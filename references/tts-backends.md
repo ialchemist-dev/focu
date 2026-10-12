@@ -1,37 +1,41 @@
-# TTS backends
+# TTS backends (M1)
 
-`synthesize.sh` delegates to whatever you set as `THEVIEW_TTS_CMD` —
-a command where `$IN` is the script text file and `$OUT` is the MP3
-to produce:
+Audio mode requires ffmpeg/ffprobe plus an explicit TTS argv template:
 
-```bash
-export THEVIEW_TTS_CMD='my-tts --input "$IN" --output "$OUT" --voice xiaobei'
-./scripts/run-daily.sh
+```yaml
+tts_argv:
+  - /absolute/path/to/tts
+  - --input
+  - "{input}"
+  - --output
+  - "{output}"
+  - --voice
+  - "{voice}"
 ```
 
-Without `THEVIEW_TTS_CMD`, synthesis is skipped and the script is
-kept — the pipeline still delivers text episodes.
+The backend must read UTF-8 Host:-labelled text and produce a non-empty MP3 at
+the requested output path. Voice comes from the channel. The output is a temp
+file in the episode directory and may already exist; the backend must overwrite
+it. The timeout is 300 seconds; longer-running providers need a later async
+adapter. Stderr/stdout are captured to keep machine JSON output parseable.
 
-## Backend requirements
+For old setups, THEFEW_TTS_CMD (preferred) or THEVIEW_TTS_CMD is parsed with
+shlex into argv; literal $IN/$OUT placeholders are replaced. No eval, shell
+expansion, pipelines or redirection occur. Example:
 
-- Reads a plain-text script file with `Host: ` turn labels (see
-  `script-conventions.md`).
-- Writes an MP3 (or anything ffmpeg can convert — adapt
-  `synthesize.sh`).
-- Single voice per channel is enough for v0.1; multi-voice dialogue
-  is out of scope (the show is single-host by design).
+```bash
+export THEFEW_TTS_CMD='my-tts --input "$IN" --output "$OUT"'
+```
 
-## Parsing gotcha (learned the hard way)
+The command is trusted local configuration, never taken from collected text or
+shared lists. Credentials belong in environment variables. Runtime command
+repair does not invalidate frozen content.
 
-Some TTS chunk parsers silently return empty audio when a turn label
-is malformed — e.g. a full-width colon (`Host：`) or a missing space
-(`Host:text`). `compose.py` enforces ASCII `Host: ` (colon + space);
-if you write your own composer, enforce the same or validate labels
-before synthesis.
+No backend is not a successful audio episode. Choose output_mode: text_only or
+--text-only explicitly for text completion. Failed TTS preserves the script and
+selection and leaves coverage absent. Per-channel results report failure; CLI
+run/synthesize exits 4 when any required episode fails.
 
-## Silence at chunk boundaries
-
-If your backend inserts long pauses between chunks, post-process:
-detect silences over ~1.5s and compress them. `ffmpeg`'s `silencedetect`
-+ `silenceremove` does it. Validate audio length against the script
-before calling an episode done.
+MP3 checks verify format, positive duration and decoding. They do not verify
+speech completeness, language, or whether a person heard it. A receipt keyed
+by episode/script/audio hashes enables crash recovery without repeated TTS.

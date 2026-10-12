@@ -1,135 +1,118 @@
-# Architecture
+# Architecture: v0.2 M1
 
-## Pipeline
+## Runtime and boundaries
+
+`the_few` owns configuration, identities, collectors, persistence and episode
+state. CLI and `scripts/` wrappers invoke it; wrappers do not implement a second
+pipeline. One local data directory is one user/profile. Multi-user/server
+operation is out of scope.
 
 ```
-┌─────────────┐
-│ sources.yaml │  user-owned, the only input that matters
-└──────┬──────┘
-       │ daily trigger (cron)
-       ▼
-┌─────────────┐
-│    ingest    │  per-source fetchers → raw items
-└──────┬──────┘
-       │ data/units/YYYY-MM-DD.json
-       ▼
-┌─────────────┐
-│    digest    │  dedupe, filter, rank, group by channel
-└──────┬──────┘
-       │ data/digested/YYYY-MM-DD.json
-       ▼
-┌─────────────┐
-│   compose    │  prompt template → single-host script
-└──────┬──────┘
-       │ data/episodes/YYYY-MM-DD/<channel>-script.txt
-       ▼
-┌─────────────┐
-│  synthesize  │  TTS backend → MP3
-└─────────────┘
-  data/episodes/YYYY-MM-DD/<channel>.mp3
+validated sources -> collect -> transactional content store -> backlog selection
+                  -> frozen episode inputs -> script -> validated MP3 -> coverage
 ```
 
-Every stage reads the previous stage's output file and writes its own.
-Stages are independently re-runnable: `compose` never re-fetches, `ingest`
-never re-renders.
+SQLite (`data/few.sqlite3`, schema 1, migrations packaged with the code) is the
+source of truth. JSON/text/audio remain inspectable exports. This intentionally
+replaces v0.1's overwrite-style JSON state so content, cursors and coverage can
+be committed atomically. `few export-state --json` exports all tables, including
+private source settings; it is a local diagnostic, not a shareable list.
 
-## State
+Modules: `config.py`, `identity.py`, `collectors.py`, `store.py`, `pipeline.py`,
+`cli.py`, `legacy.py`. Every writing CLI command holds a kernel `flock` on the
+data directory (Linux/macOS). SQLite foreign keys, WAL and FULL synchronous
+writes protect state. A crashed process releases the OS lock automatically.
 
-`data/state.json` tracks per-source watermarks:
+## Identity
 
-```json
-{
-  "sources": {
-    "3blue1brown": {"last_item_id": "abc123", "last_run": "2026-09-28T07:14:00-06:00"},
-    "openai-blog": {"last_item_id": "https://openai.com/...", "last_run": "..."}
-  }
-}
-```
+Source ID: SHA-256 of `src:v1:` + canonical source URL. Content ID: SHA-256 of
+`cnt:v1:` + canonical item URL. Labels, channels and transport types do not
+participate. Override `canonical_url` to retain a source identity when changing
+transport; automatic URL-move aliases and canonicalizer upgrades are future work.
+Use a stable YouTube `channel_id` where available; handle changes otherwise
+require an explicit identity-preserving canonical_url.
 
-Ingest only fetches items newer than the watermark, then advances it.
-A source that fails does not block others; failures are logged to
-`data/logs/ingest-YYYY-MM-DD.log` and the run continues.
+Canonicalization lowercases hosts, removes fragments and known tracking params
+(`utm_*`, fbclid, gclid, dclid, msclkid, mc_cid, mc_eid). It preserves unknown
+query parameters, path case and arbitrary trailing slashes/www names. YouTube
+watch/short-link/shorts/embed/live URLs normalize to a watch URL with its significant
+`v` parameter. Twitter URLs normalize to x.com. Different videos remain different.
+Unknown URLs receive conservative identities, rather than guessed equivalences.
 
-## Channels
+No URL: source ID + native item ID is a fallback. No stable item key:
+provisional identity; title alone never causes permanent merging, and provisional
+items are not selected. Same URL with richer text produces revisions; selection
+prefers the longest available body. M1 deliberately does not infer meaningful
+updates or republish previously covered URLs. Semantic event dedup is deferred.
 
-A channel is one episode per day. Sources declare which channel they feed:
+## Storage and eligibility
 
-```yaml
-channels:
-  - id: research
-    name: "Research Digest"
-    language: zh
-    voice: default
-  - id: personal
-    name: "Personal Briefing"
-    language: zh
-    voice: default
-```
+`sources/subscriptions` separate identity from channel/quotas. `contents`,
+`content_revisions`, `observations` preserve transport provenance and text.
+`fetch_state/fetch_attempts` preserve native cursors and outcomes.
+`candidates` holds pending/expired/dismissed state. `runs/stage_runs`,
+`episodes/episode_items`, `coverage` represent the generation lifecycle.
+Feedback and list-install tables will be added by later migrations when used.
 
-Keep channels few. Two is the tested shape (personal vs. research);
-one is fine. More than three is a smell — the user's attention is the
-scarce resource.
+Each fetch batch and its safe cursor commit together. Failed/partial/windowed
+fetches do not advance the cursor. RSS always scans its available window, so
+reordering and repeated items are harmless upserts. Cursor is a native hint,
+not proof that older feed items were obtained. No selection quota is applied
+to persisted collection. Conditional requests, bounded retries, RSS archives,
+HTML parsing and pagination completeness are M2 work.
 
-## Source types
+Candidates require a non-empty body, a non-provisional identity, an enabled
+subscription and no existing coverage/reservation. Missing-body discoveries wait
+for later enrichment. Date parsing uses UTC ISO timestamps; missing/unzoned dates
+fall back to fetched_at. Default retention is 7 days from publication or first
+fetch, adjustable per source. Expiration retains content identity; no semantic
+importance estimator or evergreen classification is present yet. Source priority
+and age determine deterministic ranking. Source count and approximate speaking
+word budgets limit selection, rather than truncating or discarding collected
+content. Oversized items remain pending until summarized in M3 or expired.
 
-| type     | how it fetches                              | auth needed |
-|----------|---------------------------------------------|-------------|
-| rss      | feedparser on `feed_url`                    | no          |
-| youtube  | transcript API, yt-dlp fallback             | no          |
-| blog     | RSS if available, else HTML extract         | no          |
-| x        | API or login session                        | yes         |
-| linkedin | login session                               | yes         |
+Global per-user coverage prevents repeated content across dates/channels. One
+source has one channel in M1. Items reserved by a failed earlier episode are not
+silently duplicated in a later date: resume that original date. `few status`
+shows unfinished episodes. Reservations do not mean covered/delivered/played.
 
-Auth-gated types degrade gracefully: no credentials → warning in the
-log, source skipped, run continues. The pipeline must never fail closed
-because one source is unreachable.
+## Frozen episode lifecycle
 
-## Units
+A daily run freezes content configuration and output mode. After selection it
+freezes unit/revision JSON. Script retries restore stored text; they do not ingest
+again. Repairing `tts_argv` or its environment command is allowed without changing
+frozen content. Other config changes require a new date.
 
-The digest's atomic item. Every ingested item becomes a unit:
+Draft -> script_ready -> finalized. Audio mode finalizes only after a non-empty,
+decodable MP3 passes ffprobe/ffmpeg checks. Text_only must be explicitly selected.
+Missing TTS and failures are visible; no coverage is written on failure. There
+is no delivery/player API or receipt for actual listening in M1.
 
-```json
-{
-  "id": "yt:abc123",
-  "source": "3Blue1Brown",
-  "channel": "research",
-  "title": "...",
-  "url": "https://...",
-  "published_at": "2026-09-27T...",
-  "body": "transcript or article text, truncated to N chars",
-  "kind": "video|post|article"
-}
-```
+Audio writes to a temp file and is atomically renamed. A receipt ties audio
+hash to script hash/episode ID so a crash after publishing audio can resume
+without repeating TTS. An artifact manifest is written before coverage commits.
+Finalization and coverage commit in one transaction. Finalized episodes are
+never rewritten; future revision/supersession needs a separate feature.
+Container validation does not prove speech completeness or human listening;
+speech-to-script quality validation is future work.
 
-## Content identity & dedup
+Exports: `units/<date>.json` is the current content inventory at collection time,
+not today's delivery ledger; `digested/<date>.json` is the frozen selection;
+`episodes/<date>/<channel>-{script.txt,units.json,manifest.json}` plus MP3.
+The deterministic composer preserves full selected text and ASCII Host labels;
+it does not use prompts.md, translate, summarize long items, or learn feedback.
 
-A unit's `id` is only unique per ingestion. The SAME underlying content
-arriving through ANY channel (RSS, browser check, manual save) must map
-to the SAME identity, or it will be digested twice. Every unit therefore
-also gets a deterministic **content hash**:
+## Legacy import
 
-- If the unit carries a URL, the hash is over the canonicalized URL:
-  fragment dropped, all query/tracking params stripped, host lowercased,
-  `twitter.com` → `x.com`, `www.` stripped, trailing slash dropped.
-  The path alone identifies the content for every source type we cover
-  (article slug, video id, status id).
-- Otherwise the hash is over normalized `source + title` text
-  (lowercased, punctuation/whitespace collapsed).
+`few import-legacy` requires a separate non-nested destination. It validates
+snapshots while the old scheduler is stopped. It matches
+snapshot source names against enabled config, backs up state/units/digested/
+episodes, imports content additively, and never applies old watermarks. Missing
+snapshots cannot be reconstructed from state.json. No automatic historic coverage
+is inferred. `--register-coverage` is an explicit operator attestation, requiring
+non-empty scripts (and MP3 files in audio mode); it does not validate past speech
+or infer delivery/listening. Legacy runs do not occupy new daily date slots.
+Unknown sources require their original names/locators to be supplied in config.
+Original files remain intact; safe repeated import dedupes content/coverage.
 
-Dedup keeps an append-only registry of content hashes already digested.
-A unit is only eligible when BOTH its unit id and its content hash are
-unseen; within one batch, duplicate hashes collapse to the longest body.
-The registry starts with the first run that adopts this rule — earlier
-episodes are covered by unit-id dedup only.
-
-## Design principles
-
-- **Files over services.** State is JSON on disk. Any agent with a
-  shell can inspect and repair a run.
-- **Prompts over code.** Episode voice lives in
-  `references/prompts.md`, not in Python string literals. Changing the
-  show's voice never requires a code change.
-- **Append-only episodes.** Published episodes are never rewritten.
-  A bad episode is superseded by the next day's, not patched.
-- **Boring technology.** feedparser, yt-dlp, cron, ffmpeg. The novelty
-  is the curation contract, not the stack.
+See [../docs/V0.2-PLAN.md](../docs/V0.2-PLAN.md) for later milestones.

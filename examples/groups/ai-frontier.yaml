@@ -8,14 +8,15 @@
 # schedule it. See docs/ONBOARDING.md.
 
 sources:
-  - name: "OpenAI Blog"
+  - name: "OpenAI News"
     type: rss
     channel: research
-    feed_url: "https://openai.com/blog/rss.xml"
+    feed_url: "https://openai.com/news/rss.xml"
     notes: "official OpenAI announcements"
 
   - name: "Anthropic News"
     type: blog
+    enabled: false
     channel: research
     site_url: "https://www.anthropic.com/news"
-    notes: "official Anthropic announcements; no official RSS, HTML extraction"
+    notes: "defined for future use; HTML collector is not implemented in M1"

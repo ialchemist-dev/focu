@@ -1,60 +1,49 @@
-# Source schema (`sources.yaml`)
+# Source/config schema
 
 ```yaml
-version: 1
-
+version: 2
+timezone: America/Denver
+output_mode: audio  # audio | text_only
 channels:
-  - id: research            # episode id; one MP3 per channel per day
-    name: "Research Digest"
-    language: zh            # episode language
-    voice: default          # TTS voice key (see references/tts-backends.md)
-    max_minutes: 12         # target episode length; compose aims here
-
-  - id: personal
-    name: "Personal Briefing"
-    language: zh
+  - id: research
+    name: Research Digest
+    language: en
     voice: default
-    max_minutes: 6
-
+    max_minutes: 12
+    words_per_minute: 150
 sources:
-  - name: "3Blue1Brown"
-    type: youtube           # rss | youtube | blog | x | linkedin
-    channel: research       # which episode this source feeds
-    handle: "3blue1brown"   # type-specific locator (see below)
-    notes: "Grant Sanderson's math channel"
-
-  - name: "Ethan Mollick"
+  - name: Ethan Mollick
     type: rss
     channel: research
-    feed_url: "https://www.oneusefulthing.org/feed"
+    feed_url: https://www.oneusefulthing.org/feed
+    max_items_per_day: 5
+    retention_days: 7
+    priority: 1
 ```
 
-## Per-type locators
+Versions 1/2 are accepted. UTC and audio are defaults; text-only completion must
+be explicit in config or CLI. Channel IDs are unique safe filename components.
+Configured source names must be unique/non-empty and channels must exist.
+Disabled sources may be incomplete placeholders. Unknown enabled types fail
+validation before fetch. Renaming a source keeps its URL identity unchanged.
 
-- `rss`: `feed_url` (required).
-- `youtube`: `handle` (channel handle or ID). Optional `playlist_id`
-  to scope to one playlist.
-- `blog`: `site_url` (required); `feed_url` (optional — used first when
-  present, else HTML extraction).
-- `x`: `username` (required). Requires credentials — see
-  `references/auth.md`.
-- `linkedin`: `profile_url` or `company_page` (required). Requires a
-  login session — see `references/auth.md`.
+Locators:
 
-## Common fields
+- rss: feed_url required; optional canonical_url to preserve identity.
+- blog: site_url or feed_url; only blog-with-feed can fetch in M1.
+- youtube: channel_id (preferred stable ID) or handle; optional dependencies;
+  experimental latest-ten window, no full backfill or yt-dlp subtitle fallback.
+- x: username; collector not implemented.
+- linkedin: profile_url or company_page URL; collector not implemented.
 
-- `name` (required): human label, shown in the episode ("Elon Musk
-  posted…").
-- `channel` (required): must match a channel id.
-- `notes` (optional): curator's note, e.g. "only posts about agents".
-- `enabled: false` (optional): keep the source defined but skip it.
-- `max_items_per_day` (optional, default 5): cap per source so one loud
-  source can't eat the episode.
+Common settings: enabled (boolean), notes (private curator text),
+max_items_per_day (positive selection quota, not a fetch cap), retention_days
+(positive expiry window), priority (positive source weight). No feedback-driven
+updates are implemented yet. Every source belongs to one channel. Same canonical
+URL twice is a config error: merge subscriptions rather than assigning new IDs.
 
-## Rules
-
-- A source belongs to exactly one channel.
-- Unknown `type` → ingest errors loudly at startup (fail fast on config
-  bugs, degrade gracefully on network/auth failures).
-- `sources.yaml` is personal — never commit it. Share `examples/`
-  instead.
+`source_id` and `content_id` are core-generated, versioned full SHA-256 IDs. Manual
+units from an agent must identify an enabled source by its configured name or
+source_id. Output channel is always derived from config, never trusted from units.
+Secrets belong in the environment, not in YAML. Personal config/data stays out
+of git; `examples/sources.yaml` is deliberately tracked.
