@@ -1,31 +1,26 @@
-# Scheduling
+# Scheduling and retries
 
-The pipeline is cron-shaped: one run per day, unattended.
-
-## Cron
+Use one scheduler: system cron or the host agent's scheduler. Install Python
+in a venv, use an absolute interpreter/CLI path, and choose a data directory.
+Create the log directory before setting up redirection.
 
 ```cron
-14 7 * * * /path/to/the-few/scripts/run-daily.sh >> /path/to/the-few/data/cron.log 2>&1
+14 7 * * * cd /absolute/path/to/the-few && .venv/bin/few run --text-only --json >> data/cron.log 2>&1
 ```
 
-`run-daily.sh` is idempotent per date: re-running the same `--date`
-re-fetches only items newer than the watermark (usually zero), so a
-retry never duplicates an episode.
+Trigger time uses the scheduler/machine timezone. The episode date uses config
+`timezone` (UTC default). `--date YYYY-MM-DD` overrides it, with strict date
+validation. Every writer acquires the same kernel lock; lock contention returns
+exit 5 rather than starting another process. Do not install both scheduler types.
 
-## What the scheduler must guarantee
+A finalized date is a no-op. A failed date resumes its frozen selection and
+script; repair TTS runtime settings and retry that same date. Earlier unfinished
+episodes reserve their content; `few status --json` identifies dates to resume.
+Use the original content config/output mode. Collection may overlap safely, but
+no finalized episode is replaced or marked played/delivered by generation.
 
-- One run per calendar day. If a run fails mid-pipeline, the next run
-  (or a manual `--date` re-run) resumes cleanly: ingest advances
-  watermarks only for items actually fetched; compose and synthesize
-  overwrite that date's outputs.
-- Logs: stdout goes to `data/cron.log`; per-source ingest warnings go
-  to stdout too (grep for `skipped`).
-- The scheduler never edits `sources.yaml`. Source changes are the
-  user's job.
-
-## Agent-run alternative
-
-If the host agent has its own scheduler (e.g. Muse cron), schedule
-"run `./scripts/run-daily.sh`" as a daily task instead of system cron.
-Same contract: one run per day, logs kept, failures reported not
-hidden.
+Exit codes: 0 success (including explicitly degraded source reports), 2 invalid
+configuration/frozen run, 3 unavailable sources/runtime I/O failure, 4 episode
+failure, 5 concurrent writer. JSON stdout has schema_version/status and contextual
+reports; do not interpret a degraded run as all sources having succeeded.
+Host-specific scheduler registration and uninstall instructions are M4 work.

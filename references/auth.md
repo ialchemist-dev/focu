@@ -1,22 +1,13 @@
-# Auth-gated sources (x, linkedin)
+# Auth-gated sources (M1)
 
-`x` and `linkedin` types need credentials. v0.1 does not implement
-their fetchers — ingest logs a warning and skips them, and the run
-continues. This is deliberate: an unreachable source must never fail
-the day's episode.
+X and LinkedIn collectors are not implemented. Supplying a token or a session
+alone does not make them work. Keep these sources disabled in config. An enabled
+source returns a visible needs_auth/collector_not_implemented outcome; healthy
+sources and ready backlog can continue. If all sources fail and no ready backlog
+exists, the CLI returns an error instead of reporting no news.
 
-## What's needed to wire them
-
-- **x**: an API bearer token (`THEVIEW_X_BEARER`) or a logged-in
-  session. Fetcher to implement in `scripts/ingest.py::fetch_x`:
-  user timeline since `since_id`, map to units.
-- **linkedin**: a login session cookie (`THEVIEW_LINKEDIN_COOKIE`).
-  Fetcher to implement in `scripts/ingest.py::fetch_linkedin`:
-  profile recent activity, map to units.
-
-## Rules
-
-- Secrets live in env vars, never in `sources.yaml`, never in git.
-- No credentials → skip with a warning, never crash, never retry-loop.
-- When a fetcher is implemented, keep the unit schema identical to
-  the other types (`references/architecture.md`).
+Later collectors belong in the_few/collectors.py or a dedicated collector
+package, using the same FetchResult, source identity and transactional store.
+Credentials must live in environment/provider configuration, never shared YAML,
+collected units, exported lists or git. No auth retry loops or silently expanded
+source lists. Actual host/browser authorization is a separate provider contract.
