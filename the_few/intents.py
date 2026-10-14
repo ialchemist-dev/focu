@@ -39,7 +39,7 @@ class IntentStore:
         if kind not in {"one_time_research", "recurring"}:
             raise ValueError("Unsupported intent kind")
         intent_id = intent_id or "int_" + uuid.uuid4().hex
-        if not intent_id.startswith("int_") or len(intent_id) != 36:
+        if not (len(intent_id) == 36 and intent_id.startswith("int_") and all(c in "0123456789abcdef" for c in intent_id[4:])):
             raise ValueError("Invalid intent id")
         now = utcnow()
         with self._connect() as db:
@@ -64,6 +64,10 @@ class IntentStore:
                 rows = db.execute("SELECT * FROM intents ORDER BY created_at, id").fetchall()
         return [{"schema_version": "0.2", **dict(row)} for row in rows]
 
+    @staticmethod
+    def _has_evidence_table(db: sqlite3.Connection) -> bool:
+        return db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='evidence_packs'").fetchone() is not None
+
     def transition(self, intent_id: str, expected_status: str, new_status: str,
                    *, evidence_pack_id: str | None = None, error: str | None = None) -> dict:
         allowed = {"queued": {"researching"}, "researching": {"completed", "failed"},
@@ -73,6 +77,10 @@ class IntentStore:
         if new_status == "completed" and not evidence_pack_id:
             raise ValueError("Completed research requires an evidence pack ID")
         with self._connect() as db:
+            if new_status == "completed":
+                row = db.execute("SELECT intent_id FROM evidence_packs WHERE id=?", (evidence_pack_id,)).fetchone() if self._has_evidence_table(db) else None
+                if row is None or row["intent_id"] != intent_id:
+                    raise ValueError("Completion requires a stored evidence pack belonging to this intent")
             cur = db.execute("""UPDATE intents SET status=?, updated_at=?,
                 evidence_pack_id=?, error=? WHERE id=? AND status=?""",
                 (new_status, utcnow(), evidence_pack_id, error, intent_id, expected_status))
