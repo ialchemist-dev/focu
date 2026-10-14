@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Digest Session",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "id",
+    "scheduled_for",
+    "items",
+    "status"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "0.2"
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "scheduled_for": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "attention_budget_minutes": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 1
+    },
+    "status": {
+      "enum": [
+        "planned",
+        "rendering",
+        "delivered",
+        "failed"
+      ]
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "evidence_pack_id",
+          "priority"
+        ],
+        "properties": {
+          "evidence_pack_id": {
+            "type": "string"
+          },
+          "priority": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "intent_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      }
+    },
+    "renditions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "format",
+          "path"
+        ],
+        "properties": {
+          "format": {
+            "enum": [
+              "markdown",
+              "audio",
+              "pdf",
+              "epub",
+              "video"
+            ]
+          },
+          "path": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}
