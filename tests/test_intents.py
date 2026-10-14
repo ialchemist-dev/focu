@@ -2,6 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from the_few.intents import IntentStore
+from the_few.evidence import EvidenceStore
 
 
 class IntentStoreTests(unittest.TestCase):
@@ -28,6 +29,10 @@ class IntentStoreTests(unittest.TestCase):
         self.store.transition(item["id"], "researching", "failed", error="timeout")
         self.store.transition(item["id"], "failed", "queued")
         self.store.transition(item["id"], "queued", "researching")
+        EvidenceStore(self.path).save({"schema_version":"0.2","id":"ev_1","intent_id":item["id"],
+            "summary":"Summary","created_at":"2026-10-13T00:00:00Z",
+            "sources":[{"id":"s1","url":"https://example.com/source","title":"Source"}],
+            "findings":[{"claim":"Supported claim","source_ids":["s1"]}]})
         self.store.transition(item["id"], "researching", "completed", evidence_pack_id="ev_1")
         self.assertEqual(self.store.get(item["id"])["evidence_pack_id"], "ev_1")
 
