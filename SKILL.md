@@ -1,12 +1,11 @@
 ---
 name: the-few
-description: Turn user-defined sources into a daily podcast. The user declares the sources they care about (people, blogs, channels — never platforms' recommendations); a background agent ingests each source's latest updates once a day, digests them into units, composes a single-host script, and synthesizes an MP3 episode while keeping the script. Use when the user wants a personal feed-to-podcast pipeline, wants to define or change their sources, or wants to run, debug, or extend the daily digest.
+description: Agent-native information digestion. Capture spontaneous research questions, follow user-curated entities and sources, preserve evidence, and deliver attention-aware digests. The existing daily feed-to-podcast pipeline remains available. Use for research-intent capture, source management, digest planning, and podcast workflows.
 ---
 
 # The Few
 
-A personal feed-to-podcast pipeline. The user defines their sources; a
-background agent does the rest, every day:
+The Few is evolving into an agent-native information digestion system: user-defined sources, recurring routines, and one-time research intents feed evidence-backed, attention-aware digests. The existing v0.1 feed-to-podcast pipeline remains supported:
 
 ```
 sources.yaml → ingest → digest → compose → synthesize → episode.mp3 + script.txt
@@ -80,3 +79,29 @@ configured backend (see `references/tts-backends.md`). Output:
 - Keep every stage independently runnable and its output inspectable.
   An agent should be able to re-run `compose` without re-running
   `ingest`.
+
+## v0.2 incremental workflow (experimental)
+
+Read `docs/architecture-v0.2.md` and the versioned schemas before implementing new flows. The installable v0.2 slice supports intent capture, Evidence Pack persistence, public HTML fetching, and agent-authored evidence-to-Markdown delivery. Automatic research orchestration, session planning, and new audio providers are not implemented.
+
+Capture a question without changing permanent subscriptions:
+
+```bash
+python -m the_few.intents capture "Why do tools sometimes constrain their users?"
+python -m the_few.intents list --status queued
+```
+
+The default SQLite DB lives under ignored `data/`. Do not store API keys, private questions, or generated research in Git. The v0.1 `scripts/run-daily.sh` is unchanged. Never imply an intent has been researched or delivered merely because it has been captured.
+
+## Muse / agent installation (v0.2)
+
+From a terminal with Python 3.10+ and Git:
+
+```bash
+git clone https://github.com/ialchemist-dev/the-few.git
+cd the-few
+bash scripts/bootstrap.sh
+.venv/bin/the-few --help
+```
+
+**Branch note:** until PR #2 is merged, run `git checkout feat/v0.2-intent-contracts` before bootstrap. Read `docs/AGENT_INSTALL.md` for the complete agent protocol and acceptance test. Agents must not claim autonomous research exists yet.
