@@ -15,8 +15,6 @@ This repository is a **portable, installable research handoff tool**, not a self
 ```bash
 git clone https://github.com/ialchemist-dev/the-few.git
 cd the-few
-# Remove this checkout once PR #2 is merged:
-git checkout feat/v0.2-intent-contracts
 bash scripts/bootstrap.sh
 .venv/bin/the-few doctor
 ```
