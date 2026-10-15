@@ -24,7 +24,7 @@ def render_markdown(pack: dict, question: str) -> str:
     lines.extend(["", "## Sources", ""])
     for source in pack["sources"]:
         lines.append(f"- **{source['id']}**: [{source['title']}]({source['url']})")
-    return "\\n".join(lines) + "\\n"
+    return "\n".join(lines) + "\n"
 
 
 def ingest_research(db_path: str | Path, evidence_path: str | Path, output_path: str | Path) -> Path:
