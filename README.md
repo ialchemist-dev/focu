@@ -1,3 +1,20 @@
+## Agent-native installation (v0.2 preview)
+
+The v0.2 preview lives on branch `feat/v0.2-intent-contracts` until merged into `main`. Requires Python 3.10+ and Git.
+
+```bash
+git clone https://github.com/ialchemist-dev/the-few.git
+cd the-few
+git checkout feat/v0.2-intent-contracts
+bash scripts/bootstrap.sh
+.venv/bin/the-few capture "Why do tools constrain us?"
+.venv/bin/the-few list --status queued
+```
+
+See [Agent Installation](docs/AGENT_INSTALL.md) for Muse/OpenClaw usage, limitations and an end-to-end evidence handoff. The Few does not yet autonomously run a research agent or produce v0.2 audio.
+
+---
+
 # The Few
 
 Your sources. Your podcast. Every day.
