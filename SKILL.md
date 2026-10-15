@@ -82,7 +82,7 @@ configured backend (see `references/tts-backends.md`). Output:
 
 ## v0.2 incremental workflow (experimental)
 
-Read `docs/architecture-v0.2.md` and the versioned schemas before implementing new flows. The first slice provides **intent capture and persistence only**; research, Evidence Pack storage, session planning, and new audio providers are not yet implemented.
+Read `docs/architecture-v0.2.md` and the versioned schemas before implementing new flows. The installable v0.2 slice supports intent capture, Evidence Pack persistence, public HTML fetching, and agent-authored evidence-to-Markdown delivery. Automatic research orchestration, session planning, and new audio providers are not implemented.
 
 Capture a question without changing permanent subscriptions:
 
@@ -92,3 +92,16 @@ python -m the_few.intents list --status queued
 ```
 
 The default SQLite DB lives under ignored `data/`. Do not store API keys, private questions, or generated research in Git. The v0.1 `scripts/run-daily.sh` is unchanged. Never imply an intent has been researched or delivered merely because it has been captured.
+
+## Muse / agent installation (v0.2)
+
+From a terminal with Python 3.10+ and Git:
+
+```bash
+git clone https://github.com/ialchemist-dev/the-few.git
+cd the-few
+bash scripts/bootstrap.sh
+.venv/bin/the-few --help
+```
+
+**Branch note:** until PR #2 is merged, run `git checkout feat/v0.2-intent-contracts` before bootstrap. Read `docs/AGENT_INSTALL.md` for the complete agent protocol and acceptance test. Agents must not claim autonomous research exists yet.
