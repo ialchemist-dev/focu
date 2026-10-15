@@ -104,4 +104,4 @@ bash scripts/bootstrap.sh
 .venv/bin/the-few --help
 ```
 
-**Branch note:** until PR #2 is merged, run `git checkout feat/v0.2-intent-contracts` before bootstrap. Read `docs/AGENT_INSTALL.md` for the complete agent protocol and acceptance test. Agents must not claim autonomous research exists yet.
+Read `docs/AGENT_INSTALL.md` for the complete agent protocol and acceptance test. Agents must not claim autonomous research exists yet.
