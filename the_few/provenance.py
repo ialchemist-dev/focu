@@ -1,6 +1,13 @@
 """Optional evidence provenance contract, backwards compatible with v0.2 packs."""
 from __future__ import annotations
 
+import re
+
+
+def normalized_text(value: str) -> str:
+    return re.sub(r"\\s+", " ", value).strip()
+
+
 SOURCE_TYPES = {"primary", "secondary_reporting", "search_snippet", "unknown"}
 ACCESS_STATUSES = {"full", "partial", "paywalled", "unavailable", "not_attempted"}
 VERIFICATION_LEVELS = {"checked_extracted_text", "checked_original_document", "unverified"}
@@ -51,5 +58,5 @@ def validate_provenance(pack: dict) -> None:
             if source.get("access_status") in {"unavailable", "not_attempted"}:
                 raise ValueError("Inaccessible sources cannot support findings")
             if finding.get("evidence_quote") and source.get("extracted_text"):
-                if finding["evidence_quote"] not in source["extracted_text"]:
+                if normalized_text(finding["evidence_quote"]) not in normalized_text(source["extracted_text"]):
                     raise ValueError("Evidence quote not present in cited extracted text")
