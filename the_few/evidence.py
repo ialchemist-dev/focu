@@ -5,6 +5,7 @@ import json
 import sqlite3
 from pathlib import Path
 from urllib.parse import urlparse
+from the_few.provenance import validate_provenance
 
 
 def validate_pack(pack: dict) -> None:
@@ -33,6 +34,8 @@ def validate_pack(pack: dict) -> None:
         refs = finding.get("source_ids")
         if not isinstance(refs, list) or not refs or any(not isinstance(ref, str) or ref not in source_ids for ref in refs) or len(set(refs)) != len(refs):
             raise ValueError("Finding cites unknown or duplicate source IDs")
+
+    validate_provenance(pack)
 
 
 class EvidenceStore:
