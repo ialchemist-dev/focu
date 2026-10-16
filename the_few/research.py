@@ -21,6 +21,15 @@ def render_markdown(pack: dict, question: str) -> str:
         lines.append(f"- {finding['claim']} ({links})")
         if finding.get("uncertainty"):
             lines.append(f"  - **Uncertainty:** {finding['uncertainty']}")
+    completeness = pack.get("research_completeness")
+    if completeness:
+        lines.extend(["", "## Research completeness", "",
+                      f"Status: **{completeness['status']}**", ""])
+        for label, key in (("Answered", "answered"), ("Unverified", "unverified"), ("Limitations", "limitations")):
+            if completeness.get(key):
+                lines.append(f"**{label}:**")
+                lines.extend(f"- {item}" for item in completeness[key])
+                lines.append("")
     lines.extend(["", "## Sources", ""])
     for source in pack["sources"]:
         lines.append(f"- **{source['id']}**: [{source['title']}]({source['url']})")
