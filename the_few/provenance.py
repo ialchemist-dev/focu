@@ -5,7 +5,7 @@ import re
 
 
 def normalized_text(value: str) -> str:
-    return re.sub(r"\\s+", " ", value).strip()
+    return re.sub(r"\s+", " ", value).strip()
 
 
 SOURCE_TYPES = {"primary", "secondary_reporting", "search_snippet", "unknown"}
