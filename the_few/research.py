@@ -32,7 +32,8 @@ def render_markdown(pack: dict, question: str) -> str:
                 lines.append("")
     lines.extend(["", "## Sources", ""])
     for source in pack["sources"]:
-        lines.append(f"- **{source['id']}**: [{source['title']}]({source['url']})")
+        details = ", ".join(str(source[key]) for key in ("source_type", "access_status", "verification") if source.get(key))
+        lines.append(f"- **{source['id']}**: [{source['title']}]({source['url']})" + (f" — {details}" if details else ""))
     return "\n".join(lines) + "\n"
 
 
