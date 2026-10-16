@@ -110,7 +110,7 @@ def _retrieve(req: Request, url: str, timeout: float, max_bytes: int) -> WebPage
     else:
         title = ""
         text = body
-    text = re.sub(r"\\s+", " ", text).strip()
+    text = re.sub(r"\s+", " ", text).strip()
     if not text:
         raise FetchError("Retrieved page has no extractable text")
     return WebPage(url=final_url, title=title, text=text, status=status, content_type=content_type)
