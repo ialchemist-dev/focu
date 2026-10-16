@@ -56,6 +56,10 @@
               "string",
               "null"
             ]
+          },
+          "evidence_quote": {
+            "type": "string",
+            "minLength": 1
           }
         }
       }
@@ -94,6 +98,41 @@
               "null"
             ],
             "format": "date-time"
+          },
+          "source_type": {
+            "enum": [
+              "primary",
+              "secondary_reporting",
+              "search_snippet",
+              "unknown"
+            ]
+          },
+          "access_status": {
+            "enum": [
+              "full",
+              "partial",
+              "paywalled",
+              "unavailable",
+              "not_attempted"
+            ]
+          },
+          "verification": {
+            "enum": [
+              "checked_extracted_text",
+              "checked_original_document",
+              "unverified"
+            ]
+          },
+          "original_source_accessed": {
+            "type": "boolean"
+          },
+          "accessed_at": {
+            "type": "string",
+            "minLength": 1
+          },
+          "extracted_text": {
+            "type": "string",
+            "minLength": 1
           }
         }
       }
@@ -101,6 +140,43 @@
     "created_at": {
       "type": "string",
       "format": "date-time"
+    },
+    "research_completeness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "complete",
+            "partial",
+            "blocked"
+          ]
+        },
+        "answered": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "unverified": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "limitations": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
     }
   }
 }
