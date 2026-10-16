@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import re
+import socket
+import time
 from dataclasses import dataclass
 from html import unescape
 from html.parser import HTMLParser
@@ -11,7 +13,10 @@ from urllib.request import Request, urlopen
 
 
 class FetchError(RuntimeError):
-    pass
+    def __init__(self, message: str, *, category: str = "network", status: int | None = None):
+        super().__init__(message)
+        self.category = category
+        self.status = status
 
 
 class _TextParser(HTMLParser):
@@ -50,13 +55,26 @@ class WebPage:
     content_type: str
 
 
-def fetch_page(url: str, *, timeout: float = 12, max_bytes: int = 2_000_000) -> WebPage:
+def fetch_page(url: str, *, timeout: float = 12, max_bytes: int = 2_000_000, retries: int = 2) -> WebPage:
     parsed = urlparse(url)
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
         raise ValueError("Only absolute HTTP(S) URLs are supported")
+    if retries < 0 or retries > 5:
+        raise ValueError("retries must be between 0 and 5")
     if timeout <= 0 or max_bytes <= 0:
         raise ValueError("timeout and max_bytes must be positive")
     req = Request(url, headers={"User-Agent": "TheFew/0.2 (+research verification)", "Accept": "text/html,text/plain;q=0.9"})
+    for attempt in range(retries + 1):
+        try:
+            return _retrieve(req, url, timeout, max_bytes)
+        except FetchError as exc:
+            if attempt == retries or exc.category not in {"timeout", "rate_limit", "server"}:
+                raise
+            time.sleep(min(0.25 * (2 ** attempt), 2))
+    raise AssertionError("unreachable")
+
+
+def _retrieve(req: Request, url: str, timeout: float, max_bytes: int) -> WebPage:
     try:
         with urlopen(req, timeout=timeout) as response:
             final_url = response.geturl()
@@ -74,8 +92,16 @@ def fetch_page(url: str, *, timeout: float = 12, max_bytes: int = 2_000_000) -> 
             except LookupError as exc:
                 raise FetchError(f"Unknown charset: {charset}") from exc
             status = response.status
-    except (HTTPError, URLError, TimeoutError, OSError) as exc:
-        raise FetchError(f"Could not retrieve {url}: {exc}") from exc
+    except HTTPError as exc:
+        category = "rate_limit" if exc.code == 429 else "server" if exc.code >= 500 else "http"
+        raise FetchError(f"HTTP {exc.code} retrieving {url}", category=category, status=exc.code) from exc
+    except (TimeoutError, socket.timeout) as exc:
+        raise FetchError(f"Timeout retrieving {url}", category="timeout") from exc
+    except URLError as exc:
+        category = "timeout" if isinstance(exc.reason, (TimeoutError, socket.timeout)) or "timed out" in str(exc.reason).lower() else "network"
+        raise FetchError(f"Could not retrieve {url}: {exc}", category=category) from exc
+    except OSError as exc:
+        raise FetchError(f"Could not retrieve {url}: {exc}", category="network") from exc
     if content_type == "text/html":
         parser = _TextParser()
         parser.feed(body)
@@ -84,7 +110,7 @@ def fetch_page(url: str, *, timeout: float = 12, max_bytes: int = 2_000_000) -> 
     else:
         title = ""
         text = body
-    text = re.sub(r"\\s+", " ", text).strip()
+    text = re.sub(r"\s+", " ", text).strip()
     if not text:
         raise FetchError("Retrieved page has no extractable text")
     return WebPage(url=final_url, title=title, text=text, status=status, content_type=content_type)

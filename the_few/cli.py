@@ -10,7 +10,8 @@ from pathlib import Path
 from the_few.evidence import EvidenceStore
 from the_few.intents import IntentStore
 from the_few.research import ingest_research
-from the_few.web import fetch_page
+from the_few.web import fetch_page, FetchError
+from the_few.snapshots import save_snapshot, verify_snapshot
 
 
 def _json(value: object) -> None:
@@ -45,7 +46,13 @@ def main(argv: list[str] | None = None) -> int:
     fetch = sub.add_parser("fetch", help="Retrieve public HTML/text for research")
     fetch.add_argument("url")
     fetch.add_argument("--timeout", type=float, default=12)
+    fetch.add_argument("--retries", type=int, default=2)
+    fetch.add_argument("--snapshot-dir", help="Save content-addressed local snapshot")
     fetch.add_argument("--max-bytes", type=int, default=2_000_000)
+
+    verify = sub.add_parser("verify-snapshot", help="Check saved text against SHA256")
+    verify.add_argument("path")
+    verify.add_argument("sha256")
 
     args = parser.parse_args(argv)
     try:
@@ -56,10 +63,15 @@ def main(argv: list[str] | None = None) -> int:
                    "agent_handoff": True, "automatic_research": False,
                    "live_web_requires_network": True, "ready_for_init": True})
             return 0
+        if args.command == "verify-snapshot":
+            valid = verify_snapshot(args.path, args.sha256)
+            _json({"valid": valid})
+            return 0 if valid else 1
         if args.command == "fetch":
-            page = fetch_page(args.url, timeout=args.timeout, max_bytes=args.max_bytes)
+            page = fetch_page(args.url, timeout=args.timeout, max_bytes=args.max_bytes, retries=args.retries)
+            snapshot = save_snapshot(args.snapshot_dir, url=page.url, title=page.title, text=page.text) if args.snapshot_dir else None
             _json({"url": page.url, "title": page.title, "text": page.text,
-                   "status": page.status, "content_type": page.content_type})
+                   "status": page.status, "content_type": page.content_type, "snapshot": snapshot})
             return 0
         if args.command == "ingest-evidence":
             output = ingest_research(args.db, args.evidence, args.output)
@@ -92,7 +104,10 @@ def main(argv: list[str] | None = None) -> int:
                                    error=args.error if args.command == "fail" else None))
         return 0
     except (ValueError, OSError, RuntimeError, json.JSONDecodeError) as exc:
-        print(json.dumps({"error": str(exc)}, ensure_ascii=False), file=sys.stderr)
+        payload = {"error": str(exc)}
+        if isinstance(exc, FetchError):
+            payload.update({"category": exc.category, "http_status": exc.status})
+        print(json.dumps(payload, ensure_ascii=False), file=sys.stderr)
         return 1
 
 
