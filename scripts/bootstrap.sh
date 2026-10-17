@@ -6,6 +6,6 @@ PYTHON="${PYTHON:-python3}"
 "$PYTHON" -m venv .venv
 .venv/bin/python -m pip install --upgrade pip
 .venv/bin/python -m pip install -e .
-.venv/bin/the-few doctor
-.venv/bin/the-few init
-echo "The Few installed. Run: .venv/bin/the-few --help"
+.venv/bin/focu doctor
+.venv/bin/focu init
+echo "Focu installed. Run: .venv/bin/focu --help"

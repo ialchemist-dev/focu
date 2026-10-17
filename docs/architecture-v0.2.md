@@ -1,4 +1,4 @@
-# The Few v0.2 — Architecture (incremental proposal)
+# Focu v0.2 — Architecture (incremental proposal)
 
 **Mission:** Agent-native information digestion: user-curated entities and sources, recurring routines, captured research intents, traceable evidence, and user-controlled delivery. Protect attention; never optimize for engagement.
 
@@ -16,13 +16,13 @@ These schemas are versioned at `0.2` and are contracts, not a claim that researc
 
 ## Persistence and lifecycle
 
-`the_few.intents.IntentStore` stores intents in a local SQLite DB (default `data/the-few.sqlite3`, git-ignored). Capture uses a generated stable `int_<uuid4hex>` identifier; a caller may supply an existing ID to make retries idempotent. Lifecycle: `queued → researching → completed`, or `researching → failed → queued`. Completion requires an Evidence Pack stored in the same SQLite database and linked to the same Intent. `EvidenceStore.save` checks source IDs referenced by findings; it does not establish whether external claims are factually correct. Transitions use compare-and-swap updates to prevent stale workers overwriting another worker's state.
+`focu.intents.IntentStore` stores intents in a local SQLite DB (default `data/focu.sqlite3`, git-ignored). Capture uses a generated stable `int_<uuid4hex>` identifier; a caller may supply an existing ID to make retries idempotent. Lifecycle: `queued → researching → completed`, or `researching → failed → queued`. Completion requires an Evidence Pack stored in the same SQLite database and linked to the same Intent. `EvidenceStore.save` checks source IDs referenced by findings; it does not establish whether external claims are factually correct. Transitions use compare-and-swap updates to prevent stale workers overwriting another worker's state.
 
 Example:
 
 ```bash
-python -m the_few.intents capture 'What is the economics of advertising?'
-python -m the_few.intents list --status queued
+python -m focu.intents capture 'What is the economics of advertising?'
+python -m focu.intents list --status queued
 python -m unittest discover -s tests -v
 ```
 

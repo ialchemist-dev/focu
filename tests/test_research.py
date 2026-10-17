@@ -2,8 +2,8 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
-from the_few.intents import IntentStore
-from the_few.research import ingest_research
+from focu.intents import IntentStore
+from focu.research import ingest_research
 
 
 class ResearchHandoffTests(unittest.TestCase):

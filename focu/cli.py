@@ -7,10 +7,10 @@ import os
 import sys
 from pathlib import Path
 
-from the_few.evidence import EvidenceStore
-from the_few.intents import IntentStore
-from the_few.research import ingest_research
-from the_few.web import fetch_page
+from focu.evidence import EvidenceStore
+from focu.intents import IntentStore
+from focu.research import ingest_research
+from focu.web import fetch_page
 
 
 def _json(value: object) -> None:
@@ -18,8 +18,8 @@ def _json(value: object) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="the-few", description="Agent-native research workflow")
-    parser.add_argument("--db", default=os.getenv("THE_FEW_DB", "data/the-few.sqlite3"))
+    parser = argparse.ArgumentParser(prog="focu", description="Agent-native research workflow")
+    parser.add_argument("--db", default=(os.getenv("FOCU_DB") or os.getenv("THE_FEW_DB") or ("data/the-few.sqlite3" if Path("data/the-few.sqlite3").exists() else "data/focu.sqlite3")))
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("init", help="Create local SQLite stores")
     sub.add_parser("doctor", help="Inspect local installation without external API calls")

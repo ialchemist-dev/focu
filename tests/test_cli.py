@@ -4,7 +4,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
-from the_few.cli import main
+from focu.cli import main
 
 
 class AgentCLITests(unittest.TestCase):

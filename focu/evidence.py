@@ -5,7 +5,7 @@ import json
 import sqlite3
 from pathlib import Path
 from urllib.parse import urlparse
-from the_few.provenance import validate_provenance
+from focu.provenance import validate_provenance
 
 
 def validate_pack(pack: dict) -> None:
@@ -39,7 +39,7 @@ def validate_pack(pack: dict) -> None:
 
 
 class EvidenceStore:
-    def __init__(self, db_path: str | Path = "data/the-few.sqlite3") -> None:
+    def __init__(self, db_path: str | Path = "data/focu.sqlite3") -> None:
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         with self._connect() as db:
