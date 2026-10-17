@@ -32,7 +32,7 @@ Use the CLI (all results JSON except Markdown artifact):
 .venv/bin/focu fetch https://docs.python.org/3/
 ```
 
-The agent must research the question using approved sources, inspect the actual content, and produce a JSON object with the fields defined in `schemas/evidence-pack.schema.json`. Example:
+The agent must research the question using approved sources, inspect the actual content, and produce a JSON object with the fields defined in `schemas/evidence-pack.schema.json`. The following is a **shape-only legacy-compatible example**, not verified research. Missing provenance fields do not establish that a claim has been checked. For evidence-backed handoff, include `source_type`, `access_status`, `verification`, `original_source_accessed`, and `extracted_text` on each source, plus a verbatim `evidence_quote` on each finding. See `docs/EVIDENCE_PROVENANCE.md`. Example:
 
 ```json
 {
@@ -54,7 +54,7 @@ The agent must research the question using approved sources, inspect the actual 
 }
 ```
 
-Write it to an ignored local path, for example `data/research/evidence.json`. Replace the sample claim with one genuinely supported by the source; this JSON is a shape example, **not** a valid researched result.
+Write it to an ignored local path, for example `data/research/evidence.json`. Replace the sample claim with one genuinely supported by the source. **Do not treat this example as verified evidence:** legacy packs are accepted for compatibility but their claims lack provenance checks. A fully verified pack must contain genuine extracted source text and matching quotations.
 
 ```bash
 .venv/bin/focu ingest-evidence --evidence data/research/evidence.json --output data/research/digest.md
