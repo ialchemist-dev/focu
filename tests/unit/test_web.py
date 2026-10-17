@@ -2,7 +2,7 @@
 import threading
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from the_few.web import FetchError, fetch_page
+from focu.web import FetchError, fetch_page
 
 
 class Handler(BaseHTTPRequestHandler):

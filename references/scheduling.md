@@ -5,7 +5,7 @@ The pipeline is cron-shaped: one run per day, unattended.
 ## Cron
 
 ```cron
-14 7 * * * /path/to/the-few/scripts/run-daily.sh >> /path/to/the-few/data/cron.log 2>&1
+14 7 * * * /path/to/focu/scripts/run-daily.sh >> /path/to/focu/data/cron.log 2>&1
 ```
 
 `run-daily.sh` is idempotent per date: re-running the same `--date`

@@ -9,8 +9,8 @@ import argparse
 import json
 from pathlib import Path
 
-from the_few.evidence import EvidenceStore
-from the_few.intents import IntentStore
+from focu.evidence import EvidenceStore
+from focu.intents import IntentStore
 
 
 def render_markdown(pack: dict, question: str) -> str:
@@ -58,7 +58,7 @@ def ingest_research(db_path: str | Path, evidence_path: str | Path, output_path:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Import an agent-authored evidence pack and render cited Markdown")
-    parser.add_argument("--db", default="data/the-few.sqlite3")
+    parser.add_argument("--db", default="data/focu.sqlite3")
     parser.add_argument("--evidence", required=True)
     parser.add_argument("--output", required=True)
     args = parser.parse_args()

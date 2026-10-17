@@ -1,11 +1,12 @@
 ---
-name: the-few
+name: focu
 description: Agent-native information digestion. Capture spontaneous research questions, follow user-curated entities and sources, preserve evidence, and deliver attention-aware digests. The existing daily feed-to-podcast pipeline remains available. Use for research-intent capture, source management, digest planning, and podcast workflows.
 ---
 
-# The Few
+# Focu
 
-The Few is evolving into an agent-native information digestion system: user-defined sources, recurring routines, and one-time research intents feed evidence-backed, attention-aware digests. The existing v0.1 feed-to-podcast pipeline remains supported:
+Focu is evolving into an agent-native information digestion system: user-defined sources, recurring routines, and one-time research intents feed evidence-backed, attention-aware digests. The existing v0.1 feed-to-podcast pipeline remains supported. Recurring Watches, change detection, and silence-by-default delivery are planned rather than implemented:
+
 
 ```
 sources.yaml → ingest → digest → compose → synthesize → episode.mp3 + script.txt
@@ -87,8 +88,8 @@ Read `docs/architecture-v0.2.md` and the versioned schemas before implementing n
 Capture a question without changing permanent subscriptions:
 
 ```bash
-python -m the_few.intents capture "Why do tools sometimes constrain their users?"
-python -m the_few.intents list --status queued
+python -m focu.intents capture "Why do tools sometimes constrain their users?"
+python -m focu.intents list --status queued
 ```
 
 The default SQLite DB lives under ignored `data/`. Do not store API keys, private questions, or generated research in Git. The v0.1 `scripts/run-daily.sh` is unchanged. Never imply an intent has been researched or delivered merely because it has been captured.
@@ -98,10 +99,10 @@ The default SQLite DB lives under ignored `data/`. Do not store API keys, privat
 From a terminal with Python 3.10+ and Git:
 
 ```bash
-git clone https://github.com/ialchemist-dev/the-few.git
-cd the-few
+git clone https://github.com/ialchemist-dev/the-few.git focu
+cd focu
 bash scripts/bootstrap.sh
-.venv/bin/the-few --help
+.venv/bin/focu --help
 ```
 
 Read `docs/AGENT_INSTALL.md` for the complete agent protocol and acceptance test. Agents must not claim autonomous research exists yet.
