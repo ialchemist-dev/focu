@@ -13,6 +13,7 @@ from focu.research import ingest_research
 from focu.web import fetch_page
 from focu import tts
 from focu import open_notebook
+from focu.delivery import DeliveryArchive
 
 
 def _json(value: object) -> None:
@@ -55,12 +56,50 @@ def main(argv: list[str] | None = None) -> int:
     podcast_cmd = sub.add_parser("podcast", help="Open Notebook podcast handoff")
     podcast_cmd.add_argument("podcast_args", nargs=argparse.REMAINDER)
 
+    report = sub.add_parser("report", help="Archive/export a canonical cited Markdown research report")
+    report.add_argument("evidence_id")
+    report.add_argument("--output", required=True)
+    artifacts = sub.add_parser("artifacts", help="List stored delivery formats for an Evidence Pack")
+    artifacts.add_argument("evidence_id")
+    artifact = sub.add_parser("artifact", help="Export an archived artifact")
+    artifact.add_argument("artifact_id")
+    artifact.add_argument("--output", required=True)
+    sync = sub.add_parser("sync-podcast", help="Archive a completed Open Notebook episode's transcript and outline")
+    sync.add_argument("--evidence-id", required=True)
+    sync.add_argument("--episode-id", required=True)
     args = parser.parse_args(argv)
     try:
         if args.command == "podcast":
             return open_notebook.main(args.podcast_args)
         if args.command == "tts":
             return tts.main(args.tts_args)
+        if args.command == "report":
+            archive = DeliveryArchive(args.db)
+            saved = archive.archive_report(args.evidence_id)
+            content = archive.get(saved["id"])["content"]
+            output = Path(args.output)
+            output.parent.mkdir(parents=True, exist_ok=True)
+            output.write_text(content, encoding="utf-8")
+            _json({"artifact": saved, "output": str(output)})
+            return 0
+        if args.command == "artifacts":
+            _json(DeliveryArchive(args.db).list(args.evidence_id))
+            return 0
+        if args.command == "artifact":
+            content = DeliveryArchive(args.db).get(args.artifact_id)
+            output = Path(args.output)
+            output.parent.mkdir(parents=True, exist_ok=True)
+            output.write_text(content["content"], encoding="utf-8")
+            _json({"artifact_id": args.artifact_id, "kind": content["kind"], "output": str(output)})
+            return 0
+        if args.command == "sync-podcast":
+            client = open_notebook.OpenNotebookClient()
+            episode = client.request("GET", "/api/podcasts/episodes/" +
+                open_notebook.urllib.parse.quote(args.episode_id, safe=""))
+            if not isinstance(episode, dict) or str(episode.get("id")) != args.episode_id:
+                raise ValueError("Episode ID mismatch")
+            _json(DeliveryArchive(args.db).sync_podcast(args.evidence_id, episode))
+            return 0
         if args.command == "doctor":
             path = Path(args.db)
             _json({"python": sys.version.split()[0], "db_path": str(path),
