@@ -81,3 +81,7 @@ Live tests use the public internet and are opt-in. Research quality still requir
 - No automatic source discovery, research orchestration, digest scheduler, neural TTS, or Muse-specific plugin installation API is implemented.
 - The skill file is an agent-readable contract, not proof that Muse automatically discovers it. Muse must be able to read this checkout and invoke shell commands; verify this on the actual Muse runtime.
 - Personal SQLite databases, evidence, output and credentials must remain local and out of Git.
+
+## Podcast generation with Open Notebook
+
+For the first Muse end-to-end podcast run, see `docs/OPEN_NOTEBOOK_MUSE_TEST.md`. Install/start Open Notebook separately, configure its models and profiles, then use `.venv/bin/focu podcast doctor/generate/job/episodes/download`. No TTS API key is required by Focu's adapter itself; the Open Notebook server manages its own provider credentials.

@@ -12,6 +12,7 @@ from focu.intents import IntentStore
 from focu.research import ingest_research
 from focu.web import fetch_page
 from focu import tts
+from focu import open_notebook
 
 
 def _json(value: object) -> None:
@@ -51,8 +52,13 @@ def main(argv: list[str] | None = None) -> int:
     tts_cmd = sub.add_parser("tts", help="Configure and run opt-in TTS")
     tts_cmd.add_argument("tts_args", nargs=argparse.REMAINDER)
 
+    podcast_cmd = sub.add_parser("podcast", help="Open Notebook podcast handoff")
+    podcast_cmd.add_argument("podcast_args", nargs=argparse.REMAINDER)
+
     args = parser.parse_args(argv)
     try:
+        if args.command == "podcast":
+            return open_notebook.main(args.podcast_args)
         if args.command == "tts":
             return tts.main(args.tts_args)
         if args.command == "doctor":
