@@ -9,3 +9,4 @@ PYTHON="${PYTHON:-python3}"
 .venv/bin/focu doctor
 .venv/bin/focu init
 echo "Focu installed. Run: .venv/bin/focu --help"
+echo "Optional podcast speech: .venv/bin/focu tts status; .venv/bin/focu tts setup (requires user consent and an interactive terminal)"

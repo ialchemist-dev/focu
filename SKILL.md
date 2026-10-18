@@ -106,3 +106,7 @@ bash scripts/bootstrap.sh
 ```
 
 Read `docs/AGENT_INSTALL.md` for the complete agent protocol and acceptance test. Agents must not claim autonomous research exists yet.
+
+## Optional TTS credential onboarding (host-agent instructions)
+
+After bootstrap, run `.venv/bin/focu tts status`. If speech is not configured, **ask the user** whether they want to enable OpenAI speech synthesis. Do not assume consent, request the secret in chat, or claim to open a native popup. If the user agrees, direct them to run `.venv/bin/focu tts setup` in a private interactive terminal, or use the host's secure secret-input facility to set `OPENAI_API_KEY`. See `docs/TTS_ONBOARDING.md`. Never send a key to a model prompt or store it in Git.
