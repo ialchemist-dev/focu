@@ -14,6 +14,7 @@ from focu.web import fetch_page
 from focu import tts
 from focu import open_notebook
 from focu.delivery import DeliveryArchive
+from focu.collectors import collect_export, collect_youtube
 from focu.podcast_delivery import deliver, wait_and_deliver
 
 
@@ -75,8 +76,26 @@ def main(argv: list[str] | None = None) -> int:
     choice.add_argument("--job-id")
     delivery.add_argument("--output-dir", required=True)
     delivery.add_argument("--timeout", type=int, default=900)
+    collect = sub.add_parser("collect", help="Opt-in source collector PoC")
+    collect_sub = collect.add_subparsers(dest="platform", required=True)
+    yt = collect_sub.add_parser("youtube", help="Fetch a single video transcript")
+    yt.add_argument("url")
+    yt.add_argument("--scope", required=True)
+    yt.add_argument("--output", required=True)
+    yt.add_argument("--language", action="append", default=[])
+    li = collect_sub.add_parser("linkedin-export", help="Import an authorized MCP feed JSON export")
+    li.add_argument("--input", required=True)
+    li.add_argument("--scope", required=True)
+    li.add_argument("--output", required=True)
     args = parser.parse_args(argv)
     try:
+        if args.command == "collect":
+            if args.platform == "youtube":
+                _json(collect_youtube(args.url, args.db, args.scope, args.output,
+                                      tuple(args.language or ["en"])))
+            else:
+                _json(collect_export(args.input, "linkedin", args.db, args.scope, args.output))
+            return 0
         if args.command == "deliver":
             if args.episode_id:
                 result = deliver(args.evidence_id, args.episode_id, args.output_dir, args.db)
