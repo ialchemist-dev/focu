@@ -118,3 +118,7 @@ After bootstrap, run `.venv/bin/focu tts status`. If speech is not configured, *
 ## Canonical report and alternate delivery formats
 
 Research is the primary durable asset; podcast is only one interface. See `docs/MULTIFORMAT_DELIVERY.md`. After an Evidence Pack is ingested, run `focu report EVIDENCE_ID --output data/reports/report.md` to preserve a detailed Markdown report with original source links. For an audio derivative, use the Open Notebook workflow, then `focu sync-podcast --evidence-id EVIDENCE_ID --episode-id EPISODE_ID` after completion to archive its actual transcript, outline, and metadata in Focu SQLite. Run `focu artifacts EVIDENCE_ID` to discover available formats and `focu artifact ARTIFACT_ID --output PATH` to export. The spoken transcript is not the canonical report. Preserve all source claims and uncertainty in the report, and flag unsupported generated podcast statements. Don't claim transcript archival happens automatically yet.
+
+## Unified delivery
+
+After an approved Open Notebook episode completes, follow `docs/MUSE_DELIVERY.md` and run `focu deliver --evidence-id ID --episode-id ID --output-dir PATH`. Return reading and listening paths. Do not confuse transcript with canonical research. If only a job ID is known, `--job-id` can resolve it only when the completed job result explicitly includes the episode ID.

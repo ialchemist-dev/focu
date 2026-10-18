@@ -14,6 +14,7 @@ from focu.web import fetch_page
 from focu import tts
 from focu import open_notebook
 from focu.delivery import DeliveryArchive
+from focu.podcast_delivery import deliver, wait_and_deliver
 
 
 def _json(value: object) -> None:
@@ -67,8 +68,22 @@ def main(argv: list[str] | None = None) -> int:
     sync = sub.add_parser("sync-podcast", help="Archive a completed Open Notebook episode's transcript and outline")
     sync.add_argument("--evidence-id", required=True)
     sync.add_argument("--episode-id", required=True)
+    delivery = sub.add_parser("deliver", help="Deliver report, podcast and transcript from a completed episode")
+    delivery.add_argument("--evidence-id", required=True)
+    choice = delivery.add_mutually_exclusive_group(required=True)
+    choice.add_argument("--episode-id")
+    choice.add_argument("--job-id")
+    delivery.add_argument("--output-dir", required=True)
+    delivery.add_argument("--timeout", type=int, default=900)
     args = parser.parse_args(argv)
     try:
+        if args.command == "deliver":
+            if args.episode_id:
+                result = deliver(args.evidence_id, args.episode_id, args.output_dir, args.db)
+            else:
+                result = wait_and_deliver(args.evidence_id, args.job_id, args.output_dir, args.db, timeout=args.timeout)
+            _json(result)
+            return 0
         if args.command == "podcast":
             return open_notebook.main(args.podcast_args)
         if args.command == "tts":
