@@ -11,6 +11,7 @@ from focu.evidence import EvidenceStore
 from focu.intents import IntentStore
 from focu.research import ingest_research
 from focu.web import fetch_page
+from focu import tts
 
 
 def _json(value: object) -> None:
@@ -47,8 +48,13 @@ def main(argv: list[str] | None = None) -> int:
     fetch.add_argument("--timeout", type=float, default=12)
     fetch.add_argument("--max-bytes", type=int, default=2_000_000)
 
+    tts_cmd = sub.add_parser("tts", help="Configure and run opt-in TTS")
+    tts_cmd.add_argument("tts_args", nargs=argparse.REMAINDER)
+
     args = parser.parse_args(argv)
     try:
+        if args.command == "tts":
+            return tts.main(args.tts_args)
         if args.command == "doctor":
             path = Path(args.db)
             _json({"python": sys.version.split()[0], "db_path": str(path),
