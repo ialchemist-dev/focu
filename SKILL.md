@@ -110,3 +110,7 @@ Read `docs/AGENT_INSTALL.md` for the complete agent protocol and acceptance test
 ## Optional TTS credential onboarding (host-agent instructions)
 
 After bootstrap, run `.venv/bin/focu tts status`. If speech is not configured, **ask the user** whether they want to enable OpenAI speech synthesis. Do not assume consent, request the secret in chat, or claim to open a native popup. If the user agrees, direct them to run `.venv/bin/focu tts setup` in a private interactive terminal, or use the host's secure secret-input facility to set `OPENAI_API_KEY`. See `docs/TTS_ONBOARDING.md`. Never send a key to a model prompt or store it in Git.
+
+## Open Notebook podcast backend (Muse testable)
+
+**Preferred podcast backend is Open Notebook, not the standalone Focu TTS adapter.** Read `docs/OPEN_NOTEBOOK_MUSE_TEST.md` before generating audio. After bootstrap, run `.venv/bin/focu podcast doctor` and show the user missing prerequisites. Open Notebook must run separately with API + worker and configured LLM/TTS models. Use the exact Episode Profile and Speaker Profile names returned by doctor. Ask before sending evidence content to a remote service. Generate from approved evidence, poll the returned job ID, list episodes, then download the MP3. Never claim a submitted job is a finished episode. Preserve the evidence separately and verify generated claims. No automatic deployment, scheduling, or feed publishing is implied.
