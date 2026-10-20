@@ -75,13 +75,19 @@ sources:
     feed_url: "https://www.oneusefulthing.org/feed"
 
   - name: "北美王路飞"
-    type: linkedin
+    type: youtube
     channel: research
-    # profile_url: "https://www.linkedin.com/in/<handle>"  # TODO: fill in during setup
-    notes: "mainly LinkedIn and other public updates; needs a login session"
+    channel_id: "UCmajVvuOjspOA9WtJGquDHA"
+    notes: "YouTube creator (corrected by Jerry 2026-10-19: he is a YouTuber, not a LinkedIn source); many recent uploads are members-only with no public transcripts"
 
   - name: "Google DeepMind"
     type: blog
     channel: research
     site_url: "https://deepmind.google/discover/blog/"
     notes: "Google AI official announcements; no official RSS known — verify blog structure during setup"
+
+  - name: "Claude Blog"
+    type: blog
+    channel: research
+    site_url: "https://claude.dev/blog/"
+    notes: "Claude product blog on claude.dev (added 2026-10-20 at Jerry's instruction after the Oct 15 code-review post was missed: it is a separate publication from anthropic.com news/research/engineering); no RSS — check https://claude.dev/sitemap.xml for /blog/ entries by lastmod"
