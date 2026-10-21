@@ -122,3 +122,7 @@ Research is the primary durable asset; podcast is only one interface. See `docs/
 ## Unified delivery
 
 After an approved Open Notebook episode completes, follow `docs/MUSE_DELIVERY.md` and run `focu deliver --evidence-id ID --episode-id ID --output-dir PATH`. Return reading and listening paths. Do not confuse transcript with canonical research. If only a job ID is known, `--job-id` can resolve it only when the completed job result explicitly includes the episode ID.
+
+## Source collectors PoC
+
+See `docs/COLLECTOR_POC.md` before running YouTube or importing an authorized LinkedIn MCP feed export. Do not equate collected text with verified Evidence Pack findings.
