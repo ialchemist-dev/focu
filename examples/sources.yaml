@@ -91,3 +91,9 @@ sources:
     channel: research
     site_url: "https://claude.dev/blog/"
     notes: "Claude product blog on claude.dev (added 2026-10-20 at Jerry's instruction after the Oct 15 code-review post was missed: it is a separate publication from anthropic.com news/research/engineering); no RSS — check https://claude.dev/sitemap.xml for /blog/ entries by lastmod"
+
+  - name: "Felix Rieseberg"
+    type: rss
+    channel: research
+    feed_url: "https://felixrieseberg.com/rss/"
+    notes: "Personal blog (added 2026-10-28 at Jerry's instruction, via his post 'Hunger beats tenure: Advice for junior engineers', 2026-10-27); RSS verified 2026-10-28"
