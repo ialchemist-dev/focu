@@ -3,5 +3,7 @@
 set -euo pipefail
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 export PYTHONPATH="$REPO${PYTHONPATH:+:$PYTHONPATH}"
-exec "${THEFEW_PYTHON:-python3}" -m the_few.cli run \
+PYTHON="${FOCU_PYTHON:-${THEFEW_PYTHON:-$REPO/.venv/bin/python}}"
+[[ -x "$PYTHON" ]] || PYTHON=python3
+exec "$PYTHON" -m focu.daily.cli run \
   --config "$REPO/sources.yaml" --data-dir "$REPO/data" "$@"

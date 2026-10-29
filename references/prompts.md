@@ -1,8 +1,7 @@
-# Prompt templates (planned M3 provider interface)
+# Prompt templates (v0.1 — framework; voice tuning comes next)
 
-M1 does not load or execute these templates; its composer is an explicit
-deterministic skeleton. M3 will load/version these prompts through the provider
-interface. Keep the future voice contract here, not duplicated in adapters.
+The composer (`scripts/compose.py`) fills these templates. Keep prompts
+here, not in code.
 
 ## Compose: single-host episode script
 
@@ -37,7 +36,7 @@ Updates:
 {units_json}
 ```
 
-## Digest: rank and filter (planned for M3, not executed by M1)
+## Digest: rank and filter (used by digest.py when a channel overflows)
 
 ```
 You are filtering a daily digest. Given {n} candidate items (title,
@@ -49,7 +48,7 @@ the kept item ids in order, newest first, with one line each saying
 why it survived.
 ```
 
-## Ingest: per-item summary (planned for M3; oversized M1 items stay pending)
+## Ingest: per-item summary (used when a body is too long for the digest)
 
 ```
 Summarize the following {kind} from {source} in 5-8 sentences,

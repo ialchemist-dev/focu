@@ -1,17 +1,38 @@
-name: M1 checks
-on: [push, pull_request]
+name: Focu Python tests
+on:
+  push:
+    branches: [main, "feat/**"]
+  pull_request:
+  workflow_dispatch:
+
 jobs:
-  tests:
+  unit:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ['3.10', '3.12']
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
-      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
-      - run: python -m pip install .
-      - run: python -m unittest discover -s tests -v
-      - run: few run --config examples/sources.yaml --text-only --dry-run --json
+          python-version: "3.11"
+      - name: Install CLI package
+        run: python -m pip install -e .
+      - name: CLI installation smoke test
+        run: |
+          focu --help
+          focu --db /tmp/focu-smoke.sqlite3 init
+          focu --db /tmp/focu-smoke.sqlite3 capture "What is advertising?"
+      - name: Run offline unit tests
+        run: python -m unittest discover -s tests -p 'test_*.py' -v
+      - name: Run HTTP fixture tests
+        run: python -m unittest discover -s tests/unit -p 'test_*.py' -v
+  live-web:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Real external webpage smoke test
+        env:
+          FOCU_LIVE_TESTS: "1"
+        run: python -m unittest discover -s tests/integration -p 'test_*.py' -v

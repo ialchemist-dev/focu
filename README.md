@@ -1,99 +1,119 @@
-# The Few
+# Focu
+
+Current integrated version: **0.3.0**. Research/evidence handoff, podcast delivery, finite mobile reader, versioned source packs, explicit feedback, collector PoCs, auditable snapshots, and the recoverable daily pipeline are available on `main`. Recurring research orchestration and authenticated mobile hosting remain host integration work.
+
+**Agent-native Attention Infrastructure** — focus on what matters, stay quiet about the rest.
+
+Focu is evolving from the original feed-to-podcast prototype into an intent-led, evidence-backed information workflow. The current v0.2 code implements research-intent capture, evidence persistence and agent handoff; recurring Watches, change detection and silence-by-default delivery are **planned, not yet implemented**.
+
+## Agent-native installation (v0.2 preview)
+
+The v0.2 agent-installable workflow is available on `main`. Requires Python 3.10+ and Git.
+
+```bash
+git clone https://github.com/ialchemist-dev/focu.git focu
+cd focu
+bash scripts/bootstrap.sh
+.venv/bin/focu capture "Why do tools constrain us?"
+.venv/bin/focu list --status queued
+```
+
+See [Agent Installation](docs/AGENT_INSTALL.md) for Muse/OpenClaw usage, limitations and an end-to-end evidence handoff. Focu does not yet autonomously run a research agent or produce v0.2 audio.
+
+---
+
+## Legacy v0.1 feed-to-podcast pipeline
 
 Your sources. Your podcast. Every day.
 
-The Few turns only the sources you choose into a daily script and, with a
-configured TTS backend, an MP3. No trending feeds or unsolicited sources.
+Focu is a personal feed-to-podcast pipeline with one rule: **you define
+the sources, nothing else gets in.** A background agent checks your sources
+once a day, pulls their latest updates, and turns them into a podcast
+episode — with the full script kept alongside the audio.
 
-## Status
+No recommendations. No trending tabs. No algorithmic feed. Just the people
+and publications you chose, read to you.
 
-v0.2 M1 foundation: persistent URL identities, SQLite backlog, cross-day
-coverage, frozen episode inputs, resumable TTS, and a host-independent CLI.
-The composer is still a deterministic skeleton: it reads the available text
-without an LLM, translation, feedback learning, or long-body summarization.
-Those capabilities are planned in [docs/V0.2-PLAN.md](docs/V0.2-PLAN.md).
+## New here? Start in one sitting
 
-RSS and blogs with an RSS feed are supported. YouTube is experimental and
-requires optional dependencies. HTML-only blogs, X and LinkedIn are not
-implemented; examples keep them disabled rather than claiming a successful
-fetch. RSS scans the available feed window; old items removed from that feed
-cannot be backfilled by this version.
+Hand this repo to your agent (or a friend's) and answer six questions:
+who to follow, any official blogs, how many episodes, how long, what
+language, what the host is called. The full script is in
+[`docs/ONBOARDING.md`](docs/ONBOARDING.md) — it includes recommended
+starter packs (AI labs tracker, learning & thinking) you can paste
+straight into `sources.yaml`.
 
-## Install and run
+## How it works
 
-M1 supports Linux/macOS and Python 3.10+. Run these commands from the repo:
-
-```bash
-git clone https://github.com/ialchemist-dev/the-few.git
-cd the-few
-python3 -m venv .venv
-.venv/bin/python -m pip install -e .
-cp examples/sources.yaml sources.yaml
-# Edit sources, timezone and channel settings first.
-.venv/bin/few run --text-only --dry-run --json
-.venv/bin/few run --text-only --json
-.venv/bin/few status --json
+```
+You define sources (sources.yaml)
+        ↓  daily, automatic
+Agent ingests each source's latest updates
+        ↓
+Updates → digest → single-host script → MP3 episode
+        ↓
+data/episodes/2026-09-28/research.mp3 (+ research-script.txt)
 ```
 
-`--text-only` explicitly chooses text as the final artifact. To generate
-audio, install ffmpeg/ffprobe and configure `tts_argv` as described in
-[references/tts-backends.md](references/tts-backends.md), then omit this flag.
-Missing or failed TTS does not count as a successful audio episode.
-Use the same mode when resuming a date; text and audio completion are distinct.
+## Install
 
-All commands accept `--config` and `--data-dir`. Defaults are `sources.yaml`
-and `data` in the working directory. Compatibility scripts keep repo-relative
-defaults and support the same overrides:
+Prerequisites: Python 3.10+, `ffmpeg`, a TTS backend (see
+`references/tts-backends.md`).
 
 ```bash
-THEFEW_PYTHON="$PWD/.venv/bin/python" ./scripts/run-daily.sh --text-only --json
+git clone <this-repo> focu
+cd focu
+pip install -r requirements.txt
+cp examples/sources.yaml sources.yaml   # then edit: your sources
+./scripts/run-daily.sh                  # run once now
 ```
 
-Use only one scheduler. For example, at 07:14 in the machine's timezone:
+Schedule it daily (cron example — 7:14 AM):
 
 ```cron
-14 7 * * * cd /absolute/path/to/the-few && .venv/bin/few run --text-only --json >> data/cron.log 2>&1
+14 7 * * * /path/to/focu/scripts/run-daily.sh >> /path/to/focu/data/cron.log 2>&1
 ```
 
-Create `data` before installing this cron entry. Config `timezone` determines
-the episode date; cron's timezone determines the trigger time. Resume a failed
-date with the same `--date`, mode and content config. A completed date is a no-op.
-Never treat generation as proof of delivery or listening.
+## Defining sources
 
-## Upgrading v0.1 data
+`sources.yaml` is the whole product. Example:
 
-Stop the old scheduler while importing. Do not run the new pipeline over old output directories. The CLI refuses to
-initialize over legacy files. Import into a separate directory:
+```yaml
+sources:
+  - name: "3Blue1Brown"
+    type: youtube
+    channel: research
+    handle: "3blue1brown"
 
-```bash
-.venv/bin/few import-legacy --config sources.yaml --from-dir data --data-dir data-v2 --json
+  - name: "Ethan Mollick"
+    type: rss
+    channel: research
+    feed_url: "https://www.oneusefulthing.org/feed"
 ```
 
-This copies the old state and outputs into a backup, imports snapshots from
-configured sources, and ignores unreliable old cursors. By default it registers
-no historical coverage. Add `--register-coverage` only when you explicitly
-attest those episode snapshots as complete. That option requires scripts and,
-in audio mode, MP3s, but does not infer delivery/listening or validate legacy
-speech. Preserve original source names in config for matching. Future commands
-must use `--data-dir data-v2`. See [references/architecture.md](references/architecture.md).
+Full schema: `references/source-schema.md`. Source types: `rss`,
+`youtube`, `blog`, `x`, `linkedin`.
 
 ## For agents
 
-[SKILL.md](SKILL.md) is the entry point. Muse, OpenClaw and other shell-capable
-hosts use the same CLI and JSON contract; no host-specific installer is claimed.
-Agents may submit units from configured sources with `ingest --input-units`.
-[docs/ONBOARDING.md](docs/ONBOARDING.md) provides the existing setup questions.
-Shared lists currently live in `examples/groups`; versioned import/export and a
-marketplace registry are planned, not implemented in M1.
+This repo is a skill: `SKILL.md` is the agent-readable entry point.
+Agents (Muse, or any agent that reads skills) can install, configure,
+run, and extend the pipeline from these docs alone.
 
-## Verify
+## Status
 
-```bash
-.venv/bin/python -m unittest discover -s tests -v
-```
+v0.1 — framework. Pipeline skeleton, source schema, script conventions,
+and prompt templates are in place. Prompt quality for natural-sounding
+episodes is the next iteration (see `references/prompts.md`).
 
-The suite covers URL collisions, RSS repeat/ordering, transactional cursor
-rollback, backlog, crash recovery, audio validation, source boundaries and
-process locks. Audio tests require ffmpeg/ffprobe.
+## License
 
 MIT — see [LICENSE](LICENSE).
+
+## Finite mobile reader and source marketplace
+
+Run `python -m focu.cli reader serve` to read explicitly published research batches, save/complete items, and inspect/subscribe to versioned source groups. See [Reader App](docs/READER_APP.md), [product design](docs/READER_MARKETPLACE_PLAN.md), and [Anthropic source validation](docs/ANTHROPIC_SOURCE_DISCOVERY.md). Local-only server; authenticated HTTPS hosting and iOS installation acceptance remain outstanding.
+
+## Recoverable daily pipeline
+
+`focu daily ...` exposes the persistent backlog and safe resume functionality without replacing the research CLI. See [Persistent Pipeline](docs/PERSISTENT_PIPELINE.md). For an existing installation, follow [Muse Reinstall](docs/MUSE_REINSTALL.md) to preserve databases, sources and credentials.

@@ -1,7 +1,5 @@
 # Example sources.yaml — copy to sources.yaml and make it yours.
-version: 2
-timezone: UTC
-output_mode: audio
+version: 1
 
 channels:
   - id: research
@@ -19,21 +17,18 @@ channels:
 sources:
   - name: "3Blue1Brown"
     type: youtube
-    enabled: false  # experimental; enable after installing the youtube extra
     channel: research
     handle: "3blue1brown"
     notes: "Grant Sanderson's math channel"
 
   - name: "Elon Musk"
     type: x
-    enabled: false  # collector not implemented
     channel: research
     username: "elonmusk"
     notes: "needs API or session; skipped gracefully without it"
 
   - name: "Andrej Karpathy"
     type: x
-    enabled: false  # collector not implemented
     channel: research
     username: "karpathy"
     notes: "needs API or session; skipped gracefully without it"
@@ -46,38 +41,33 @@ sources:
 
   - name: "OpenAI Research"
     type: blog
-    enabled: false  # HTML extraction is an M2 task; RSS already covers OpenAI
     channel: research
     site_url: "https://openai.com/research/"
     notes: "verified 2026-10-05: openai.com/research/ is an overview landing page — its publications all link to /index/ items already covered by the OpenAI News RSS; no separate scrape needed"
 
   - name: "OpenAI Index"
     type: blog
-    enabled: false  # HTML extraction is an M2 task; RSS already covers OpenAI
     channel: research
     site_url: "https://openai.com/index/"
     notes: "verified 2026-10-05: the OpenAI News RSS already contains all /index/ announcements (1178 links, with pubDates) — covered via OpenAI News, no separate scrape needed"
 
   - name: "Anthropic News"
-    type: blog
-    enabled: false  # HTML collector planned for M2
+    type: anthropic
     channel: research
-    site_url: "https://www.anthropic.com/news"
-    notes: "verified 2026-10-05: no official RSS configured; HTML collector not implemented"
+    section: news
+    notes: "verified 2026-10-05: no official RSS; listing cards scraped from https://www.anthropic.com/news"
 
   - name: "Anthropic Research"
-    type: blog
-    enabled: false  # HTML collector planned for M2
+    type: anthropic
     channel: research
-    site_url: "https://www.anthropic.com/research"
-    notes: "verified 2026-10-05: no official RSS configured; HTML collector not implemented"
+    section: research
+    notes: "verified 2026-10-05: no official RSS; listing cards scraped from https://www.anthropic.com/research"
 
   - name: "Anthropic Engineering"
-    type: blog
-    enabled: false  # HTML collector planned for M2
+    type: anthropic
     channel: research
-    site_url: "https://www.anthropic.com/engineering"
-    notes: "verified 2026-10-05: HTML collector not implemented"
+    section: engineering
+    notes: "verified 2026-10-05: no official RSS; page is client-rendered — discovered via the official sitemap, titles from article og:title"
 
   - name: "Ethan Mollick"
     type: rss
@@ -85,15 +75,25 @@ sources:
     feed_url: "https://www.oneusefulthing.org/feed"
 
   - name: "北美王路飞"
-    type: linkedin
-    enabled: false  # fill in locator; collector not implemented
+    type: youtube
     channel: research
-    # profile_url: "https://www.linkedin.com/in/<handle>"  # TODO: fill in during setup
-    notes: "mainly LinkedIn and other public updates; needs a login session"
+    channel_id: "UCmajVvuOjspOA9WtJGquDHA"
+    notes: "YouTube creator (corrected by Jerry 2026-10-19: he is a YouTuber, not a LinkedIn source); many recent uploads are members-only with no public transcripts"
 
   - name: "Google DeepMind"
     type: blog
-    enabled: false  # HTML extraction is an M2 task
     channel: research
     site_url: "https://deepmind.google/discover/blog/"
     notes: "Google AI official announcements; no official RSS known — verify blog structure during setup"
+
+  - name: "Claude Blog"
+    type: blog
+    channel: research
+    site_url: "https://claude.dev/blog/"
+    notes: "Claude product blog on claude.dev (added 2026-10-20 at Jerry's instruction after the Oct 15 code-review post was missed: it is a separate publication from anthropic.com news/research/engineering); no RSS — check https://claude.dev/sitemap.xml for /blog/ entries by lastmod"
+
+  - name: "Felix Rieseberg"
+    type: rss
+    channel: research
+    feed_url: "https://felixrieseberg.com/rss/"
+    notes: "Personal blog (added 2026-10-28 at Jerry's instruction, via his post 'Hunger beats tenure: Advice for junior engineers', 2026-10-27); RSS verified 2026-10-28"

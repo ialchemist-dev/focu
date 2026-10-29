@@ -54,6 +54,14 @@ def load_config(path):
         # Disabled placeholders are deliberately permitted to lack a locator.
         if src.get("enabled", True) is False:
             continue
+        # Preserve older registered Anthropic sections as host-collected blogs.
+        # This normalization is in memory; never rewrite the user's source file.
+        if src.get("type") == "anthropic":
+            section = src.get("section", "news")
+            if section not in {"news", "research", "engineering"}:
+                raise FewError("unknown Anthropic section")
+            src.setdefault("site_url", "https://www.anthropic.com/" + section)
+            src["type"] = "blog"
         if src.get("type") not in KNOWN_TYPES:
             raise FewError(f"unknown source type: {src.get('type')}")
         if not isinstance(src.get("name"), str) or not src["name"].strip() or src["name"] in names:

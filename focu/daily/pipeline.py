@@ -40,7 +40,7 @@ def atomic_write(path, text):
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists() and path.read_text(encoding="utf-8") == text:
         return
-    fd, temp = tempfile.mkstemp(dir=path.parent, prefix=".few-")
+    fd, temp = tempfile.mkstemp(dir=path.parent, prefix=".focu-")
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as file:
             file.write(text)
@@ -173,11 +173,11 @@ def tts_argv(cfg):
     value = cfg.get("tts_argv")
     if value is None:
         # Compatibility only; parsing into argv, NEVER eval or shell=True.
-        value = os.environ.get("THEFEW_TTS_CMD") or os.environ.get("THEVIEW_TTS_CMD")
+        value = os.environ.get("FOCU_TTS_CMD") or os.environ.get("THEFEW_TTS_CMD") or os.environ.get("THEVIEW_TTS_CMD")
         if value:
             value = shlex.split(value)
     if not isinstance(value, list) or not value or not all(isinstance(a, str) for a in value):
-        raise FewError("audio mode requires tts_argv (or THEFEW_TTS_CMD); choose explicit text_only for text output",
+        raise FewError("audio mode requires tts_argv (or FOCU_TTS_CMD); choose explicit text_only for text output",
                        "missing_tts", 4)
     template = " ".join(value)
     if not ("{input}" in template or "$IN" in template) or not ("{output}" in template or "$OUT" in template):
@@ -222,7 +222,7 @@ def finalize_episodes(store, cfg, run, channel=None):
                 if not (receipt and receipt.get("episode_id") == ep["episode_id"] and
                         receipt.get("script_hash") == ep["script_hash"] and audio_path.exists() and
                         receipt.get("audio_hash") == file_hash(audio_path)):
-                    fd, tmp = tempfile.mkstemp(dir=ep_dir, suffix=".mp3", prefix=".few-audio-")
+                    fd, tmp = tempfile.mkstemp(dir=ep_dir, suffix=".mp3", prefix=".focu-audio-")
                     os.close(fd)
                     tmp_path = Path(tmp)
                     try:

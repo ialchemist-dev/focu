@@ -9,12 +9,12 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
-from the_few.collectors import FetchResult, rss_from_bytes
-from the_few.config import load_config
-from the_few.errors import FewError
-from the_few.identity import canonical_url, content_identity, source_url, stable_id
-from the_few.pipeline import compose, digest, finalize_episodes, ingest, run_lock, run_pipeline
-from the_few.store import Store
+from focu.daily.collectors import FetchResult, rss_from_bytes
+from focu.daily.config import load_config
+from focu.daily.errors import FewError
+from focu.daily.identity import canonical_url, content_identity, source_url, stable_id
+from focu.daily.pipeline import compose, digest, finalize_episodes, ingest, run_lock, run_pipeline
+from focu.daily.store import Store
 
 
 class IdentityTests(unittest.TestCase):
@@ -152,7 +152,7 @@ class PipelineTests(unittest.TestCase):
         manifest = json.loads(episode["artifact_manifest"])
         files = [Path(manifest[k]) for k in ("script", "units")]
         before = [(p.read_bytes(), p.stat().st_mtime_ns) for p in files]
-        with patch("the_few.pipeline.collect", side_effect=AssertionError("must not fetch")):
+        with patch("focu.daily.pipeline.collect", side_effect=AssertionError("must not fetch")):
             again = run_pipeline(self.store, self.cfg, self.today, "text_only")
         self.assertEqual(again["status"], "reused")
         self.assertEqual(before, [(p.read_bytes(), p.stat().st_mtime_ns) for p in files])
@@ -167,7 +167,7 @@ class PipelineTests(unittest.TestCase):
         ep = self.store.episodes(first["run_id"])[0]
         self.assertEqual(ep["status"], "script_ready")
         self.assertEqual(len(self.store.units(ep["episode_id"])), 1)
-        with patch("the_few.pipeline.collect", side_effect=AssertionError("must reuse frozen input")):
+        with patch("focu.daily.pipeline.collect", side_effect=AssertionError("must reuse frozen input")):
             again = run_pipeline(self.store, cfg, self.today, "audio")
         self.assertEqual(again["run_id"], first["run_id"])
         self.assertEqual(self.count("episodes"), 1)
@@ -190,7 +190,7 @@ class PipelineTests(unittest.TestCase):
             crashed = run_pipeline(self.store, cfg, self.today, "audio")
         self.assertEqual(crashed["status"], "failed")
         self.assertEqual(self.count("coverage"), 0)
-        with patch("the_few.pipeline.collect", side_effect=AssertionError("must not re-fetch")):
+        with patch("focu.daily.pipeline.collect", side_effect=AssertionError("must not re-fetch")):
             complete = run_pipeline(self.store, cfg, self.today, "audio")
         self.assertEqual(complete["status"], "completed")
         self.assertEqual(marker.read_text(), "call\n")
@@ -219,7 +219,7 @@ class PipelineTests(unittest.TestCase):
             if source["name"] == "Other":
                 raise TimeoutError("unavailable")
             return FetchResult(items=[self.item()])
-        with patch("the_few.pipeline.collect", side_effect=collector):
+        with patch("focu.daily.pipeline.collect", side_effect=collector):
             report = run_pipeline(self.store, self.cfg, self.today, "text_only")
         self.assertEqual(report["status"], "degraded")
         self.assertEqual(self.count("coverage"), 1)
@@ -227,7 +227,7 @@ class PipelineTests(unittest.TestCase):
 
     def test_outage_can_use_durable_backlog_without_hiding_failure(self):
         self.store.persist_fetch(self.src, FetchResult(items=[self.item()]))
-        with patch("the_few.pipeline.collect", side_effect=TimeoutError("offline")):
+        with patch("focu.daily.pipeline.collect", side_effect=TimeoutError("offline")):
             report = run_pipeline(self.store, self.cfg, self.today, "text_only")
         self.assertEqual(report["status"], "degraded")
         self.assertEqual(report["fetch"]["sources"][0]["status"], "error")
@@ -253,7 +253,7 @@ class PipelineTests(unittest.TestCase):
     def test_unknown_publication_time_ages_from_first_discovery(self):
         self.store.persist_fetch(self.src, FetchResult(items=[self.item()]))
         first = self.store.db.execute("SELECT expires_at FROM candidates").fetchone()[0]
-        with patch("the_few.store.now_utc", return_value=(datetime.now(timezone.utc) + timedelta(days=2)).isoformat()):
+        with patch("focu.daily.store.now_utc", return_value=(datetime.now(timezone.utc) + timedelta(days=2)).isoformat()):
             self.store.persist_fetch(self.src, FetchResult(items=[self.item()]))
         self.assertEqual(self.store.db.execute("SELECT expires_at FROM candidates").fetchone()[0], first)
 
@@ -263,13 +263,13 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(self.count("contents"), 0)
 
     def test_lock_rejects_concurrent_process(self):
-        code = 'from the_few.pipeline import run_lock\nfrom the_few.errors import FewError\nimport sys\ntry:\n with run_lock(sys.argv[1]): pass\nexcept FewError as e:\n sys.exit(e.exit_code)\n'
+        code = 'from focu.daily.pipeline import run_lock\nfrom focu.daily.errors import FewError\nimport sys\ntry:\n with run_lock(sys.argv[1]): pass\nexcept FewError as e:\n sys.exit(e.exit_code)\n'
         with run_lock(self.store.data_dir):
             proc = subprocess.run([sys.executable, "-c", code, str(self.store.data_dir)], capture_output=True, timeout=10)
         self.assertEqual(proc.returncode, 5, proc.stderr.decode())
 
     def test_cli_json_error_and_legacy_guard(self):
-        from the_few.cli import execute, parser
+        from focu.daily.cli import execute, parser
         old_dir = self.root / "legacy"
         (old_dir / "episodes").mkdir(parents=True)
         old = old_dir / "state.json"
@@ -282,7 +282,7 @@ class PipelineTests(unittest.TestCase):
         self.assertFalse((old_dir / "few.sqlite3").exists())
 
     def test_legacy_import_is_additive_and_coverage_is_explicit(self):
-        from the_few.legacy import import_legacy
+        from focu.daily.legacy import import_legacy
         old = self.root / "old"
         audits = old / "episodes" / "2026-10-01"
         audits.mkdir(parents=True)
@@ -304,7 +304,7 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual((Path(imported["backup"]) / "episodes/2026-10-01/research-units.json").read_bytes(), before)
 
     def test_legacy_audio_attestation_requires_audio(self):
-        from the_few.legacy import import_legacy
+        from focu.daily.legacy import import_legacy
         old = self.root / "old"
         audits = old / "episodes/2026-10-01"
         audits.mkdir(parents=True)
@@ -316,7 +316,7 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(self.count("contents"), 0)
 
     def test_legacy_unknown_source_is_rejected_before_import(self):
-        from the_few.legacy import import_legacy
+        from focu.daily.legacy import import_legacy
         old = self.root / "old"
         (old / "units").mkdir(parents=True)
         (old / "units/2026-10-01.json").write_text(json.dumps([self.item(source="Other")]))

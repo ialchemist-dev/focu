@@ -12,7 +12,7 @@ from .store import Store
 
 
 def parser():
-    ap = argparse.ArgumentParser(description="The Few persistent pipeline (M1)")
+    ap = argparse.ArgumentParser(description="Focu persistent pipeline (M1)")
     sub = ap.add_subparsers(dest="command", required=True)
     for name in ("run", "ingest", "digest", "compose", "synthesize", "status", "export-state"):
         p = sub.add_parser(name)

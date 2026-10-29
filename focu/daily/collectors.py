@@ -64,7 +64,7 @@ def rss_from_bytes(source, payload):
 def collect(source, state=None):
     typ = source["type"]
     if typ == "rss" or (typ == "blog" and source.get("feed_url")):
-        request = Request(source["feed_url"], headers={"User-Agent": "TheFew/0.2"})
+        request = Request(source["feed_url"], headers={"User-Agent": "Focu/0.2"})
         with urlopen(request, timeout=20) as response:
             payload = response.read(8 * 1024 * 1024 + 1)
         if len(payload) > 8 * 1024 * 1024:
