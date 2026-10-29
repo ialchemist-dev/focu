@@ -8,6 +8,7 @@ from urllib.parse import urlsplit, urlunsplit
 from focu.delivery import DeliveryArchive
 from focu.evidence import EvidenceStore
 from focu.intents import IntentStore
+from focu.covers import source_cover, image_url
 
 ASSETS = Path(__file__).with_name('reader_assets')
 PACKS = Path(__file__).with_name('source_packs')
@@ -35,6 +36,8 @@ class ReaderStore:
                 CREATE TABLE IF NOT EXISTS reader_state (
                     item_id TEXT PRIMARY KEY REFERENCES reader_items(id),
                     completed INTEGER NOT NULL DEFAULT 0, saved INTEGER NOT NULL DEFAULT 0);
+                CREATE TABLE IF NOT EXISTS reader_covers (
+                    item_id TEXT PRIMARY KEY REFERENCES reader_items(id), payload TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS reader_subscriptions (
                     pack_id TEXT PRIMARY KEY, payload TEXT NOT NULL);
             ''')
@@ -94,8 +97,25 @@ class ReaderStore:
             if not row:
                 raise ValueError('Unknown reader item')
             state = db.execute('SELECT completed,saved FROM reader_state WHERE item_id=?', (item_id,)).fetchone()
-        return {**json.loads(row['payload']), 'completed': bool(state['completed']) if state else False,
+            cover = db.execute('SELECT payload FROM reader_covers WHERE item_id=?',(item_id,)).fetchone()
+        payload=json.loads(row['payload'])
+        return {**payload, 'cover':json.loads(cover['payload']) if cover else source_cover(payload['sources']), 'completed': bool(state['completed']) if state else False,
                 'saved': bool(state['saved']) if state else False}
+
+    def set_cover(self, item_id, url, source_url, alt=''):
+        item=self.item(item_id)
+        if canonical_url(source_url) not in {canonical_url(s['url']) for s in item['sources']}:
+            raise ValueError('Cover must be attributed to a cited source')
+        safe=image_url(url,source_url)
+        if safe is None:
+            raise ValueError('Cover requires a credential-free HTTPS image URL')
+        if not isinstance(alt,str) or len(alt)>1000:
+            raise ValueError('Invalid cover description')
+        cover={'url':safe,'source_url':source_url,'alt':alt or item['title']}
+        with self.db() as db:
+            db.execute('INSERT OR REPLACE INTO reader_covers VALUES (?,?)',
+                       (item_id,json.dumps(cover,ensure_ascii=False)))
+        return self.item(item_id)
 
     def state(self, item_id, changes):
         if not isinstance(changes, dict) or not changes or set(changes) - {'completed','saved'} or any(type(v) is not bool for v in changes.values()):
@@ -174,6 +194,11 @@ def main(argv=None, *, db_path='data/focu.sqlite3'):
     publish.add_argument('--media-json',help='JSON mapping evidence ID to audio/video paths relative to media root')
     publish.add_argument('--limit',type=int,default=20)
     sub.add_parser('sources')
+    cover=sub.add_parser('cover',help='Attach an original source image to an existing card')
+    cover.add_argument('--evidence-id',required=True)
+    cover.add_argument('--image-url',required=True)
+    cover.add_argument('--source-url',required=True)
+    cover.add_argument('--alt',default='')
     collection=sub.add_parser('collect')
     collection.add_argument('--output',required=True)
     ack=sub.add_parser('acknowledge')
@@ -189,7 +214,9 @@ def main(argv=None, *, db_path='data/focu.sqlite3'):
         from focu.reader_server import serve as run
         run(store,args.port,Path(args.media_root))
         return 0
-    if args.action=='collect':
+    if args.action=='cover':
+        result=store.set_cover(args.evidence_id,args.image_url,args.source_url,args.alt)
+    elif args.action=='collect':
         from focu.source_collection import collect
         result=collect(store,Path(args.output))
     elif args.action=='acknowledge':

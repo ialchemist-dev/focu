@@ -23,6 +23,12 @@ def validate_pack(pack: dict) -> None:
         parsed = urlparse(source["url"])
         if parsed.scheme not in ("http", "https") or not parsed.netloc:
             raise ValueError("Source URL must be HTTP(S)")
+        if 'image_url' in source:
+            from focu.covers import image_url
+            if image_url(source['image_url'],source['url']) is None:
+                raise ValueError('Source image must use credential-free HTTPS')
+        if 'image_alt' in source and not isinstance(source['image_alt'],str):
+            raise ValueError('Source image description must be text')
         if source["id"] in source_ids:
             raise ValueError("Duplicate source ID")
         source_ids.add(source["id"])

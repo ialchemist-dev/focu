@@ -41,3 +41,7 @@ Existing IntentStore -> EvidenceStore -> DeliveryArchive remain the research tru
 
 ## Scope tracking
 This document describes the entire target and its dependencies, not a time schedule. Implementation status and verification are recorded in the PR and READER_APP.md. The first runnable implementation can use existing generated material without waiting for broad source discovery or new AI orchestration.
+
+## Visual direction update
+
+English UI by default, preserving source/content language. Mobile feed uses two image-first columns inspired by familiar social reading apps. Prefer the original post image with source attribution; use editorial typography when no original image is available. Do not fabricate unrelated stock covers. Completion, source selection and finite batches keep their existing semantics.

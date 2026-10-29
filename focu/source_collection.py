@@ -8,6 +8,7 @@ from urllib.parse import urljoin
 from xml.etree import ElementTree as ET
 from focu.reader import canonical_url
 from focu.intents import utcnow
+from focu.covers import feed_cover
 
 
 def parse_feed(data,base_url):
@@ -25,10 +26,11 @@ def parse_feed(data,base_url):
         if not url:continue
         url=canonical_url(urljoin(base_url,url))
         text=e.findtext('{http://purl.org/rss/1.0/modules/content/}encoded') or e.findtext('description') or e.findtext(atom+'content') or e.findtext(atom+'summary') or title
+        cover=feed_cover(e,text,url)
         text=unescape(re.sub('<[^>]+>',' ',text))
         text=re.sub(r'\s+',' ',text).strip()
         published=e.findtext('pubDate') or e.findtext(atom+'published') or e.findtext(atom+'updated')
-        records.append({'url':url,'title':title,'text':text,'published_at':published})
+        records.append({'url':url,'title':title,'text':text,'published_at':published,**cover})
     return records
 
 
@@ -51,7 +53,12 @@ def collect(store,output):
                 payload={**record,'id':record_id,'source':source['name'],'method':'rss_or_atom',
                          'collected_at':utcnow(),'evidence_status':'unverified_raw_material'}
                 with store.db() as db:
-                    db.execute('INSERT OR IGNORE INTO reader_raw_queue(id,payload) VALUES (?,?)',
+                    db.execute("""INSERT INTO reader_raw_queue(id,payload) VALUES (?,?)
+                               ON CONFLICT(id) DO UPDATE SET payload=json_set(reader_raw_queue.payload,
+                               '$.image_url',json_extract(excluded.payload,'$.image_url'),
+                               '$.image_alt',json_extract(excluded.payload,'$.image_alt'))
+                               WHERE json_extract(reader_raw_queue.payload,'$.image_url') IS NULL
+                               AND json_extract(excluded.payload,'$.image_url') IS NOT NULL""",
                                (record_id,json.dumps(payload,ensure_ascii=False)))
             results.append({'source':source['name'],'status':'collected','items':len(records)})
         except Exception as exc:
