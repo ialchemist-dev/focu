@@ -8,6 +8,7 @@ from urllib.parse import urljoin
 from xml.etree import ElementTree as ET
 from focu.reader import canonical_url
 from focu.intents import utcnow
+from focu import sync_events
 from focu.covers import feed_cover
 
 
@@ -53,13 +54,14 @@ def collect(store,output):
                 payload={**record,'id':record_id,'source':source['name'],'method':'rss_or_atom',
                          'collected_at':utcnow(),'evidence_status':'unverified_raw_material'}
                 with store.db() as db:
-                    db.execute("""INSERT INTO reader_raw_queue(id,payload) VALUES (?,?)
+                    changed=db.execute("""INSERT INTO reader_raw_queue(id,payload) VALUES (?,?)
                                ON CONFLICT(id) DO UPDATE SET payload=json_set(reader_raw_queue.payload,
                                '$.image_url',json_extract(excluded.payload,'$.image_url'),
                                '$.image_alt',json_extract(excluded.payload,'$.image_alt'))
                                WHERE json_extract(reader_raw_queue.payload,'$.image_url') IS NULL
                                AND json_extract(excluded.payload,'$.image_url') IS NOT NULL""",
-                               (record_id,json.dumps(payload,ensure_ascii=False)))
+                               (record_id,json.dumps(payload,ensure_ascii=False))).rowcount
+                    if changed:sync_events.append(db,record_id,'collect',{'source_url':record['url']})
             results.append({'source':source['name'],'status':'collected','items':len(records)})
         except Exception as exc:
             results.append({'source':source['name'],'status':'failed','error':str(exc)})
@@ -76,4 +78,5 @@ def acknowledge(store,ids):
             if db.execute('SELECT 1 FROM reader_raw_queue WHERE id=?',(record_id,)).fetchone() is None:
                 raise ValueError('Unknown raw record ID')
             db.execute('UPDATE reader_raw_queue SET acknowledged=1 WHERE id=?',(record_id,))
+            sync_events.append(db,record_id,'acknowledge',{})
     return {'acknowledged':len(ids)}

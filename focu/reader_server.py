@@ -5,11 +5,18 @@ import mimetypes
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlsplit
-from focu.reader import ASSETS
+from focu.reader import ASSETS, StateConflict
 
 
-def handler(store, media_root):
+def handler(store, media_root, *, public_origin=None, drive=None):
     root=Path(media_root).resolve()
+    public_host=None
+    if public_origin:
+        parsed=urlsplit(public_origin)
+        if parsed.scheme!='https' or not parsed.hostname or parsed.username or parsed.password or parsed.path not in ('','/') or parsed.query or parsed.fragment:
+            raise ValueError('Public origin must be a plain HTTPS origin')
+        public_origin='https://'+parsed.netloc
+        public_host=parsed.netloc
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *_):
             pass
@@ -31,7 +38,7 @@ def handler(store, media_root):
             self.wfile.write(body)
 
         def valid_host(self):
-            return self.headers.get('Host') in {f'127.0.0.1:{self.server.server_port}',f'localhost:{self.server.server_port}',f'[::1]:{self.server.server_port}'}
+            return bool(self.headers.get('Host')) and self.headers.get('Host') in {public_host,f'127.0.0.1:{self.server.server_port}',f'localhost:{self.server.server_port}',f'[::1]:{self.server.server_port}'}
 
         def do_GET(self):
             if not self.valid_host():
@@ -41,6 +48,10 @@ def handler(store, media_root):
                 parts=urlsplit(self.path)
                 path=unquote(parts.path)
                 query=parse_qs(parts.query)
+                if path=='/api/item':
+                    return self.reply(store.item(query.get('id',[''])[0]))
+                if path=='/api/sync-status':
+                    return self.reply(store.sync_status())
                 if path=='/api/batches':
                     return self.reply(store.batches())
                 if path=='/api/batch':
@@ -51,6 +62,16 @@ def handler(store, media_root):
                     return self.reply(store.packs())
                 if path=='/api/sources':
                     return self.reply(store.sources())
+                if path=='/cover':
+                    item_id=query.get('id',[''])[0]
+                    with store.db() as db:
+                        row=db.execute("SELECT relative_path FROM sync_artifacts WHERE item_id=? AND kind='cover'",(item_id,)).fetchone()
+                    if not row:raise ValueError('No archived cover')
+                    from focu.data_sync import contained, ArtifactCache
+                    target=contained(root,row['relative_path'])
+                    if not target.is_file() and drive is not None:ArtifactCache(store,root,drive).ensure(row['relative_path'])
+                    if target.suffix.lower() not in {'.jpg','.png','.webp','.gif'}:raise ValueError('Invalid cover format')
+                    return self.file(target)
                 if path=='/media':
                     item=store.item(query.get('id',[''])[0])
                     kind=query.get('kind',[''])[0]
@@ -60,6 +81,9 @@ def handler(store, media_root):
                     target=(root/relative).resolve()
                     if not target.is_relative_to(root) or target.suffix.lower() not in {'.mp3','.m4a','.wav','.ogg','.mp4','.webm'}:
                         raise ValueError('Invalid media path')
+                    if not target.is_file() and drive is not None:
+                        from focu.data_sync import ArtifactCache
+                        ArtifactCache(store,root,drive).ensure(relative)
                     return self.file(target,allow_range=True)
                 names={'/':'index.html','/index.html':'index.html','/app.js':'app.js',
                        '/style.css':'style.css','/manifest.webmanifest':'manifest.webmanifest',
@@ -68,6 +92,8 @@ def handler(store, media_root):
                 if path not in names:
                     return self.reply({'error':'Not found'},404)
                 return self.file(ASSETS/names[path])
+            except RuntimeError:
+                self.reply({'error':'Remote artifact unavailable; retry after connectivity is restored'},503)
             except (ValueError,KeyError,FileNotFoundError) as exc:
                 self.reply({'error':str(exc)},404)
 
@@ -110,7 +136,7 @@ def handler(store, media_root):
             if not self.valid_host() or self.headers.get('X-Focu-Reader')!='1':
                 return self.reply({'error':'Same-origin reader request required'},403)
             origin=self.headers.get('Origin')
-            if origin and origin != 'http://'+self.headers['Host']:
+            if origin and origin not in {'http://'+self.headers['Host'],public_origin}:
                 return self.reply({'error':'Cross-origin mutation rejected'},403)
             if self.headers.get('Content-Type')!='application/json':
                 return self.reply({'error':'Expected application/json'},415)
@@ -121,19 +147,23 @@ def handler(store, media_root):
                 payload=json.loads(self.rfile.read(length))
                 if not isinstance(payload,dict):raise ValueError('Expected JSON object')
                 if self.path=='/api/state':
-                    result=store.state(payload['id'],payload['changes'])
+                    result=store.state(payload['id'],payload['changes'],event_id=payload.get('event_id'),expected_revision=payload.get('expected_revision'))
                 elif self.path=='/api/subscribe':
                     result=store.subscribe(payload['id'],payload['enabled'],payload.get('version'))
                 else:
                     return self.reply({'error':'Not found'},404)
                 self.reply(result)
+            except StateConflict as exc:
+                self.reply({'error':str(exc)},409)
             except (ValueError,KeyError,TypeError) as exc:
                 self.reply({'error':str(exc)},400)
     return Handler
 
 
-def serve(store,port,media_root):
-    server=ThreadingHTTPServer(('127.0.0.1',port),handler(store,media_root))
+def serve(store,port,media_root,*,public_origin=None,drive_config=None):
+    from focu.drive_storage import DriveStorage
+    drive=DriveStorage(drive_config) if drive_config else None
+    server=ThreadingHTTPServer(('127.0.0.1',port),handler(store,media_root,public_origin=public_origin,drive=drive))
     print(f'Focu reader: http://127.0.0.1:{server.server_port}',flush=True)
     try:server.serve_forever()
     except KeyboardInterrupt:pass

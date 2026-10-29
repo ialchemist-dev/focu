@@ -8,3 +8,7 @@ __pycache__/
 *.egg-info/
 
 build/
+
+*drive-private.json
+*sync-private.env
+focu-sync-work/

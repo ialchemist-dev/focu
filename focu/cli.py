@@ -99,8 +99,18 @@ def main(argv: list[str] | None = None) -> int:
     reader_cmd.add_argument("reader_args", nargs=argparse.REMAINDER)
     daily_cmd = sub.add_parser("daily", help="Persistent feed-to-podcast stages")
     daily_cmd.add_argument("daily_args", nargs=argparse.REMAINDER)
+    sync_cmd = sub.add_parser("sync", help="Durable Drive artifacts and private Git metadata")
+    sync_cmd.add_argument("sync_args", nargs=argparse.REMAINDER)
+    host_cmd = sub.add_parser("host", help="Private HTTPS deployment preflight and service configuration")
+    host_cmd.add_argument("host_args", nargs=argparse.REMAINDER)
     args = parser.parse_args(argv)
     try:
+        if args.command == "host":
+            from focu.hosting import main as host_main
+            return host_main(args.host_args)
+        if args.command == "sync":
+            from focu.data_sync import main as sync_main
+            return sync_main(args.sync_args, db_path=args.db)
         if args.command == "daily":
             from focu.daily.cli import main as daily_main
             return daily_main(args.daily_args)

@@ -1,6 +1,6 @@
 # Focu
 
-Current integrated version: **0.3.1**. Research/evidence handoff, podcast delivery, finite mobile reader, versioned source packs, explicit feedback, collector PoCs, auditable snapshots, and the recoverable daily pipeline are available on `main`. Recurring research orchestration and authenticated mobile hosting remain host integration work.
+Current integrated version: **0.4.0**. Research/evidence handoff, podcast delivery, finite mobile reader, versioned source packs, explicit feedback, collector PoCs, auditable snapshots, and the recoverable daily pipeline are available on `main`. Recurring research orchestration and authenticated mobile hosting remain host integration work.
 
 **Agent-native Attention Infrastructure** — focus on what matters, stay quiet about the rest.
 
@@ -117,3 +117,7 @@ Run `python -m focu.cli reader serve` to read explicitly published research batc
 ## Recoverable daily pipeline
 
 `focu daily ...` exposes the persistent backlog and safe resume functionality without replacing the research CLI. See [Persistent Pipeline](docs/PERSISTENT_PIPELINE.md). For an existing installation, follow [Muse Reinstall](docs/MUSE_REINSTALL.md) to preserve databases, sources and credentials.
+
+## Durable files and cross-device state
+
+`focu sync` replicates registered artifacts to private Google Drive and metadata/state checkpoints to a separate private GitHub repository. `focu host` checks deployment prerequisites and generates service units for an exact private HTTPS origin. See [Data Flow](docs/DATA_FLOW.md) and the [Muse deployment-only handoff](docs/MUSE_DATA_SYNC_DEPLOY.md). These adapters are implemented; account authorization and target-host/iPhone verification still happen at deployment.

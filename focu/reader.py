@@ -9,6 +9,11 @@ from focu.delivery import DeliveryArchive
 from focu.evidence import EvidenceStore
 from focu.intents import IntentStore
 from focu.covers import source_cover, image_url
+from focu import sync_events
+
+class StateConflict(ValueError):
+    pass
+
 
 ASSETS = Path(__file__).with_name('reader_assets')
 PACKS = Path(__file__).with_name('source_packs')
@@ -27,6 +32,7 @@ class ReaderStore:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         DeliveryArchive(self.path)
         with self.db() as db:
+            sync_events.initialize(db)
             db.executescript('''
                 CREATE TABLE IF NOT EXISTS reader_items (
                     id TEXT PRIMARY KEY, payload TEXT NOT NULL);
@@ -41,6 +47,11 @@ class ReaderStore:
                 CREATE TABLE IF NOT EXISTS reader_subscriptions (
                     pack_id TEXT PRIMARY KEY, payload TEXT NOT NULL);
             ''')
+
+        with self.db() as db:
+            columns={r['name'] for r in db.execute('PRAGMA table_info(reader_state)')}
+            for name,definition in [('archived','INTEGER NOT NULL DEFAULT 0'),('position_seconds','REAL NOT NULL DEFAULT 0'),('read_at','TEXT'),('saved_at','TEXT'),('archived_at','TEXT')]:
+                if name not in columns:db.execute(f'ALTER TABLE reader_state ADD COLUMN {name} {definition}')
 
     def db(self):
         db = sqlite3.connect(self.path, timeout=30)
@@ -89,6 +100,7 @@ class ReaderStore:
             if old and (old['title'], old['members']) != (title, members):
                 raise ValueError('Batch ID reused with different selection')
             db.execute('INSERT OR IGNORE INTO reader_batches(id,title,members) VALUES (?,?,?)', (batch_id,title,members))
+            if old is None:sync_events.append(db,batch_id,'publish',{'members':evidence_ids})
         return self.batch(batch_id)
 
     def item(self, item_id):
@@ -96,11 +108,23 @@ class ReaderStore:
             row = db.execute('SELECT payload FROM reader_items WHERE id=?', (item_id,)).fetchone()
             if not row:
                 raise ValueError('Unknown reader item')
-            state = db.execute('SELECT completed,saved FROM reader_state WHERE item_id=?', (item_id,)).fetchone()
+            state = db.execute('SELECT * FROM reader_state WHERE item_id=?', (item_id,)).fetchone()
             cover = db.execute('SELECT payload FROM reader_covers WHERE item_id=?',(item_id,)).fetchone()
+            revision=db.execute("SELECT coalesce(max(seq),0) FROM sync_events WHERE target=?",(item_id,)).fetchone()[0]
         payload=json.loads(row['payload'])
-        return {**payload, 'cover':json.loads(cover['payload']) if cover else source_cover(payload['sources']), 'completed': bool(state['completed']) if state else False,
-                'saved': bool(state['saved']) if state else False}
+        cover_value=json.loads(cover['payload']) if cover else source_cover(payload['sources'])
+        if cover_value:
+            with self.db() as db:
+                archived=db.execute("SELECT record FROM sync_artifacts WHERE item_id=? AND kind='cover'",(item_id,)).fetchone()
+            if archived and json.loads(archived['record']).get('source_image_url')==cover_value['url']:
+                from urllib.parse import quote
+                cover_value={**cover_value,'cache_url':'/cover?id='+quote(item_id,safe='')}
+        return {**payload, 'cover':cover_value, 'completed': bool(state['completed']) if state else False,
+                'saved': bool(state['saved']) if state else False,
+                'archived':bool(state['archived']) if state else False,
+                'position_seconds':state['position_seconds'] if state else 0,
+                'read_at':state['read_at'] if state else None,'saved_at':state['saved_at'] if state else None,
+                'archived_at':state['archived_at'] if state else None,'revision':revision}
 
     def set_cover(self, item_id, url, source_url, alt=''):
         item=self.item(item_id)
@@ -115,18 +139,41 @@ class ReaderStore:
         with self.db() as db:
             db.execute('INSERT OR REPLACE INTO reader_covers VALUES (?,?)',
                        (item_id,json.dumps(cover,ensure_ascii=False)))
+            sync_events.append(db,item_id,'cover',cover)
         return self.item(item_id)
 
-    def state(self, item_id, changes):
-        if not isinstance(changes, dict) or not changes or set(changes) - {'completed','saved'} or any(type(v) is not bool for v in changes.values()):
-            raise ValueError('Expected explicit completed/saved booleans')
+    def state(self, item_id, changes, *, event_id=None, expected_revision=None):
+        allowed={'completed','saved','archived','position_seconds'}
+        if not isinstance(changes,dict) or not changes or set(changes)-allowed:
+            raise ValueError('Expected explicit reading state changes')
+        for key,value in changes.items():
+            if key=='position_seconds':
+                import math
+                if type(value) not in (int,float) or not math.isfinite(value) or not 0<=value<=604800:
+                    raise ValueError('Invalid playback position')
+            elif type(value) is not bool:raise ValueError('Expected boolean reading state')
         with self.db() as db:
+            db.execute('BEGIN IMMEDIATE')
             if not db.execute('SELECT 1 FROM reader_items WHERE id=?',(item_id,)).fetchone():
                 raise ValueError('Unknown reader item')
-            db.execute('INSERT OR IGNORE INTO reader_state(item_id) VALUES (?)',(item_id,))
-            for key, value in changes.items():
-                db.execute(f'UPDATE reader_state SET {key}=? WHERE item_id=?',(int(value),item_id))
+            prior=db.execute('SELECT * FROM sync_events WHERE event_id=?',(event_id,)).fetchone() if event_id else None
+            if prior:
+                sync_events.append(db,item_id,'state',changes,event_id)
+            else:
+                revision=db.execute('SELECT coalesce(max(seq),0) FROM sync_events WHERE target=?',(item_id,)).fetchone()[0]
+                if expected_revision is not None and (type(expected_revision) is not int or expected_revision!=revision):
+                    raise StateConflict('Reading state changed on another client; reload before retrying')
+                db.execute('INSERT OR IGNORE INTO reader_state(item_id) VALUES (?)',(item_id,))
+                from focu.intents import utcnow
+                for key,value in changes.items():
+                    db.execute(f'UPDATE reader_state SET {key}=? WHERE item_id=?',(value,item_id))
+                    timestamp={'completed':'read_at','saved':'saved_at','archived':'archived_at'}.get(key)
+                    if timestamp:db.execute(f'UPDATE reader_state SET {timestamp}=? WHERE item_id=?',(utcnow() if value else None,item_id))
+                sync_events.append(db,item_id,'state',changes,event_id)
         return self.item(item_id)
+
+    def sync_status(self):
+        with self.db() as db:return sync_events.status(db)
 
     def batches(self):
         with self.db() as db:
@@ -139,11 +186,11 @@ class ReaderStore:
             raise ValueError('Unknown batch')
         items = [self.item(i) for i in json.loads(row['members'])]
         return {'id':batch_id,'title':row['title'],'created_at':row['created_at'], 'items':items,
-                'remaining':sum(not i['completed'] for i in items)}
+                'remaining':sum(not i['completed'] and not i['archived'] for i in items)}
 
     def library(self):
         with self.db() as db:
-            ids = [r['item_id'] for r in db.execute('SELECT item_id FROM reader_state WHERE saved=1 OR completed=1 ORDER BY rowid DESC')]
+            ids = [r['item_id'] for r in db.execute('SELECT item_id FROM reader_state WHERE saved=1 OR completed=1 OR archived=1 ORDER BY rowid DESC')]
         return [self.item(i) for i in ids]
 
     def packs(self):
@@ -158,6 +205,7 @@ class ReaderStore:
         if not enabled:
             with self.db() as db:
                 db.execute('DELETE FROM reader_subscriptions WHERE pack_id=?',(pack_id,))
+                sync_events.append(db,pack_id,'unsubscribe',{})
             return {'id':pack_id,'subscribed':False}
         pack = next((p for p in self.packs() if p['id']==pack_id),None)
         if not pack or version != pack['version']:
@@ -166,6 +214,7 @@ class ReaderStore:
         with self.db() as db:
             db.execute('INSERT OR REPLACE INTO reader_subscriptions VALUES (?,?)',
                        (pack_id,json.dumps(pack,ensure_ascii=False,sort_keys=True)))
+            sync_events.append(db,pack_id,'subscribe',{'version':version})
         return {'id':pack_id,'subscribed':True,'version':version}
 
     def sources(self):
@@ -187,6 +236,8 @@ def main(argv=None, *, db_path='data/focu.sqlite3'):
     serve = sub.add_parser('serve')
     serve.add_argument('--port',type=int,default=8765)
     serve.add_argument('--media-root',default='data')
+    serve.add_argument('--public-origin',help='Exact trusted HTTPS origin, e.g. Tailscale Serve URL')
+    serve.add_argument('--drive-config',help='Private Drive config for lazy media-cache recovery')
     publish = sub.add_parser('publish')
     publish.add_argument('--batch-id',required=True)
     publish.add_argument('--title',required=True)
@@ -212,7 +263,7 @@ def main(argv=None, *, db_path='data/focu.sqlite3'):
     store=ReaderStore(db_path)
     if args.action=='serve':
         from focu.reader_server import serve as run
-        run(store,args.port,Path(args.media_root))
+        run(store,args.port,Path(args.media_root),public_origin=args.public_origin,drive_config=args.drive_config)
         return 0
     if args.action=='cover':
         result=store.set_cover(args.evidence_id,args.image_url,args.source_url,args.alt)
