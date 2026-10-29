@@ -1,6 +1,6 @@
 # Focu
 
-Current integrated version: **0.3.0**. Research/evidence handoff, podcast delivery, finite mobile reader, versioned source packs, explicit feedback, collector PoCs, auditable snapshots, and the recoverable daily pipeline are available on `main`. Recurring research orchestration and authenticated mobile hosting remain host integration work.
+Current integrated version: **0.3.1**. Research/evidence handoff, podcast delivery, finite mobile reader, versioned source packs, explicit feedback, collector PoCs, auditable snapshots, and the recoverable daily pipeline are available on `main`. Recurring research orchestration and authenticated mobile hosting remain host integration work.
 
 **Agent-native Attention Infrastructure** — focus on what matters, stay quiet about the rest.
 

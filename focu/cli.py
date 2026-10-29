@@ -167,7 +167,7 @@ def main(argv: list[str] | None = None) -> int:
             page = fetch_page(args.url, timeout=args.timeout, max_bytes=args.max_bytes, retries=args.retries)
             snapshot = save_snapshot(args.snapshot_dir, url=page.url, title=page.title, text=page.text) if args.snapshot_dir else None
             _json({"url": page.url, "title": page.title, "text": page.text,
-                   "status": page.status, "content_type": page.content_type, "snapshot": snapshot})
+                   "status": page.status, "content_type": page.content_type, "image_url": page.image_url, "snapshot": snapshot})
             return 0
         if args.command == "ingest-evidence":
             output = ingest_research(args.db, args.evidence, args.output)

@@ -133,6 +133,14 @@
           "extracted_text": {
             "type": "string",
             "minLength": 1
+          },
+          "image_url": {
+            "type": "string",
+            "format": "uri",
+            "description": "Original post image, used as a display cover; HTTPS required by reader."
+          },
+          "image_alt": {
+            "type": "string"
           }
         }
       }

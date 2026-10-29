@@ -10,7 +10,7 @@
 - 用 Python 3.10+ 在目标 checkout 建立 .venv，执行 `bash scripts/bootstrap.sh`，再 `.venv/bin/python -m pip install -e '.[daily]'` 安装可选采集依赖。若可选依赖安装失败，保留已安装核心并明确报告。
 - 先读 `SKILL.md`、`docs/AGENT_INSTALL.md`、`docs/READER_APP.md`、`docs/PERSISTENT_PIPELINE.md`、`docs/MUSE_DELIVERY.md`。复用现有 TTS/Open Notebook 密钥和配置，不索要已有密钥，不创建新的付费服务。
 - 显式确定研究数据库的绝对路径，并始终用 `.venv/bin/focu --db ABS_DB ...`。保留 FOCU_DB/THE_FEW_DB 兼容选择，不能悄悄切到空库。daily 的 `<data-dir>/few.sqlite3` 是另一种 schema，不能并入研究库。
-- 检查 HEAD 等于安装时远端 main，并记录完整 SHA；检查 `.venv/bin/focu --version` 为 0.3.0，确认 `focu.__file__` 指向本次 checkout。
+- 检查 HEAD 等于安装时远端 main，并记录完整 SHA；检查 `.venv/bin/focu --version` 为 0.3.1，确认 `focu.__file__` 指向本次 checkout。
 
 ## 2. 验证合并后的功能
 
@@ -38,9 +38,9 @@ ABS_DB 必须替换成实际绝对路径。Open Notebook doctor 不能替代 wor
 
 我授权在本次验收中订阅 `anthropic-personal-blogs` 的仓库当前版本并进行一次显式采集。先在源包详情核对版本，再运行相应 subscribe、sources、collect 命令。此包目前有 6 位作者、4 个可用 RSS；失效或禁用的源如实保留。不是完整员工名单，不自动扩展其他订阅，不自动开启循环任务。
 
-如果需要补充研究，读取原文，按 Evidence Pack provenance 合约创建真正有来源的中文小文章，保留引用与局限；按现有 capture -> start -> ingest-evidence -> report 流程入库。采集队列是原始素材，不是已验证结论。
+如果需要补充研究，读取原文，按 Evidence Pack provenance 合约创建真正有来源的小文章（保留原文语言，新写内容默认英文，除非我要求其他语言），保留引用与局限；按现有 capture -> start -> ingest-evidence -> report 流程入库。采集队列是原始素材，不是已验证结论。
 
-播客优先使用已有的成功产物。若不足，使用现有已配置的 Open Notebook 和 profiles，最多新生成一集 5–7 分钟中文播客来验收；检查真实任务完成和 MP3，再通过 `focu deliver` 归档 research.md、transcript.json、podcast.mp3。不猜 episode ID，不将逐字稿代替研究报告。缺少服务/凭据时交付文章并报告音频阻塞，不伪造音频、不新开付费账户。
+播客优先使用已有的成功产物。若不足，使用现有已配置的 Open Notebook 和 profiles，最多新生成一集 5–7 分钟播客（默认英文，除非我指定其他语言）来验收；检查真实任务完成和 MP3，再通过 `focu deliver` 归档 research.md、transcript.json、podcast.mp3。不猜 episode ID，不将逐字稿代替研究报告。缺少服务/凭据时交付文章并报告音频阻塞，不伪造音频、不新开付费账户。
 
 先准备好要发布的全部媒体，再运行 `reader publish`：一个 Evidence Pack 共用一张卡片，`--media-json` 填写相对于 media root 的真实音频/视频文件路径。批次 ID 唯一、内容固定、上限 5 条；不把旧未关联的 MP3 随意绑定给新的证据。发布后只 acknowledge 实际被覆盖的 raw record IDs。
 

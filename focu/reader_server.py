@@ -20,7 +20,7 @@ def handler(store, media_root):
             self.send_header('Cache-Control','no-store')
             self.send_header('X-Content-Type-Options','nosniff')
             self.send_header('Referrer-Policy','no-referrer')
-            self.send_header('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; media-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'")
+            self.send_header('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' https:; media-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'")
             if size is not None:
                 self.send_header('Content-Length',str(size))
             self.end_headers()
@@ -94,7 +94,7 @@ def handler(store, media_root):
             self.send_header('Content-Length',str(end-start+1))
             self.send_header('Cache-Control','no-store' if allow_range else 'no-cache')
             self.send_header('X-Content-Type-Options','nosniff')
-            self.send_header('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; media-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'")
+            self.send_header('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' https:; media-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'")
             if allow_range:
                 self.send_header('Accept-Ranges','bytes')
                 if status==206:self.send_header('Content-Range',f'bytes {start}-{end}/{size}')

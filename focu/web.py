@@ -10,6 +10,7 @@ from html.parser import HTMLParser
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
+from focu.covers import image_url
 
 
 class FetchError(RuntimeError):
@@ -26,8 +27,14 @@ class _TextParser(HTMLParser):
         self.parts = []
         self._in_title = False
         self._skip = 0
+        self.images = {}
 
     def handle_starttag(self, tag, attrs):
+        values=dict(attrs)
+        if tag == 'meta':
+            key=values.get('property') or values.get('name')
+            if key in {'og:image','twitter:image'} and values.get('content'):
+                self.images.setdefault(key,values['content'])
         if tag in {"script", "style", "noscript"}:
             self._skip += 1
         if tag == "title":
@@ -53,6 +60,7 @@ class WebPage:
     text: str
     status: int
     content_type: str
+    image_url: str | None = None
 
 
 def fetch_page(url: str, *, timeout: float = 12, max_bytes: int = 2_000_000, retries: int = 2) -> WebPage:
@@ -102,9 +110,11 @@ def _retrieve(req: Request, url: str, timeout: float, max_bytes: int) -> WebPage
         raise FetchError(f"Could not retrieve {url}: {exc}", category=category) from exc
     except OSError as exc:
         raise FetchError(f"Could not retrieve {url}: {exc}", category="network") from exc
+    cover = None
     if content_type == "text/html":
         parser = _TextParser()
         parser.feed(body)
+        cover = image_url(parser.images.get("og:image") or parser.images.get("twitter:image"),final_url)
         title = unescape(parser.title).strip()
         text = " ".join(parser.parts)
     else:
@@ -113,4 +123,4 @@ def _retrieve(req: Request, url: str, timeout: float, max_bytes: int) -> WebPage
     text = re.sub(r"\s+", " ", text).strip()
     if not text:
         raise FetchError("Retrieved page has no extractable text")
-    return WebPage(url=final_url, title=title, text=text, status=status, content_type=content_type)
+    return WebPage(url=final_url, title=title, text=text, status=status, content_type=content_type, image_url=cover)
