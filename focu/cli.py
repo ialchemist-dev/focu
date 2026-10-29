@@ -93,8 +93,13 @@ def main(argv: list[str] | None = None) -> int:
     li.add_argument("--input", required=True)
     li.add_argument("--scope", required=True)
     li.add_argument("--output", required=True)
+    reader_cmd = sub.add_parser("reader", help="Finite mobile reader and source marketplace")
+    reader_cmd.add_argument("reader_args", nargs=argparse.REMAINDER)
     args = parser.parse_args(argv)
     try:
+        if args.command == "reader":
+            from focu.reader import main as reader_main
+            return reader_main(args.reader_args, db_path=args.db)
         if args.command == "collect":
             if args.platform == "youtube":
                 _json(collect_youtube(args.url, args.db, args.scope, args.output,
