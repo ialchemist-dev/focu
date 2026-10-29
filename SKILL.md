@@ -88,11 +88,11 @@ Read `docs/architecture-v0.2.md` and the versioned schemas before implementing n
 Capture a question without changing permanent subscriptions:
 
 ```bash
-python -m focu.intents capture "Why do tools sometimes constrain their users?"
-python -m focu.intents list --status queued
+.venv/bin/focu capture "Why do tools sometimes constrain their users?"
+.venv/bin/focu list --status queued
 ```
 
-The default SQLite DB lives under ignored `data/`. Do not store API keys, private questions, or generated research in Git. The v0.1 `scripts/run-daily.sh` is unchanged. Never imply an intent has been researched or delivered merely because it has been captured.
+The installed `.venv/bin/focu` CLI is the recommended agent interface; `python -m focu.intents` remains available for compatibility. The default SQLite DB lives under ignored `data/`. Do not store API keys, private questions, or generated research in Git. The v0.1 `scripts/run-daily.sh` is unchanged. Never imply an intent has been researched or delivered merely because it has been captured.
 
 ## Muse / agent installation (v0.2)
 
@@ -122,3 +122,7 @@ Research is the primary durable asset; podcast is only one interface. See `docs/
 ## Unified delivery
 
 After an approved Open Notebook episode completes, follow `docs/MUSE_DELIVERY.md` and run `focu deliver --evidence-id ID --episode-id ID --output-dir PATH`. Return reading and listening paths. Do not confuse transcript with canonical research. If only a job ID is known, `--job-id` can resolve it only when the completed job result explicitly includes the episode ID.
+
+## Source collectors PoC
+
+See `docs/COLLECTOR_POC.md` before running YouTube or importing an authorized LinkedIn MCP feed export. Do not equate collected text with verified Evidence Pack findings.

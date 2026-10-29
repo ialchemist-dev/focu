@@ -10,10 +10,12 @@ from pathlib import Path
 from focu.evidence import EvidenceStore
 from focu.intents import IntentStore
 from focu.research import ingest_research
-from focu.web import fetch_page
+from focu.web import fetch_page, FetchError
+from focu.snapshots import save_snapshot, verify_snapshot
 from focu import tts
 from focu import open_notebook
 from focu.delivery import DeliveryArchive
+from focu.collectors import collect_export, collect_youtube
 from focu.podcast_delivery import deliver, wait_and_deliver
 
 
@@ -49,6 +51,11 @@ def main(argv: list[str] | None = None) -> int:
     fetch = sub.add_parser("fetch", help="Retrieve public HTML/text for research")
     fetch.add_argument("url")
     fetch.add_argument("--timeout", type=float, default=12)
+    fetch.add_argument("--retries", type=int, default=2)
+    fetch.add_argument("--snapshot-dir", help="Save a content-addressed local snapshot")
+    verify = sub.add_parser("verify-snapshot", help="Check text against SHA256")
+    verify.add_argument("path")
+    verify.add_argument("sha256")
     fetch.add_argument("--max-bytes", type=int, default=2_000_000)
 
     tts_cmd = sub.add_parser("tts", help="Configure and run opt-in TTS")
@@ -75,6 +82,17 @@ def main(argv: list[str] | None = None) -> int:
     choice.add_argument("--job-id")
     delivery.add_argument("--output-dir", required=True)
     delivery.add_argument("--timeout", type=int, default=900)
+    collect = sub.add_parser("collect", help="Opt-in source collector PoC")
+    collect_sub = collect.add_subparsers(dest="platform", required=True)
+    yt = collect_sub.add_parser("youtube", help="Fetch a single video transcript")
+    yt.add_argument("url")
+    yt.add_argument("--scope", required=True)
+    yt.add_argument("--output", required=True)
+    yt.add_argument("--language", action="append", default=[])
+    li = collect_sub.add_parser("linkedin-export", help="Import an authorized MCP feed JSON export")
+    li.add_argument("--input", required=True)
+    li.add_argument("--scope", required=True)
+    li.add_argument("--output", required=True)
     reader_cmd = sub.add_parser("reader", help="Finite mobile reader and source marketplace")
     reader_cmd.add_argument("reader_args", nargs=argparse.REMAINDER)
     args = parser.parse_args(argv)
@@ -82,6 +100,13 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "reader":
             from focu.reader import main as reader_main
             return reader_main(args.reader_args, db_path=args.db)
+        if args.command == "collect":
+            if args.platform == "youtube":
+                _json(collect_youtube(args.url, args.db, args.scope, args.output,
+                                      tuple(args.language or ["en"])))
+            else:
+                _json(collect_export(args.input, "linkedin", args.db, args.scope, args.output))
+            return 0
         if args.command == "deliver":
             if args.episode_id:
                 result = deliver(args.evidence_id, args.episode_id, args.output_dir, args.db)
@@ -127,10 +152,15 @@ def main(argv: list[str] | None = None) -> int:
                    "agent_handoff": True, "automatic_research": False,
                    "live_web_requires_network": True, "ready_for_init": True})
             return 0
+        if args.command == "verify-snapshot":
+            valid = verify_snapshot(args.path, args.sha256)
+            _json({"valid": valid})
+            return 0 if valid else 1
         if args.command == "fetch":
-            page = fetch_page(args.url, timeout=args.timeout, max_bytes=args.max_bytes)
+            page = fetch_page(args.url, timeout=args.timeout, max_bytes=args.max_bytes, retries=args.retries)
+            snapshot = save_snapshot(args.snapshot_dir, url=page.url, title=page.title, text=page.text) if args.snapshot_dir else None
             _json({"url": page.url, "title": page.title, "text": page.text,
-                   "status": page.status, "content_type": page.content_type})
+                   "status": page.status, "content_type": page.content_type, "snapshot": snapshot})
             return 0
         if args.command == "ingest-evidence":
             output = ingest_research(args.db, args.evidence, args.output)
@@ -163,7 +193,10 @@ def main(argv: list[str] | None = None) -> int:
                                    error=args.error if args.command == "fail" else None))
         return 0
     except (ValueError, OSError, RuntimeError, json.JSONDecodeError) as exc:
-        print(json.dumps({"error": str(exc)}, ensure_ascii=False), file=sys.stderr)
+        payload = {"error": str(exc)}
+        if isinstance(exc, FetchError):
+            payload.update({"category": exc.category, "http_status": exc.status})
+        print(json.dumps(payload, ensure_ascii=False), file=sys.stderr)
         return 1
 
 

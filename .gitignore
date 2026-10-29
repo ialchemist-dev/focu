@@ -2,3 +2,7 @@ sources.yaml
 data/
 __pycache__/
 *.pyc
+
+# Local installation artifacts
+.venv/
+*.egg-info/
