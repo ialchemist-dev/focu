@@ -80,7 +80,7 @@ class DriveStorage:
     def upload(self,path,artifact_id,mime='application/octet-stream'):
         path=Path(path);sha,md5,size=self.hashes(path)
         # Content addressing makes retries and simultaneous identical uploads discoverable.
-        key=hashlib.sha256((artifact_id+'\n'+sha).encode()).hexdigest()
+        key=hashlib.sha256((artifact_id+'\n'+sha+'\n'+self.config['folder_id']+'\n'+self.config.get('client_id','')).encode()).hexdigest()
         state_path=getattr(self,'session_dir',None)
         state_path=state_path/(key+'.json') if state_path else None
         folder=self.config['folder_id']
