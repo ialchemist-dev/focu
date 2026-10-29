@@ -19,6 +19,8 @@ def render_markdown(pack: dict, question: str) -> str:
     for finding in pack["findings"]:
         links = ", ".join(f"[{ref}]({source_map[ref]['url']})" for ref in finding["source_ids"])
         lines.append(f"- {finding['claim']} ({links})")
+        if finding.get("evidence_quote"):
+            lines.append(f"  > {finding['evidence_quote']}")
         if finding.get("uncertainty"):
             lines.append(f"  - **Uncertainty:** {finding['uncertainty']}")
     completeness = pack.get("research_completeness")

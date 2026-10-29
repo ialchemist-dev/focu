@@ -10,7 +10,8 @@ from pathlib import Path
 from focu.evidence import EvidenceStore
 from focu.intents import IntentStore
 from focu.research import ingest_research
-from focu.web import fetch_page
+from focu.web import fetch_page, FetchError
+from focu.snapshots import save_snapshot, verify_snapshot
 from focu import tts
 from focu import open_notebook
 from focu.delivery import DeliveryArchive
@@ -50,6 +51,11 @@ def main(argv: list[str] | None = None) -> int:
     fetch = sub.add_parser("fetch", help="Retrieve public HTML/text for research")
     fetch.add_argument("url")
     fetch.add_argument("--timeout", type=float, default=12)
+    fetch.add_argument("--retries", type=int, default=2)
+    fetch.add_argument("--snapshot-dir", help="Save a content-addressed local snapshot")
+    verify = sub.add_parser("verify-snapshot", help="Check text against SHA256")
+    verify.add_argument("path")
+    verify.add_argument("sha256")
     fetch.add_argument("--max-bytes", type=int, default=2_000_000)
 
     tts_cmd = sub.add_parser("tts", help="Configure and run opt-in TTS")
@@ -141,10 +147,15 @@ def main(argv: list[str] | None = None) -> int:
                    "agent_handoff": True, "automatic_research": False,
                    "live_web_requires_network": True, "ready_for_init": True})
             return 0
+        if args.command == "verify-snapshot":
+            valid = verify_snapshot(args.path, args.sha256)
+            _json({"valid": valid})
+            return 0 if valid else 1
         if args.command == "fetch":
-            page = fetch_page(args.url, timeout=args.timeout, max_bytes=args.max_bytes)
+            page = fetch_page(args.url, timeout=args.timeout, max_bytes=args.max_bytes, retries=args.retries)
+            snapshot = save_snapshot(args.snapshot_dir, url=page.url, title=page.title, text=page.text) if args.snapshot_dir else None
             _json({"url": page.url, "title": page.title, "text": page.text,
-                   "status": page.status, "content_type": page.content_type})
+                   "status": page.status, "content_type": page.content_type, "snapshot": snapshot})
             return 0
         if args.command == "ingest-evidence":
             output = ingest_research(args.db, args.evidence, args.output)
@@ -177,7 +188,10 @@ def main(argv: list[str] | None = None) -> int:
                                    error=args.error if args.command == "fail" else None))
         return 0
     except (ValueError, OSError, RuntimeError, json.JSONDecodeError) as exc:
-        print(json.dumps({"error": str(exc)}, ensure_ascii=False), file=sys.stderr)
+        payload = {"error": str(exc)}
+        if isinstance(exc, FetchError):
+            payload.update({"category": exc.category, "http_status": exc.status})
+        print(json.dumps(payload, ensure_ascii=False), file=sys.stderr)
         return 1
 
 
