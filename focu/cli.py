@@ -75,8 +75,13 @@ def main(argv: list[str] | None = None) -> int:
     choice.add_argument("--job-id")
     delivery.add_argument("--output-dir", required=True)
     delivery.add_argument("--timeout", type=int, default=900)
+    reader_cmd = sub.add_parser("reader", help="Finite mobile reader and source marketplace")
+    reader_cmd.add_argument("reader_args", nargs=argparse.REMAINDER)
     args = parser.parse_args(argv)
     try:
+        if args.command == "reader":
+            from focu.reader import main as reader_main
+            return reader_main(args.reader_args, db_path=args.db)
         if args.command == "deliver":
             if args.episode_id:
                 result = deliver(args.evidence_id, args.episode_id, args.output_dir, args.db)

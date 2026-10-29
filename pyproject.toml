@@ -18,3 +18,6 @@ focu = "focu.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["focu*"]
+
+[tool.setuptools.package-data]
+focu = ["reader_assets/*", "source_packs/*.json"]

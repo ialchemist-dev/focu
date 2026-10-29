@@ -9,7 +9,7 @@ Focu is evolving from the original feed-to-podcast prototype into an intent-led,
 The v0.2 agent-installable workflow is available on `main`. Requires Python 3.10+ and Git.
 
 ```bash
-git clone https://github.com/ialchemist-dev/the-few.git focu
+git clone https://github.com/ialchemist-dev/focu.git focu
 cd focu
 bash scripts/bootstrap.sh
 .venv/bin/focu capture "Why do tools constrain us?"
@@ -107,3 +107,7 @@ episodes is the next iteration (see `references/prompts.md`).
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+## Finite mobile reader and source marketplace
+
+Run `python -m focu.cli reader serve` to read explicitly published research batches, save/complete items, and inspect/subscribe to versioned source groups. See [Reader App](docs/READER_APP.md), [product design](docs/READER_MARKETPLACE_PLAN.md), and [Anthropic source validation](docs/ANTHROPIC_SOURCE_DISCOVERY.md). Local-only server; authenticated HTTPS hosting and iOS installation acceptance remain outstanding.
