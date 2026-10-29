@@ -1,6 +1,6 @@
 # Onboarding a new user
 
-The Few is meant to be handed to another person (or their agent) as a
+Focu is meant to be handed to another person (or their agent) as a
 link. They should be able to go from "I got this repo" to "my daily
 podcast is scheduled" in one sitting, without reading the whole repo.
 This doc is the script for that — an agent with this repo open can run

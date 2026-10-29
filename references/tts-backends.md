@@ -1,15 +1,15 @@
 # TTS backends
 
-`synthesize.sh` delegates to whatever you set as `THEVIEW_TTS_CMD` —
+`synthesize.sh` delegates to whatever you set as `FOCU_TTS_CMD` —
 a command where `$IN` is the script text file and `$OUT` is the MP3
 to produce:
 
 ```bash
-export THEVIEW_TTS_CMD='my-tts --input "$IN" --output "$OUT" --voice xiaobei'
+export FOCU_TTS_CMD='my-tts --input "$IN" --output "$OUT" --voice xiaobei'
 ./scripts/run-daily.sh
 ```
 
-Without `THEVIEW_TTS_CMD`, synthesis is skipped and the script is
+Without `FOCU_TTS_CMD`, synthesis is skipped and the script is
 kept — the pipeline still delivers text episodes.
 
 ## Backend requirements

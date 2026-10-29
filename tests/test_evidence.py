@@ -1,8 +1,8 @@
 import tempfile
 import unittest
 from pathlib import Path
-from the_few.evidence import EvidenceStore, validate_pack
-from the_few.intents import IntentStore
+from focu.evidence import EvidenceStore, validate_pack
+from focu.intents import IntentStore
 
 
 class EvidenceTests(unittest.TestCase):

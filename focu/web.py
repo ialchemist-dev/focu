@@ -63,7 +63,7 @@ def fetch_page(url: str, *, timeout: float = 12, max_bytes: int = 2_000_000, ret
         raise ValueError("retries must be between 0 and 5")
     if timeout <= 0 or max_bytes <= 0:
         raise ValueError("timeout and max_bytes must be positive")
-    req = Request(url, headers={"User-Agent": "TheFew/0.2 (+research verification)", "Accept": "text/html,text/plain;q=0.9"})
+    req = Request(url, headers={"User-Agent": "Focu/0.2 (+research verification)", "Accept": "text/html,text/plain;q=0.9"})
     for attempt in range(retries + 1):
         try:
             return _retrieve(req, url, timeout, max_bytes)

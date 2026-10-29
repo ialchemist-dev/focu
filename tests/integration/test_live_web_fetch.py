@@ -1,10 +1,10 @@
 """Opt-in external-network smoke test; intentionally not part of default CI."""
 import os
 import unittest
-from the_few.web import fetch_page
+from focu.web import fetch_page
 
 
-@unittest.skipUnless(os.getenv("THE_FEW_LIVE_TESTS") == "1", "Set THE_FEW_LIVE_TESTS=1 to allow real internet access")
+@unittest.skipUnless(os.getenv("FOCU_LIVE_TESTS") == "1", "Set FOCU_LIVE_TESTS=1 to allow real internet access")
 class LiveWebFetchTests(unittest.TestCase):
     def test_python_documentation_is_retrievable(self):
         page = fetch_page("https://docs.python.org/3/", timeout=20)

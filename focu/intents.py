@@ -15,7 +15,7 @@ def utcnow() -> str:
 
 
 class IntentStore:
-    def __init__(self, db_path: str | Path = "data/the-few.sqlite3") -> None:
+    def __init__(self, db_path: str | Path = "data/focu.sqlite3") -> None:
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         with self._connect() as db:
@@ -92,7 +92,7 @@ class IntentStore:
 def main() -> None:
     import argparse
     parser = argparse.ArgumentParser(description="Capture and inspect research intents")
-    parser.add_argument("--db", default="data/the-few.sqlite3")
+    parser.add_argument("--db", default="data/focu.sqlite3")
     sub = parser.add_subparsers(dest="command", required=True)
     capture = sub.add_parser("capture")
     capture.add_argument("question")

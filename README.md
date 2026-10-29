@@ -1,24 +1,30 @@
+# Focu
+
+**Agent-native Attention Infrastructure** — focus on what matters, stay quiet about the rest.
+
+Focu is evolving from the original feed-to-podcast prototype into an intent-led, evidence-backed information workflow. The current v0.2 code implements research-intent capture, evidence persistence and agent handoff; recurring Watches, change detection and silence-by-default delivery are **planned, not yet implemented**.
+
 ## Agent-native installation (v0.2 preview)
 
 The v0.2 agent-installable workflow is available on `main`. Requires Python 3.10+ and Git.
 
 ```bash
-git clone https://github.com/ialchemist-dev/the-few.git
-cd the-few
+git clone https://github.com/ialchemist-dev/the-few.git focu
+cd focu
 bash scripts/bootstrap.sh
-.venv/bin/the-few capture "Why do tools constrain us?"
-.venv/bin/the-few list --status queued
+.venv/bin/focu capture "Why do tools constrain us?"
+.venv/bin/focu list --status queued
 ```
 
-See [Agent Installation](docs/AGENT_INSTALL.md) for Muse/OpenClaw usage, limitations and an end-to-end evidence handoff. The Few does not yet autonomously run a research agent or produce v0.2 audio.
+See [Agent Installation](docs/AGENT_INSTALL.md) for Muse/OpenClaw usage, limitations and an end-to-end evidence handoff. Focu does not yet autonomously run a research agent or produce v0.2 audio.
 
 ---
 
-# The Few
+## Legacy v0.1 feed-to-podcast pipeline
 
 Your sources. Your podcast. Every day.
 
-The Few is a personal feed-to-podcast pipeline with one rule: **you define
+Focu is a personal feed-to-podcast pipeline with one rule: **you define
 the sources, nothing else gets in.** A background agent checks your sources
 once a day, pulls their latest updates, and turns them into a podcast
 episode — with the full script kept alongside the audio.
@@ -53,8 +59,8 @@ Prerequisites: Python 3.10+, `ffmpeg`, a TTS backend (see
 `references/tts-backends.md`).
 
 ```bash
-git clone <this-repo> the-few
-cd the-few
+git clone <this-repo> focu
+cd focu
 pip install -r requirements.txt
 cp examples/sources.yaml sources.yaml   # then edit: your sources
 ./scripts/run-daily.sh                  # run once now
@@ -63,7 +69,7 @@ cp examples/sources.yaml sources.yaml   # then edit: your sources
 Schedule it daily (cron example — 7:14 AM):
 
 ```cron
-14 7 * * * /path/to/the-few/scripts/run-daily.sh >> /path/to/the-few/data/cron.log 2>&1
+14 7 * * * /path/to/focu/scripts/run-daily.sh >> /path/to/focu/data/cron.log 2>&1
 ```
 
 ## Defining sources

@@ -1,10 +1,10 @@
 import tempfile
 import unittest
 from pathlib import Path
-from the_few.provenance import normalized_text
-from the_few.evidence import validate_pack
-from the_few.research import render_markdown
-from the_few.snapshots import save_snapshot, verify_snapshot
+from focu.provenance import normalized_text
+from focu.evidence import validate_pack
+from focu.research import render_markdown
+from focu.snapshots import save_snapshot, verify_snapshot
 
 
 class AuditabilityTests(unittest.TestCase):

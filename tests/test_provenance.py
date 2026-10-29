@@ -1,5 +1,5 @@
 import unittest
-from the_few.evidence import validate_pack
+from focu.evidence import validate_pack
 
 
 def pack():

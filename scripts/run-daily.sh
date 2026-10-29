@@ -13,7 +13,7 @@ while [[ $# -gt 0 ]]; do
 done
 DATE="${DATE:-$(date -u +%F)}"
 
-echo "=== the-few daily run: $DATE ==="
+echo "=== focu daily run: $DATE ==="
 python3 "$REPO/scripts/ingest.py" --date "$DATE"
 python3 "$REPO/scripts/digest.py" --date "$DATE"
 python3 "$REPO/scripts/compose.py" --date "$DATE"
