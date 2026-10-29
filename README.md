@@ -1,5 +1,7 @@
 # Focu
 
+Current integrated version: **0.3.0**. Research/evidence handoff, podcast delivery, finite mobile reader, versioned source packs, explicit feedback, collector PoCs, auditable snapshots, and the recoverable daily pipeline are available on `main`. Recurring research orchestration and authenticated mobile hosting remain host integration work.
+
 **Agent-native Attention Infrastructure** — focus on what matters, stay quiet about the rest.
 
 Focu is evolving from the original feed-to-podcast prototype into an intent-led, evidence-backed information workflow. The current v0.2 code implements research-intent capture, evidence persistence and agent handoff; recurring Watches, change detection and silence-by-default delivery are **planned, not yet implemented**.
@@ -111,3 +113,7 @@ MIT — see [LICENSE](LICENSE).
 ## Finite mobile reader and source marketplace
 
 Run `python -m focu.cli reader serve` to read explicitly published research batches, save/complete items, and inspect/subscribe to versioned source groups. See [Reader App](docs/READER_APP.md), [product design](docs/READER_MARKETPLACE_PLAN.md), and [Anthropic source validation](docs/ANTHROPIC_SOURCE_DISCOVERY.md). Local-only server; authenticated HTTPS hosting and iOS installation acceptance remain outstanding.
+
+## Recoverable daily pipeline
+
+`focu daily ...` exposes the persistent backlog and safe resume functionality without replacing the research CLI. See [Persistent Pipeline](docs/PERSISTENT_PIPELINE.md). For an existing installation, follow [Muse Reinstall](docs/MUSE_REINSTALL.md) to preserve databases, sources and credentials.

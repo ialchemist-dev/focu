@@ -64,6 +64,17 @@ class DeliveryArchive:
         intent = IntentStore(self.db_path).get(pack["intent_id"])
         if not intent:
             raise ValueError("Evidence pack has no linked research intent")
+        # Existing reports are immutable historical snapshots. A renderer upgrade
+        # (e.g. newly visible evidence quotes) must not break re-delivery.
+        artifact_id = "research:" + evidence_id
+        try:
+            existing = self.get(artifact_id)
+        except ValueError:
+            existing = None
+        if existing is not None:
+            if existing["evidence_id"] != evidence_id or existing["kind"] != "research_markdown":
+                raise ValueError("Research artifact ID conflicts with another delivery")
+            return {key: existing[key] for key in ("id", "evidence_id", "kind")}
         markdown = render_markdown(pack, intent["question"])
         return self.save("research:" + evidence_id, evidence_id, "research_markdown", markdown,
                          {"format": "markdown", "source": "evidence_pack"})

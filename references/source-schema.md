@@ -32,14 +32,16 @@ sources:
 ## Per-type locators
 
 - `rss`: `feed_url` (required).
-- `youtube`: `handle` (channel handle or ID). Optional `playlist_id`
+- `youtube`: `handle` or `channel_id` (explicit channel ID). Optional `playlist_id`
   to scope to one playlist.
 - `blog`: `site_url` (required); `feed_url` (optional — used first when
-  present, else HTML extraction).
+  present, else requires host HTML collection; the bundled daily adapter reports unsupported).
 - `x`: `username` (required). Requires credentials — see
   `references/auth.md`.
 - `linkedin`: `profile_url` or `company_page` (required). Requires a
   login session — see `references/auth.md`.
+
+Legacy `type: anthropic` with `section: news | research | engineering` is accepted by the daily config loader as the corresponding official blog URL. This registration does not implement an HTML collector.
 
 ## Common fields
 

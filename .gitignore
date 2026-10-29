@@ -6,3 +6,5 @@ __pycache__/
 # Local installation artifacts
 .venv/
 *.egg-info/
+
+build/

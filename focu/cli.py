@@ -7,6 +7,7 @@ import os
 import sys
 from pathlib import Path
 
+from focu import __version__
 from focu.evidence import EvidenceStore
 from focu.intents import IntentStore
 from focu.research import ingest_research
@@ -26,6 +27,7 @@ def _json(value: object) -> None:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="focu", description="Agent-native research workflow")
     parser.add_argument("--db", default=(os.getenv("FOCU_DB") or os.getenv("THE_FEW_DB") or ("data/the-few.sqlite3" if Path("data/the-few.sqlite3").exists() else "data/focu.sqlite3")))
+    parser.add_argument("--version", action="version", version="%(prog)s " + __version__)
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("init", help="Create local SQLite stores")
     sub.add_parser("doctor", help="Inspect local installation without external API calls")
@@ -95,8 +97,13 @@ def main(argv: list[str] | None = None) -> int:
     li.add_argument("--output", required=True)
     reader_cmd = sub.add_parser("reader", help="Finite mobile reader and source marketplace")
     reader_cmd.add_argument("reader_args", nargs=argparse.REMAINDER)
+    daily_cmd = sub.add_parser("daily", help="Persistent feed-to-podcast stages")
+    daily_cmd.add_argument("daily_args", nargs=argparse.REMAINDER)
     args = parser.parse_args(argv)
     try:
+        if args.command == "daily":
+            from focu.daily.cli import main as daily_main
+            return daily_main(args.daily_args)
         if args.command == "reader":
             from focu.reader import main as reader_main
             return reader_main(args.reader_args, db_path=args.db)
