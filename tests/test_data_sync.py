@@ -201,6 +201,8 @@ class DriveTests(unittest.TestCase):
         folder={'mimeType':'application/vnd.google-apps.folder','capabilities':{'canAddChildren':True}}
         with patch.object(client,'json',side_effect=[folder,{'permissions':[{'id':'public','type':'anyone','role':'reader'}]}]):
             with self.assertRaises(ValueError):client.verify_folder()
+        with patch.object(client,'json',side_effect=[folder,{}]):
+            with self.assertRaises(ValueError):client.verify_folder()
         with patch.object(client,'json',side_effect=[folder,{'permissions':[{'id':'owner','type':'user','role':'owner'}]}]):
             self.assertTrue(client.verify_folder())
 

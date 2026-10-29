@@ -60,8 +60,11 @@ class DriveStorage:
         if info.get('mimeType')!='application/vnd.google-apps.folder' or info.get('trashed') or not info.get('capabilities',{}).get('canAddChildren'):
             raise ValueError('Drive destination must be an accessible writable folder')
         permissions=self.json('GET','/files/'+folder+'/permissions?fields=permissions(id,type,role)')
+        entries=permissions.get('permissions')
+        if not isinstance(entries,list) or not entries:
+            raise ValueError('Drive folder privacy could not be verified')
         approved=set(self.config.get('allowed_permission_ids',[]))
-        for permission in permissions.get('permissions',[]):
+        for permission in entries:
             if permission.get('type') in {'anyone','domain'} or (permission.get('role')!='owner' and permission.get('id') not in approved):
                 raise ValueError('Drive folder has sharing outside the explicitly approved private permissions')
         return True
