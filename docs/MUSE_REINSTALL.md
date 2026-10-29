@@ -10,7 +10,7 @@
 - 用 Python 3.10+ 在目标 checkout 建立 .venv，执行 `bash scripts/bootstrap.sh`，再 `.venv/bin/python -m pip install -e '.[daily]'` 安装可选采集依赖。若可选依赖安装失败，保留已安装核心并明确报告。
 - 先读 `SKILL.md`、`docs/AGENT_INSTALL.md`、`docs/READER_APP.md`、`docs/PERSISTENT_PIPELINE.md`、`docs/MUSE_DELIVERY.md`。复用现有 TTS/Open Notebook 密钥和配置，不索要已有密钥，不创建新的付费服务。
 - 显式确定研究数据库的绝对路径，并始终用 `.venv/bin/focu --db ABS_DB ...`。保留 FOCU_DB/THE_FEW_DB 兼容选择，不能悄悄切到空库。daily 的 `<data-dir>/few.sqlite3` 是另一种 schema，不能并入研究库。
-- 检查 HEAD 等于安装时远端 main，并记录完整 SHA；检查 `.venv/bin/focu --version` 为 0.3.1，确认 `focu.__file__` 指向本次 checkout。
+- 检查 HEAD 等于安装时远端 main，并记录完整 SHA；检查 `.venv/bin/focu --version` 为 0.4.0，确认 `focu.__file__` 指向本次 checkout。
 
 ## 2. 验证合并后的功能
 
@@ -60,3 +60,7 @@ ABS_DB 必须替换成实际绝对路径。Open Notebook doctor 不能替代 wor
 - 最短的手动验收步骤，以及停止、重启、回滚命令。
 
 全程不要打印密钥，不删除旧数据，不替我宣称已经完成手机安装或主观音质验收。
+
+## Durable storage and private access
+
+For Drive/Git state sync and Tailscale deployment, execute docs/MUSE_DATA_SYNC_DEPLOY.md using the delivered `focu sync` and `focu host` commands. Do not redevelop these adapters in Muse.
