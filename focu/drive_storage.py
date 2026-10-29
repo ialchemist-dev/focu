@@ -59,9 +59,9 @@ class DriveStorage:
         info=self.json('GET','/files/'+folder+'?fields=id,mimeType,trashed,capabilities(canAddChildren)')
         if info.get('mimeType')!='application/vnd.google-apps.folder' or info.get('trashed') or not info.get('capabilities',{}).get('canAddChildren'):
             raise ValueError('Drive destination must be an accessible writable folder')
-        permissions=self.json('GET','/files/'+folder+'/permissions?fields=permissions(id,type,role)')
+        permissions=self.json('GET','/files/'+folder+'/permissions?pageSize=100&fields=nextPageToken,permissions(id,type,role)')
         entries=permissions.get('permissions')
-        if not isinstance(entries,list) or not entries:
+        if permissions.get('nextPageToken') or not isinstance(entries,list) or not entries:
             raise ValueError('Drive folder privacy could not be verified')
         approved=set(self.config.get('allowed_permission_ids',[]))
         for permission in entries:

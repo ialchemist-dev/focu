@@ -38,7 +38,7 @@ def handler(store, media_root, *, public_origin=None, drive=None):
             self.wfile.write(body)
 
         def valid_host(self):
-            return self.headers.get('Host') in {public_host,f'127.0.0.1:{self.server.server_port}',f'localhost:{self.server.server_port}',f'[::1]:{self.server.server_port}'}
+            return bool(self.headers.get('Host')) and self.headers.get('Host') in {public_host,f'127.0.0.1:{self.server.server_port}',f'localhost:{self.server.server_port}',f'[::1]:{self.server.server_port}'}
 
         def do_GET(self):
             if not self.valid_host():

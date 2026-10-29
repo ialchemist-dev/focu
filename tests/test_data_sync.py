@@ -174,6 +174,9 @@ class SyncTests(unittest.TestCase):
         self.assertEqual(request('POST','/api/state',{**payload,'event_id':'https2'})[0],409)
         self.assertEqual(request('POST','/api/state',payload,origin='https://evil.example')[0],403)
         self.assertEqual(request('GET','/api/sync-status')[0],200)
+        connection=HTTPConnection('127.0.0.1',server.server_port)
+        connection.putrequest('GET','/api/batches',skip_host=True);connection.endheaders()
+        response=connection.getresponse();self.assertEqual(response.status,403);response.read();connection.close()
 
 
 class DriveTests(unittest.TestCase):
