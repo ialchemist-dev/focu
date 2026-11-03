@@ -42,10 +42,15 @@ def build(deliveries, output, template, limit, *, fetch_source_covers=False, gen
     if generate_ai_covers and not os.environ.get("OPENAI_API_KEY"):
         raise ValueError("OPENAI_API_KEY is required with --generate-ai-covers")
     episodes = []
-    for audio in deliveries.glob("*/podcast.mp3"):
-        if not audio.is_file() or audio.is_symlink() or audio.stat().st_size == 0:
+    for folder in deliveries.iterdir():
+        if not folder.is_dir() or folder.is_symlink():
             continue
-        folder = audio.parent
+        audio_path = folder / "podcast.mp3"
+        audio = audio_path if audio_path.is_file() and not audio_path.is_symlink() and audio_path.stat().st_size else None
+        article_paths = [folder / name for name in ("article.md", "research.md", "article.html")]
+        has_article = any(p.is_file() and not p.is_symlink() and p.stat().st_size for p in article_paths)
+        if not audio and not has_article:
+            continue
         title = folder.name.replace("-", " ")
         report = folder / "research.md"
         if report.is_file():
@@ -53,11 +58,11 @@ def build(deliveries, output, template, limit, *, fetch_source_covers=False, gen
                 if line.startswith("# "):
                     title = line[2:].strip() or title
                     break
-        episodes.append((folder.name, title, audio, episode_date(folder.name)))
-    episodes.sort(key=lambda ep: (bool(ep[3]), ep[3], ep[0]), reverse=True)
+        episodes.append((folder.name, title, audio, folder, episode_date(folder.name)))
+    episodes.sort(key=lambda ep: (bool(ep[4]), ep[4], ep[0]), reverse=True)
     episodes = episodes[:limit]
     if not episodes:
-        raise ValueError("no nonempty podcast.mp3 files found")
+        raise ValueError("no nonempty podcast or article deliveries found")
     output.parent.mkdir(parents=True, exist_ok=True)
     stage = Path(tempfile.mkdtemp(prefix=".focu-publish-", dir=output.parent))
     try:
@@ -68,24 +73,26 @@ def build(deliveries, output, template, limit, *, fetch_source_covers=False, gen
         manifest = []
         checksums = {}
         warnings = []
-        for episode_id, title, audio, published_date in episodes:
+        for episode_id, title, audio, folder, published_date in episodes:
             safe_id = hashlib.sha256(episode_id.encode()).hexdigest()[:16]
-            target = assets / "audio" / (safe_id + ".mp3")
-            shutil.copyfile(audio, target)
-            original_hash = sha256(audio)
-            if sha256(target) != original_hash:
-                raise RuntimeError("audio checksum mismatch: " + episode_id)
-            item = {"id": episode_id, "title": title, "date": published_date, "source": "Focu", "audio_url": "assets/audio/" + target.name}
-            checksums[item["audio_url"]] = original_hash
+            item = {"id": episode_id, "title": title, "date": published_date, "source": "Focu"}
+            if audio:
+                target = assets / "audio" / (safe_id + ".mp3")
+                shutil.copyfile(audio, target)
+                original_hash = sha256(audio)
+                if sha256(target) != original_hash:
+                    raise RuntimeError("audio checksum mismatch: " + episode_id)
+                item["audio_url"] = "assets/audio/" + target.name
+                checksums[item["audio_url"]] = original_hash
             for ext in ("jpg", "jpeg", "png", "webp"):
-                cover = audio.parent / ("cover." + ext)
+                cover = folder / ("cover." + ext)
                 if cover.is_file() and not cover.is_symlink() and cover.stat().st_size:
                     cover_target = assets / "covers" / (safe_id + "." + ext)
                     shutil.copyfile(cover, cover_target)
                     item["cover_url"] = "assets/covers/" + cover_target.name
                     checksums[item["cover_url"]] = sha256(cover_target)
                     break
-            meta_path = audio.parent / "content.json"
+            meta_path = folder / "content.json"
             metadata = {}
             if meta_path.is_file():
                 metadata = json.loads(meta_path.read_text(encoding="utf-8"))
@@ -93,9 +100,9 @@ def build(deliveries, output, template, limit, *, fetch_source_covers=False, gen
                     raise ValueError("content.json must be an object")
             # Markdown is the canonical reading format; never evaluate untrusted HTML
             # inside the reader WebView. Existing article.html remains a legacy asset.
-            markdown_path = audio.parent / "article.md"
+            markdown_path = folder / "article.md"
             if not markdown_path.is_file() or markdown_path.is_symlink():
-                markdown_path = audio.parent / "research.md"
+                markdown_path = folder / "research.md"
             markdown = ""
             if markdown_path.is_file() and not markdown_path.is_symlink():
                 if markdown_path.stat().st_size > 1_000_000:
@@ -112,8 +119,8 @@ def build(deliveries, output, template, limit, *, fetch_source_covers=False, gen
                     item["title"] = metadata["title"].strip()
                 if isinstance(metadata.get("summary"), str):
                     item["summary"] = metadata["summary"].strip()
-            formats = {"audio": {"path": item["audio_url"], "mime_type": "audio/mpeg"}}
-            legacy_article = audio.parent / "article.html"
+            formats = {"audio": {"path": item["audio_url"], "mime_type": "audio/mpeg"}} if audio else {}
+            legacy_article = folder / "article.html"
             if legacy_article.is_file() and not legacy_article.is_symlink():
                 article_target = assets / "articles" / (safe_id + ".html")
                 shutil.copyfile(legacy_article, article_target)
@@ -172,7 +179,7 @@ def build(deliveries, output, template, limit, *, fetch_source_covers=False, gen
             if origin == "source" and source_url:
                 item["cover"]["source_url"] = source_url
             manifest.append(item)
-        payload = {"schema_version": 1, "items": manifest, "episodes": manifest}
+        payload = {"schema_version": 1, "items": manifest, "episodes": [x for x in manifest if x.get("audio_url")]}
         (assets / "episodes.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         html = template.read_text(encoding="utf-8")
         marker = '<script id="embedded-episodes" type="application/json">'
@@ -182,7 +189,7 @@ def build(deliveries, output, template, limit, *, fetch_source_covers=False, gen
         end = html.index("</script>", start)
         embedded = json.dumps(payload, ensure_ascii=False).replace("<", "\\u003c")
         (stage / "index.html").write_text(html[:start] + embedded + html[end:], encoding="utf-8")
-        (stage / "build-report.json").write_text(json.dumps({"episode_count": len(manifest), "sha256": checksums, "warnings": warnings, "mode": "immutable-muse-snapshot"}, indent=2) + "\n", encoding="utf-8")
+        (stage / "build-report.json").write_text(json.dumps({"item_count": len(manifest), "episode_count": sum(1 for x in manifest if x.get("audio_url")), "sha256": checksums, "warnings": warnings, "mode": "immutable-muse-snapshot"}, indent=2) + "\n", encoding="utf-8")
         if output.exists():
             raise FileExistsError("output exists; choose a new versioned directory: " + str(output))
         os.replace(stage, output)
@@ -202,7 +209,7 @@ if __name__ == "__main__":
     a = p.parse_args()
     try:
         count = build(a.deliveries, a.output, a.template, a.limit, fetch_source_covers=a.fetch_source_covers, generate_ai_covers=a.generate_ai_covers)
-        print(f"Built {count} episodes at {a.output}")
+        print(f"Built {count} content items at {a.output}")
     except (OSError, ValueError, RuntimeError) as exc:
         print(f"Publish failed: {exc}", file=sys.stderr)
         sys.exit(1)
