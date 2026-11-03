@@ -49,6 +49,26 @@ class PublisherTests(unittest.TestCase):
         self.assertIn("}catch(e){data=embedded;note='embedded snapshot (manifest unavailable)'", html)
         self.assertIn("return v}", html)
 
+    def test_unified_item_with_article_and_editorial_metadata(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            folder = root / "deliveries" / "topic-20261103"
+            folder.mkdir(parents=True)
+            (folder / "podcast.mp3").write_bytes(b"unchanged-audio")
+            (folder / "article.html").write_text("<h1>Readable article</h1>")
+            (folder / "content.json").write_text(json.dumps({"title": "A Specific Topic", "summary": "A short explanation."}))
+            output = root / "bundle"
+            build(root / "deliveries", output, Path(__file__).with_name("index.html"), 15)
+            payload = json.loads((output / "assets/episodes.json").read_text())
+            item = payload["items"][0]
+            self.assertEqual(item["content_id"], "topic-20261103")
+            self.assertEqual(item["title"], "A Specific Topic")
+            self.assertEqual(item["summary"], "A short explanation.")
+            self.assertIn("article", item["formats"])
+            self.assertEqual((output / item["formats"]["article"]["path"]).read_text(), "<h1>Readable article</h1>")
+            self.assertEqual((output / item["audio_url"]).read_bytes(), b"unchanged-audio")
+            self.assertEqual(payload["episodes"][0]["id"], item["content_id"])
+
     def test_reject_empty_and_unsafe_output(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
