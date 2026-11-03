@@ -118,6 +118,8 @@ def editorial(markdown, metadata=None):
         synopsis = summary or claim
     title = shorten(choice, 82) or "Untitled research"
     summary = shorten(synopsis, 270)
+    if isinstance(synopsis, str) and len(clean(synopsis)) <= 270 and synopsis.rstrip().endswith((".", "!", "?")):
+        summary += synopsis.rstrip()[-1]
     word_count = len(re.findall(r"\b[\w'-]+\b", markdown or ""))
     return {"title": title, "summary": summary, "article_blocks": blocks,
             "reading_minutes": max(1, round(word_count / 220))}
