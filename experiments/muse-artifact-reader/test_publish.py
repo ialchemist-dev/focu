@@ -1,9 +1,11 @@
 import json
 from pathlib import Path
 import tempfile
+import os
+from unittest.mock import patch
 import unittest
 from publish import build, sha256, episode_date
-from editorial import editorial, blocks_from_markdown
+from editorial import editorial, blocks_from_markdown, compose_article_with_openai
 from cover_art import typographic_svg
 
 class PublisherTests(unittest.TestCase):
@@ -171,6 +173,49 @@ class PublisherTests(unittest.TestCase):
             self.assertNotIn("article", items["podcast-20261102"]["formats"])
             self.assertEqual((output / items["podcast-20261102"]["audio_url"]).read_bytes(), b"audio-only")
             self.assertEqual(json.loads((output / "build-report.json").read_text())["item_count"], 2)
+
+    def test_opt_in_editorial_writes_cached_article_without_touching_source(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            folder = root / "deliveries" / "research-20261103"
+            folder.mkdir(parents=True)
+            (folder / "research.md").write_text(
+                "# What is new?\n\nInitial evidence summary.\n\n"
+                "## Findings\n- A factual observation ([s1](https://example.org/a)).\n"
+            )
+            article = ("# A precise article headline\n\n"
+                       "A careful explanation with enough context to keep this test "
+                       "faithful to the editorial output. " * 6 +
+                       "\n\n## Sources\n- [s1](https://example.org/a)\n")
+            response = {"title": "A precise article headline",
+                        "summary": "A research-based explanation of the original observation.",
+                        "article_markdown": article}
+            with patch.dict(os.environ, {"OPENAI_API_KEY": "test-only"}):
+                with patch("publish.compose_article_with_openai", return_value=response) as mock:
+                    for name in ("bundle-a", "bundle-b"):
+                        build(root / "deliveries", root / name,
+                              Path(__file__).with_name("index.html"), 15,
+                              generate_editorial=True)
+                    self.assertEqual(mock.call_count, 1)
+            item = json.loads((root / "bundle-b/assets/episodes.json").read_text())["items"][0]
+            self.assertEqual(item["title"], response["title"])
+            self.assertEqual(item["summary"], response["summary"])
+            self.assertTrue(item["article_blocks"])
+            self.assertEqual((folder / "research.md").read_text().splitlines()[0], "# What is new?")
+
+    def test_editorial_provider_rejects_fabricated_citations(self):
+        import io
+        original = "# Research\n\nEvidence ([s1](https://example.org/a))."
+        long_article = "# Valid headline\n\n" + "Technical details remain grounded. " * 12
+        long_article += "\n\n## Sources\n- [fake](https://unverified.example/nope)"
+        response = {"choices": [{"message": {"content": json.dumps({
+            "title": "A valid research headline",
+            "summary": "This summary only reflects the provided evidence.",
+            "article_markdown": long_article,
+        })}}]}
+        with patch("urllib.request.urlopen", return_value=io.BytesIO(json.dumps(response).encode())):
+            with self.assertRaisesRegex(ValueError, "introduced citations"):
+                compose_article_with_openai(original, api_key="test-only")
 
     def test_reject_empty_and_unsafe_output(self):
         with tempfile.TemporaryDirectory() as temp:
