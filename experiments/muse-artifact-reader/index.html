@@ -2,16 +2,49 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#faf9f7"><title>Focu · Podcast Library</title>
 <style>
 *{box-sizing:border-box}body{margin:0;background:#faf9f7;color:#242424;font:15px system-ui,-apple-system,sans-serif}header{position:sticky;top:0;background:#faf9f7ed;backdrop-filter:blur(12px);padding:18px 20px;border-bottom:1px solid #e9e5df;z-index:2}.head{max-width:1100px;margin:auto;display:flex;justify-content:space-between;align-items:center;gap:12px}h1{margin:0;font-size:25px}header p{margin:5px 0 0;color:#777;font-size:13px}main{max-width:1100px;margin:24px auto;padding:0 16px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}@media(min-width:720px){.grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:20px}}article{background:white;border:1px solid #eee9e4;border-radius:16px;overflow:hidden;box-shadow:0 3px 14px #00000006}article img,.placeholder{display:block;width:100%;aspect-ratio:4/5;object-fit:cover;background:linear-gradient(145deg,#f5d7c7,#c5d5e5)}.placeholder{display:grid;place-items:center;font-size:36px}article .content{padding:12px}h2{font-size:14px;line-height:1.4;margin:0 0 8px}small{color:#777}button{background:#ee554c;color:white;border:0;border-radius:10px;padding:9px 13px;cursor:pointer;font-weight:600}button:disabled{opacity:.5}audio{width:100%;margin-top:12px}#status{color:#777;margin-bottom:20px}.empty{padding:40px 12px;text-align:center;color:#666}.error{color:#a33}.hint{font-size:12px;color:#777;margin-top:10px}
-</style></head><body><header><div class="head"><div><h1>Focu</h1><p>Your personal podcast library</p></div><button id="refresh" type="button">Refresh</button></div></header><main><div id="status" role="status" aria-live="polite">Loading podcasts…</div><div class="grid" id="grid"></div><p class="hint">Local Artifact reader · No account or cloud sync</p></main>
+</style></head><body><header><div class="head"><div><h1>Focu</h1><p>Your personal podcast library</p></div><div><button id="inbox" type="button">Inbox</button> <button id="archive" type="button">Archive</button> <button id="refresh" type="button">Refresh</button></div></div></header><main><div id="status" role="status" aria-live="polite">Loading podcasts…</div><div class="grid" id="grid"></div><p class="hint">Local Artifact reader · No account or cloud sync</p></main>
 <script id="embedded-episodes" type="application/json">{"episodes":[]}</script>
 <script>
 'use strict';
 const grid=document.getElementById('grid'),status=document.getElementById('status'),refresh=document.getElementById('refresh');
 const params=new URLSearchParams(location.search);
+const STORE_KEY='focu:content-consumption:v1';
+let view='inbox',allItems=[],storageOK=true;
+function readStates(){try{return JSON.parse(localStorage.getItem(STORE_KEY)||'{}')}catch(e){storageOK=false;return {}}}
+let states=readStates();
+function saveStates(){try{localStorage.setItem(STORE_KEY,JSON.stringify(states));storageOK=true}catch(e){storageOK=false}}
+function markDone(id,via){states[id]={status:'consumed',via,updated_at:new Date().toISOString()};saveStates();render(allItems,'')}
+function markUnread(id){delete states[id];saveStates();render(allItems,'')}
+document.getElementById('inbox').onclick=()=>{view='inbox';render(allItems,'')};
+document.getElementById('archive').onclick=()=>{view='archive';render(allItems,'')};
 function el(tag,text,cls){const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n}
 function safeUrl(value){if(typeof value!=='string'||!value.trim())return null;const v=value.trim();if(v.startsWith('//')){try{const u=new URL('https:'+v);return ['https:','http:','blob:'].includes(u.protocol)?v:null}catch{return null}}if(/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(v)){try{const u=new URL(v);return ['https:','http:','blob:'].includes(u.protocol)?v:null}catch{return null}}if(v.startsWith('/')||v.startsWith('\\\\')||v.includes('\\\\'))return null;return v}
-function normalize(data){const a=Array.isArray(data)?data:data&&data.episodes;if(!Array.isArray(a))throw Error('Expected an episodes array');const seen=new Set();return a.filter(x=>{if(!x||typeof x!=='object'||typeof x.id!=='string'||!x.id.trim()||seen.has(x.id))return false;seen.add(x.id);return true}).slice(0,500)}
-function render(episodes,note){grid.replaceChildren();status.textContent=episodes.length+' episodes'+(note?' · '+note:'');if(!episodes.length){grid.append(el('p','No episodes yet. Add entries to the manifest.','empty'));return}for(const item of episodes){const card=el('article'),cover=safeUrl(item.cover_url),audio=safeUrl(item.audio_url);if(cover){const img=el('img');img.src=cover;img.alt=item.title||'Podcast cover';img.loading='lazy';img.referrerPolicy='no-referrer';img.onerror=()=>{img.replaceWith(el('div','🎧','placeholder'))};card.append(img)}else card.append(el('div','🎧','placeholder'));const content=el('div',undefined,'content');content.append(el('h2',item.title||'Untitled episode'));content.append(el('small',[item.source,item.date].filter(x=>typeof x==='string').join(' · ')));if(audio){const player=el('audio');player.controls=true;player.preload='metadata';player.src=audio;player.addEventListener('error',()=>{const msg=el('p','Audio unavailable. Check Artifact media access.','error');if(!content.contains(msg))content.append(msg)},{once:true});content.append(player)}else content.append(el('p','Audio unavailable: supply a browser-accessible media URL.','error'));card.append(content);grid.append(card)}}
+function normalize(data){
+ const a=Array.isArray(data)?data:(data&&Array.isArray(data.items)?data.items:data&&data.episodes);
+ if(!Array.isArray(a))throw Error('Expected items or episodes array');
+ const seen=new Set();
+ return a.filter(x=>{const id=x&&(x.content_id||x.id);if(typeof id!=='string'||!id.trim()||seen.has(id))return false;seen.add(id);return true}).slice(0,500).map(x=>{
+ const id=x.content_id||x.id;
+ return {id,title:x.title,summary:x.summary||'',date:x.published_at||x.date||'',source:typeof x.source==='string'?x.source:(x.source?.kind||'Focu'),cover_url:x.cover?.path||x.cover_url||'',audio_url:x.formats?.audio?.path||x.audio_url||'',article_url:x.formats?.article?.path||''};
+ });
+}
+function render(items,note){
+ allItems=items;grid.replaceChildren();
+ const visible=items.filter(x=>(states[x.id]?.status==='consumed')===(view==='archive'));
+ status.textContent=visible.length+' '+(view==='archive'?'archived':'in inbox')+(note?' · '+note:'')+(!storageOK?' · Warning: consumption state cannot be saved':'');
+ if(!visible.length){grid.append(el('p',view==='archive'?'Archive is empty':'Nothing left to read or listen to.','empty'));return}
+ for(const item of visible){
+ const card=el('article'),cover=safeUrl(item.cover_url),audio=safeUrl(item.audio_url),article=safeUrl(item.article_url);
+ if(cover){const img=el('img');img.src=cover;img.alt=item.title||'Cover';img.loading='lazy';img.onerror=()=>img.replaceWith(el('div','🎧','placeholder'));card.append(img)}
+ else card.append(el('div','🎧','placeholder'));
+ const content=el('div',undefined,'content');content.append(el('h2',item.title||'Untitled'));if(item.summary)content.append(el('p',item.summary));
+ content.append(el('small',[item.source,item.date].filter(Boolean).join(' · ')));
+ if(audio){const player=el('audio');player.controls=true;player.preload='metadata';player.src=audio;player.addEventListener('ended',()=>markDone(item.id,'audio'));player.addEventListener('error',()=>content.append(el('p','Audio unavailable. Check Artifact media access.','error')),{once:true});content.append(player)}
+ if(article){const link=el('a','Read article');link.href=article;link.target='_blank';link.rel='noopener';content.append(link);const done=el('button','Done reading');done.onclick=()=>markDone(item.id,'article');content.append(done)}
+ const toggle=el('button',view==='archive'?'Mark unread':'Mark done');toggle.onclick=()=>view==='archive'?markUnread(item.id):markDone(item.id,'manual');content.append(toggle);
+ card.append(content);grid.append(card);
+ }
+}
 async function load(){refresh.disabled=true;status.className='';status.textContent='Loading podcasts…';try{let data,note='';const raw=document.getElementById('embedded-episodes').textContent;const embedded=normalize(JSON.parse(raw));const manifest=params.get('manifest')||'assets/episodes.json';try{const url=safeUrl(manifest);if(!url)throw Error('Invalid manifest URL');const response=await fetch(url,{cache:'no-store'});if(!response.ok)throw Error('HTTP '+response.status);data=normalize(await response.json())}catch(e){data=embedded;note='embedded snapshot (manifest unavailable)';if(!data.length)note='manifest unavailable; no embedded episodes'}render(data,note)}catch(e){grid.replaceChildren();status.textContent='Unable to load podcasts: '+e.message;status.className='error'}finally{refresh.disabled=false}}
 refresh.addEventListener('click',load);load();
 </script></body></html>
