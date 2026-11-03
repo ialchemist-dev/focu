@@ -42,6 +42,13 @@ class PublisherTests(unittest.TestCase):
             self.assertEqual([ep["date"] for ep in episodes], ["2026-11-02", "2026-10-31"])
             self.assertEqual([ep["id"] for ep in episodes], ["frontier-20261102", "frontier-20261031"])
 
+    def test_muse_loader_fallback_structure(self):
+        html = Path(__file__).with_name("index.html").read_text()
+        self.assertIn("const manifest=params.get('manifest')||'assets/episodes.json'", html)
+        self.assertIn("try{const url=safeUrl(manifest);if(!url)throw Error('Invalid manifest URL');const response=", html)
+        self.assertIn("}catch(e){data=embedded;note='embedded snapshot (manifest unavailable)'", html)
+        self.assertIn("return v}", html)
+
     def test_reject_empty_and_unsafe_output(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
