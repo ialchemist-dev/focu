@@ -148,6 +148,30 @@ class PublisherTests(unittest.TestCase):
         self.assertNotIn("Done reading", html)
         self.assertNotIn("Mark done", html)
 
+    def test_article_only_and_audio_only_share_optional_format_schema(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            deliveries = root / "deliveries"
+            article = deliveries / "article-20261103"
+            article.mkdir(parents=True)
+            (article / "article.md").write_text("# A standalone research story\n\nAn evidence-backed article.")
+            audio = deliveries / "podcast-20261102"
+            audio.mkdir(parents=True)
+            (audio / "podcast.mp3").write_bytes(b"audio-only")
+            output = root / "bundle"
+            self.assertEqual(build(deliveries, output, Path(__file__).with_name("index.html"), 15), 2)
+            payload = json.loads((output / "assets/episodes.json").read_text())
+            self.assertEqual(len(payload["items"]), 2)
+            self.assertEqual(len(payload["episodes"]), 1)
+            items = {x["content_id"]: x for x in payload["items"]}
+            self.assertIn("article", items["article-20261103"]["formats"])
+            self.assertNotIn("audio", items["article-20261103"]["formats"])
+            self.assertGreater(len(items["article-20261103"]["article_blocks"]), 1)
+            self.assertIn("audio", items["podcast-20261102"]["formats"])
+            self.assertNotIn("article", items["podcast-20261102"]["formats"])
+            self.assertEqual((output / items["podcast-20261102"]["audio_url"]).read_bytes(), b"audio-only")
+            self.assertEqual(json.loads((output / "build-report.json").read_text())["item_count"], 2)
+
     def test_reject_empty_and_unsafe_output(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
