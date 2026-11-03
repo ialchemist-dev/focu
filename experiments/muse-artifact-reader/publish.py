@@ -60,6 +60,7 @@ def build(deliveries, output, template, limit):
         assets = stage / "assets"
         (assets / "audio").mkdir(parents=True)
         (assets / "covers").mkdir()
+        (assets / "articles").mkdir()
         manifest = []
         checksums = {}
         for episode_id, title, audio, published_date in episodes:
@@ -79,8 +80,32 @@ def build(deliveries, output, template, limit):
                     item["cover_url"] = "assets/covers/" + cover_target.name
                     checksums[item["cover_url"]] = sha256(cover_target)
                     break
+            meta_path = audio.parent / "content.json"
+            metadata = {}
+            if meta_path.is_file():
+                metadata = json.loads(meta_path.read_text(encoding="utf-8"))
+                if not isinstance(metadata, dict):
+                    raise ValueError("content.json must be an object")
+            chosen_title = metadata.get("title")
+            if isinstance(chosen_title, str) and chosen_title.strip():
+                item["title"] = chosen_title.strip()
+            summary = metadata.get("summary")
+            if isinstance(summary, str):
+                item["summary"] = summary.strip()
+            article = audio.parent / "article.html"
+            formats = {"audio": {"path": item["audio_url"], "mime_type": "audio/mpeg"}}
+            if article.is_file() and not article.is_symlink():
+                article_target = assets / "articles" / (safe_id + ".html")
+                shutil.copyfile(article, article_target)
+                article_path = "assets/articles/" + article_target.name
+                formats["article"] = {"path": article_path, "mime_type": "text/html"}
+                checksums[article_path] = sha256(article_target)
+            item["content_id"] = episode_id
+            item["published_at"] = published_date or None
+            item["formats"] = formats
+            item["cover"] = {"path": item.get("cover_url"), "origin": "source" if item.get("cover_url") else "placeholder"}
             manifest.append(item)
-        payload = {"episodes": manifest}
+        payload = {"schema_version": 1, "items": manifest, "episodes": manifest}
         (assets / "episodes.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         html = template.read_text(encoding="utf-8")
         marker = '<script id="embedded-episodes" type="application/json">'
