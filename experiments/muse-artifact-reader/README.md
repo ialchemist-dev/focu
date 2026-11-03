@@ -1,45 +1,40 @@
-# Muse-native Focu Artifact: end-to-end acceptance
+# Focu Muse-native Podcast Library
 
-This branch is a **Muse-only validation**, not a production sync or hosting deployment. Reuse the existing image-first Focu reader design when integrating; do not create a parallel product. No Tailscale, Google Drive, public MP3 URLs, or external website is required **if** Muse can package local audio as Artifact assets.
+## Verified acceptance (November 2, 2026)
 
-## Components
-- `index.html`: standalone, responsive two-column cards and native HTML audio seeking. It tries `episodes.json` on refresh and falls back to the embedded snapshot when network/fetch is unavailable.
-- `episodes.json`: manifest with stable episode IDs; starts empty. Fill from *existing* Focu deliveries, not mock titles.
-- Local MP3s and optional original covers must be **accessible inside the Artifact's browser origin**. A VM filesystem path (e.g. `/home/muse/episode.mp3`) is **not** a browser URL. Relative URLs only work if Muse actually bundles or serves the referenced files. A `file://` URL is intentionally unsupported.
+The private static Muse Library entry `focu-podcast-library` was updated **in place** v1 → v2 → v3. The v3 library was opened and used on the user's iPhone. It remains a private static Artifact, with no server actions, database, external hosting, Tailscale or Google Drive.
 
-## Muse agent instruction (copy all)
+Muse static Artifacts are **immutable build-time snapshots**. Workspace changes to `episodes.json` cannot update an already deployed Artifact. Each content change requires a new publisher staging bundle and a **new build of the same Library entry**, not a new Library entry.
 
-Work on the existing Focu checkout and preserve all current deliveries, databases, credentials, and existing reader UI. Use branch `experiment/muse-artifact-static-reader` (PR #17) as the validation fixture. Do not install Tailscale, configure Google Drive, create public links, deploy a website, or regenerate podcasts.
+Muse serves `index.html` and `assets/`, not root-level `episodes.json`. The manifest embedded in `index.html` is authoritative in Muse; HTTP fetch of `assets/episodes.json` is a progressive enhancement for compatible hosting contexts. The v3 loader fix allows relative media paths on the Muse iOS non-HTTP scheme and catches all manifest failures (including invalid URL), showing a labelled embedded-snapshot fallback.
 
-1. Find 2–5 already generated podcast MP3s and associated titles, timestamps, source names and original cover images, if present. Never fabricate entries. Confirm file sizes are nonzero.
-2. Make a **persistent native Muse Artifact** using the reader HTML. Try bundling MP3s and images as local Artifact assets. Set each `audio_url` and `cover_url` to a browser-resolvable relative path. Create `episodes.json` with stable IDs. If Muse does not support multi-file Artifact assets, embed a small manifest into the `embedded-episodes` JSON script in the HTML and report the limitation; do **not** inline large MP3 files as base64 without explicit approval.
-3. Open the Artifact inside the Muse mobile app. Verify covers, English UI, audio play/pause, seeking to the middle, completion, and switching episodes. Verify no external media origin is used.
-4. Close/reopen the conversation and restart the app. Open the **same Artifact**; record whether media still works and whether its entry point remains stable.
-5. Add one *existing* episode to `episodes.json`, without rebuilding the HTML. Press Refresh or reopen. Record whether the same Artifact shows it. If not, determine whether the Artifact is a frozen snapshot or its manifest is dynamically accessible. Do not report auto-refresh as passing merely because a newly generated Artifact contains the new entry.
-6. Test missing MP3, missing cover, invalid manifest, duplicate ID, and empty list. Confirm graceful UI errors. Restore the original manifest afterward.
-7. Return a concise pass/fail report with exact Artifact entry point, asset paths (not private tokens), media origin, refresh mechanism, failures, and screenshots if possible. Never claim cross-device state sync or playback-position persistence unless explicitly tested.
+The deployed reader has been checked for malformed-entry rejection, duplicate-ID rejection, visible audio-unavailable errors, and the optional `cover_url` image branch. **Covers: No data** (no source delivery had an image; placeholder path exercised). **Force-quit/reopen: Unverified. Background playback: Unverified.** Do not upgrade these without controlled physical-device tests.
 
-Acceptance gate: same Artifact opens after restart; 2+ real MP3s play and seek; missing assets fail visibly; one new entry appears without rebuilding HTML. If the update gate fails, document the limitation and propose a minimal host-side publishing mechanism, without deploying it.
+Publisher validation: 2/2 original unit tests passed in Muse; 15/15 bundled MP3s matched the original delivery files and `build-report.json` by SHA-256. Date parsing and newest-first ordering have since been corrected in the repository; run the updated tests and rebuild to verify these changes separately.
 
-## Security and limitations
-The reader stores no credentials and does not send playback events to a server. It does not currently persist progress, saved/read/archive state, or sync between devices. `episodes.json` fetch can fail inside sandboxed Artifacts; in that case the embedded snapshot is displayed with a warning. The fallback is **not** dynamic updates. A static Artifact alone cannot guarantee visibility of future VM files or their URL mapping. Verify these properties in Muse before declaring the end-to-end flow complete.
+## Files
 
+- `index.html`: standalone responsive Muse reader with embedded manifest, validated media references and visible error states.
+- `publish.py`: stages an immutable private bundle, copies existing MP3s byte-for-byte, optionally copies `cover.jpg/jpeg/png/webp`, parses trailing `YYYYMMDD` dates and selects the newest episodes before applying `--limit`.
+- `test_publish.py`: publisher and chronological-ordering regression tests.
+- `assets/episodes.json` inside each staged bundle: audit copy of the embedded manifest.
+- `build-report.json` inside each staged bundle: checksums and count for operator verification.
 
-## Immutable Muse publishing (validated platform model)
-
-Muse static Artifacts are build-time snapshots. Editing `episodes.json` in the VM **does not** change an already published Artifact. Build a new version for each update. Reuse the same Library entry only if Muse's update-in-place capability is verified in its own environment; otherwise explicitly report that a new entry was created.
-
-The staging publisher copies existing MP3 bytes (no encoding), creates relative URLs, optionally copies `cover.jpg/png/jpeg/webp`, embeds the same manifest into the HTML fallback, and writes a SHA-256 audit report. It refuses to overwrite an existing output directory and never touches production files.
+## Stage a new version
 
 ```bash
 cd experiments/muse-artifact-reader
+python3 -m unittest -v test_publish.py
 python3 publish.py \
   --deliveries ~/workspace/the-few-focu-test/data/deliveries \
-  --output ~/workspace/focu-artifact-builds/library-20261102 \
+  --output ~/workspace/focu-artifact-builds/library-NEW-VERSION \
   --limit 15
-python3 -m unittest -v test_publish.py
 ```
 
-Give Muse the resulting `index.html` and `assets/` directory as one private static Artifact bundle. Keep `build-report.json` as an operator-side audit. Do not publish private audio URLs. The publisher only stages files; it **does not** invoke Muse's proprietary Artifact build/update API or schedule daily publication. Test real Muse packaging, same-entry updates, playback, iPhone restarts and negative media cases separately.
+Confirm chronological order, ISO dates and original-file SHA-256 equality before deploying. Update the **existing** private `focu-podcast-library` Library entry with the resulting `index.html` and `assets/`. The publisher does not call Muse's build/update API, alter production cron, or touch original deliveries.
 
-**Acceptance correction:** The earlier manifest hot-update test is **Fail (platform snapshot behavior)**, not a feature to implement through fetch. Fresh builds are required. Physical iPhone force-quit/reopen and background playback remain **Unverified**. Never silently upgrade those labels.
+## Acceptance limits
+
+No original cover images were available. Controlled iPhone force-quit/reopen, lock-screen/background playback, and persistent playback position have not been verified. No daily automation or cross-device state sync is implemented. Static bundles must be rebuilt for new content. Do not publish private media URLs.
+
+The original operator report from the Muse VM must be copied verbatim to `VALIDATION_REPORT.md` and extended only with the v3 outcome. Do not substitute a reconstructed summary for that source document.
