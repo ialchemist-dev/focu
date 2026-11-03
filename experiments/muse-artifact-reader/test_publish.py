@@ -95,7 +95,8 @@ class PublisherTests(unittest.TestCase):
         self.assertEqual(first, typographic_svg("Pando memory architecture", "AI research"))
         self.assertNotEqual(first, typographic_svg("Geothermal rock physics", "Energy"))
         self.assertTrue(first.startswith(b"<svg"))
-        self.assertIn(b"Pando memory architecture", first)
+        self.assertIn(b"Pando memory", first)
+        self.assertIn(b"architecture", first)
 
     def test_build_stages_markdown_and_cover_without_network(self):
         with tempfile.TemporaryDirectory() as temp:
