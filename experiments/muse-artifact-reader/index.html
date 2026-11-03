@@ -1,22 +1,99 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#faf9f7"><title>Focu · Podcast Library</title>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#fbfaf8">
+<title>Focu · Reading Feed</title>
 <style>
-*{box-sizing:border-box}body{margin:0;background:#faf9f7;color:#242424;font:15px system-ui,-apple-system,sans-serif}header{position:sticky;top:0;background:#faf9f7ed;backdrop-filter:blur(12px);padding:18px 20px;border-bottom:1px solid #e9e5df;z-index:2}.head{max-width:1100px;margin:auto;display:flex;justify-content:space-between;align-items:center;gap:12px}h1{margin:0;font-size:25px}header p{margin:5px 0 0;color:#777;font-size:13px}main{max-width:1100px;margin:24px auto;padding:0 16px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}@media(min-width:720px){.grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:20px}}article{background:white;border:1px solid #eee9e4;border-radius:16px;overflow:hidden;box-shadow:0 3px 14px #00000006}article img,.placeholder{display:block;width:100%;aspect-ratio:4/5;object-fit:cover;background:linear-gradient(145deg,#f5d7c7,#c5d5e5)}.placeholder{display:grid;place-items:center;font-size:36px}article .content{padding:12px}h2{font-size:14px;line-height:1.4;margin:0 0 8px}small{color:#777}button{background:#ee554c;color:white;border:0;border-radius:10px;padding:9px 13px;cursor:pointer;font-weight:600}button:disabled{opacity:.5}audio{width:100%;margin-top:12px}#status{color:#777;margin-bottom:20px}.empty{padding:40px 12px;text-align:center;color:#666}.error{color:#a33}.hint{font-size:12px;color:#777;margin-top:10px}
-</style></head><body><header><div class="head"><div><h1>Focu</h1><p>Your personal podcast library</p></div><div><button id="inbox" type="button">Inbox</button> <button id="archive" type="button">Archive</button> <button id="refresh" type="button">Refresh</button></div></div></header><main><div id="status" role="status" aria-live="polite">Loading podcasts…</div><div class="grid" id="grid"></div><p class="hint">Local Artifact reader · No account or cloud sync</p></main>
+:root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;color:#252422;background:#fbfaf8;font-synthesis:none}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;background:#fbfaf8}
+button{font:inherit;cursor:pointer}
+button:focus-visible,a:focus-visible{outline:3px solid #bd6258;outline-offset:3px}
+header{position:sticky;top:0;z-index:5;background:#fbfaf8ed;backdrop-filter:blur(18px);border-bottom:1px solid #ebe8e2}
+.head{max-width:760px;margin:auto;min-height:70px;padding:12px 22px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.brand{font-size:24px;font-weight:800;letter-spacing:-1px}.brand .dot{color:#dd635b}
+.nav{display:flex;gap:5px;align-items:center}
+.nav button,.smallbutton{border:0;background:transparent;color:#77716b;padding:9px 12px;border-radius:12px;font-size:14px}
+.nav button.active{color:#222;font-weight:700;background:#ece8e2}
+.nav #refresh{padding:8px;font-size:17px}
+main{max-width:760px;margin:0 auto;padding:25px 22px 70px}
+.sectiontitle{font-size:12px;font-weight:700;color:#999189;letter-spacing:.13em;text-transform:uppercase;margin:0 0 15px}
+#status{font-size:13px;color:#938b82;margin-bottom:21px}
+.feed{display:flex;flex-direction:column;gap:0}
+.feedcard{border:0;border-bottom:1px solid #e9e5df;background:transparent;padding:22px 0;display:flex;gap:18px;width:100%;text-align:left;color:inherit;align-items:flex-start}
+.feedcard:first-child{padding-top:2px}
+.feedcard:hover .feedtitle{color:#b44e43}
+.cardbody{flex:1;min-width:0}
+.cardmeta,.byline{font-size:12px;color:#968e85;letter-spacing:.02em}
+.feedtitle{font-size:22px;font-weight:730;letter-spacing:-.035em;line-height:1.3;margin:9px 0}
+.feedsummary{font-size:14px;color:#69645f;line-height:1.65;margin:9px 0 12px;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden}
+.cover{width:108px;height:108px;object-fit:cover;border-radius:12px;flex-shrink:0;background:#eeeae5}
+.empty{padding:60px 15px;text-align:center;color:#8e857b;line-height:1.7}
+#reader[hidden],#feed[hidden],#playerbar[hidden],#toolbar[hidden]{display:none!important}
+.readerback{border:0;background:none;color:#787067;padding:6px 0;margin-bottom:27px;font-size:14px}
+.readercover{width:100%;max-height:340px;object-fit:cover;border-radius:14px;margin-bottom:25px;background:#eee9e2}
+#readertitle{font-size:clamp(30px,6.5vw,45px);letter-spacing:-.055em;line-height:1.13;margin:6px 0 18px;font-weight:790}
+#readersummary{font-size:17px;color:#716b64;line-height:1.65;margin:0 0 23px}
+.readeractions{display:flex;align-items:center;gap:12px;padding:16px 0;border-top:1px solid #e9e5df;border-bottom:1px solid #e9e5df;margin-bottom:28px}
+.listen{border:0;background:#242424;color:#fff;border-radius:24px;padding:10px 18px;font-weight:650;font-size:14px}
+.readtime{color:#999189;font-size:12px}
+#articlebody{font-size:17px;line-height:1.9;letter-spacing:-.008em;color:#37342e}
+#articlebody p{margin:0 0 23px}#articlebody h2{font-size:24px;line-height:1.3;letter-spacing:-.03em;margin:38px 0 17px}
+#articlebody h3{font-size:19px;margin:28px 0 12px}
+#articlebody li{margin:0 0 12px 17px;padding-left:5px}
+#articlebody blockquote{border-left:3px solid #d9ada0;margin:15px 0 24px;padding:0 16px;color:#68615c}
+#articlebody a{color:#a94e45;text-decoration:underline;text-underline-offset:3px;overflow-wrap:anywhere}
+#articlebody pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f0ede8;padding:14px;border-radius:10px;font-size:13px;line-height:1.65}
+.readend{margin:36px 0 15px;border-top:1px solid #e9e5df;padding-top:21px;text-align:center;color:#958c82;font-size:13px}
+#readerstate{font-size:13px;color:#82786e;text-align:center;min-height:20px;margin:10px 0}
+#restore{display:block;margin:10px auto;color:#826a60;text-decoration:underline;background:none;border:0;font-size:12px}
+#playerbar{position:fixed;z-index:8;bottom:0;left:0;right:0;background:#fff;border-top:1px solid #e5dfd8;box-shadow:0 -6px 24px #00000010;padding:9px 16px 12px}
+.playinner{max-width:710px;margin:auto}
+.playtop{display:flex;align-items:center;justify-content:space-between;gap:12px}
+#nowplaying{font-size:12px;color:#68615b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#closeaudio{border:0;background:none;color:#827d76;font-size:22px}
+#player{display:block;width:100%;height:43px}
+.error{color:#af443b!important}
+#articlebody .noarticle{text-align:center;color:#777;font-size:15px}
+@media(max-width:480px){.head{padding:10px 17px;min-height:64px}.brand{font-size:23px}.nav button{padding:8px 10px}main{padding:20px 18px 70px}.feedtitle{font-size:20px}.cover{width:92px;height:92px}.feedcard{gap:13px;padding:21px 0}#articlebody{font-size:16px;line-height:1.85}}
+</style>
+</head>
+<body>
+<header><div class="head"><div class="brand">focu<span class="dot">.</span></div><nav class="nav" aria-label="Library"><button id="inbox" class="active">Inbox</button><button id="archive">Archive</button><button id="refresh" aria-label="Refresh" title="Refresh">↻</button></nav></div></header>
+<main>
+<section id="feed"><h1 class="sectiontitle" id="feedheading">For you to read</h1><div id="status" aria-live="polite">Loading…</div><div class="feed" id="grid"></div></section>
+<section id="reader" hidden>
+<button id="back" class="readerback">← Back to Inbox</button>
+<img id="readercover" class="readercover" hidden alt="">
+<div class="byline" id="readerbyline"></div>
+<h1 id="readertitle"></h1>
+<p id="readersummary"></p>
+<div class="readeractions" id="toolbar"><button id="listen" class="listen" hidden>▶ Listen</button><span id="readtime" class="readtime"></span></div>
+<div id="articlebody"></div>
+<div class="readend" id="readend">End of article</div>
+<div id="readerstate" aria-live="polite"></div>
+<button id="restore" hidden>Restore to Inbox</button>
+</section>
+</main>
+<div id="playerbar" hidden><div class="playinner"><div class="playtop"><span id="nowplaying"></span><button id="closeaudio" aria-label="Close player">×</button></div><audio id="player" controls preload="metadata"></audio></div></div>
 <script id="embedded-episodes" type="application/json">{"episodes":[]}</script>
 <script>
 'use strict';
 const grid=document.getElementById('grid'),status=document.getElementById('status'),refresh=document.getElementById('refresh');
+const feed=document.getElementById('feed'),reader=document.getElementById('reader'),articleBody=document.getElementById('articlebody');
+const player=document.getElementById('player'),playerbar=document.getElementById('playerbar'),readend=document.getElementById('readend');
 const params=new URLSearchParams(location.search);
 const STORE_KEY='focu:content-consumption:v1';
-let view='inbox',allItems=[],storageOK=true;
-function readStates(){try{return JSON.parse(localStorage.getItem(STORE_KEY)||'{}')}catch(e){storageOK=false;return {}}}
+let view='inbox',allItems=[],storageOK=true,currentId=null,readMs=0,maxDepth=0,bottomSeen=false,contentAvailable=false;
+let tickAt=Date.now(),lastNote='',playingId=null,lastAudioPosition=null,listenedSeconds=0;
+function readStates(){try{const obj=JSON.parse(localStorage.getItem(STORE_KEY)||'{}');return obj&&typeof obj==='object'&&!Array.isArray(obj)?obj:{}}catch(e){storageOK=false;return {}}}
 let states=readStates();
 function saveStates(){try{localStorage.setItem(STORE_KEY,JSON.stringify(states));storageOK=true}catch(e){storageOK=false}}
-function markDone(id,via){states[id]={status:'consumed',via,updated_at:new Date().toISOString()};saveStates();render(allItems,'')}
-function markUnread(id){delete states[id];saveStates();render(allItems,'')}
-document.getElementById('inbox').onclick=()=>{view='inbox';render(allItems,'')};
-document.getElementById('archive').onclick=()=>{view='archive';render(allItems,'')};
+function isDone(id){return states[id]?.status==='consumed'}
+function markDone(id,via){if(!id||isDone(id))return;states[id]={status:'consumed',via,updated_at:new Date().toISOString()};saveStates();render(allItems,lastNote);updateReaderState()}
+function markUnread(id){delete states[id];saveStates();render(allItems,lastNote);updateReaderState()}
 function el(tag,text,cls){const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n}
 function safeUrl(value){if(typeof value!=='string'||!value.trim())return null;const v=value.trim();if(v.startsWith('//')){try{const u=new URL('https:'+v);return ['https:','http:','blob:'].includes(u.protocol)?v:null}catch{return null}}if(/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(v)){try{const u=new URL(v);return ['https:','http:','blob:'].includes(u.protocol)?v:null}catch{return null}}if(v.startsWith('/')||v.startsWith('\\\\')||v.includes('\\\\'))return null;return v}
 function normalize(data){
@@ -25,26 +102,120 @@ function normalize(data){
  const seen=new Set();
  return a.filter(x=>{const id=x&&(x.content_id||x.id);if(typeof id!=='string'||!id.trim()||seen.has(id))return false;seen.add(id);return true}).slice(0,500).map(x=>{
  const id=x.content_id||x.id;
- return {id,title:x.title,summary:x.summary||'',date:x.published_at||x.date||'',source:typeof x.source==='string'?x.source:(x.source?.kind||'Focu'),cover_url:x.cover?.path||x.cover_url||'',audio_url:x.formats?.audio?.path||x.audio_url||'',article_url:x.formats?.article?.path||''};
+ return {id,title:x.title||'Untitled',summary:x.summary||'',date:x.published_at||x.date||'',source:typeof x.source==='string'?x.source:(x.source?.kind||'Focu'),cover_url:x.cover?.path||x.cover_url||'',audio_url:x.formats?.audio?.path||x.audio_url||'',article_url:x.formats?.article?.path||'',blocks:Array.isArray(x.article_blocks)?x.article_blocks:[],reading_minutes:Number(x.reading_minutes)||0};
  });
 }
+function setView(which){view=which;currentId=null;reader.hidden=true;feed.hidden=false;document.getElementById('inbox').classList.toggle('active',which==='inbox');document.getElementById('archive').classList.toggle('active',which==='archive');document.getElementById('feedheading').textContent=which==='archive'?'Your Archive':'Latest stories';render(allItems,lastNote);window.scrollTo(0,0)}
+document.getElementById('inbox').onclick=()=>setView('inbox');
+document.getElementById('archive').onclick=()=>setView('archive');
 function render(items,note){
- allItems=items;grid.replaceChildren();
- const visible=items.filter(x=>(states[x.id]?.status==='consumed')===(view==='archive'));
- status.textContent=visible.length+' '+(view==='archive'?'archived':'in inbox')+(note?' · '+note:'')+(!storageOK?' · Warning: consumption state cannot be saved':'');
- if(!visible.length){grid.append(el('p',view==='archive'?'Archive is empty':'Nothing left to read or listen to.','empty'));return}
+ allItems=items;lastNote=note;grid.replaceChildren();
+ const visible=items.filter(x=>isDone(x.id)===(view==='archive'));
+ status.textContent=visible.length+' '+(view==='archive'?'saved stories':'new stories')+(note?' · '+note:'')+(!storageOK?' · Reading state cannot be saved':'');
+ if(!visible.length){grid.append(el('p',view==='archive'?'Nothing here yet. Finished stories will appear here.':'You are all caught up.','empty'));return}
  for(const item of visible){
- const card=el('article'),cover=safeUrl(item.cover_url),audio=safeUrl(item.audio_url),article=safeUrl(item.article_url);
- if(cover){const img=el('img');img.src=cover;img.alt=item.title||'Cover';img.loading='lazy';img.onerror=()=>img.replaceWith(el('div','🎧','placeholder'));card.append(img)}
- else card.append(el('div','🎧','placeholder'));
- const content=el('div',undefined,'content');content.append(el('h2',item.title||'Untitled'));if(item.summary)content.append(el('p',item.summary));
- content.append(el('small',[item.source,item.date].filter(Boolean).join(' · ')));
- if(audio){const player=el('audio');player.controls=true;player.preload='metadata';player.src=audio;player.addEventListener('ended',()=>markDone(item.id,'audio'));player.addEventListener('error',()=>content.append(el('p','Audio unavailable. Check Artifact media access.','error')),{once:true});content.append(player)}
- if(article){const link=el('a','Read article');link.href=article;link.target='_blank';link.rel='noopener';content.append(link);const done=el('button','Done reading');done.onclick=()=>markDone(item.id,'article');content.append(done)}
- const toggle=el('button',view==='archive'?'Mark unread':'Mark done');toggle.onclick=()=>view==='archive'?markUnread(item.id):markDone(item.id,'manual');content.append(toggle);
- card.append(content);grid.append(card);
+ const card=el('button',undefined,'feedcard');card.type='button';card.onclick=()=>openItem(item.id);
+ const body=el('div',undefined,'cardbody');
+ body.append(el('div',[item.source,item.date].filter(Boolean).join('  ·  '),'cardmeta'));
+ body.append(el('h2',item.title,'feedtitle'));
+ if(item.summary)body.append(el('p',item.summary,'feedsummary'));
+ const cues=[];if(item.blocks.length)cues.push('Read');if(safeUrl(item.audio_url))cues.push('Listen');if(cues.length)body.append(el('div',cues.join('  ·  '),'cardmeta'));
+ card.append(body);
+ const cover=safeUrl(item.cover_url);
+ if(cover){const img=el('img',undefined,'cover');img.src=cover;img.alt='';img.loading='lazy';img.onerror=()=>img.remove();card.append(img)}
+ grid.append(card);
  }
 }
+function inline(parent,raw){
+ const text=String(raw||'');const pattern=/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)|\*\*([^*]+)\*\*/g;
+ let match,last=0;
+ while((match=pattern.exec(text))){parent.append(document.createTextNode(text.slice(last,match.index)));if(match[1]){const url=safeUrl(match[2]);if(url&&url.startsWith('http')){const a=el('a',match[1]);a.href=url;a.target='_blank';a.rel='noopener noreferrer';parent.append(a)}else parent.append(document.createTextNode(match[1]))}else{parent.append(el('strong',match[3]))}last=pattern.lastIndex}
+ parent.append(document.createTextNode(text.slice(last).replace(/\*([^*]+)\*/g,'$1')));
+}
+function renderArticle(blocks){
+ articleBody.replaceChildren();
+ if(!blocks.length){articleBody.append(el('p','This item has audio but no article yet.','noarticle'));return}
+ let previousList=null;
+ for(const block of blocks){
+ if(!block||typeof block.text!=='string')continue;
+ const type=block.type;
+ if(type==='heading'&&block.level===1)continue;
+ if(type==='bullet'){
+ if(!previousList){previousList=el('ul');articleBody.append(previousList)}
+ const li=el('li');inline(li,block.text);previousList.append(li);continue
+ }
+ previousList=null;
+ let tag='p';
+ if(type==='heading')tag=block.level<=2?'h2':'h3';
+ else if(type==='quote')tag='blockquote';
+ else if(type==='code')tag='pre';
+ const node=el(tag);
+ if(type==='code')node.textContent=block.text;else inline(node,block.text);
+ articleBody.append(node);
+ }
+}
+function updateReaderState(){
+ if(!currentId)return;
+ const done=isDone(currentId);
+ document.getElementById('readerstate').textContent=done?'Finished · Saved in Archive':'';
+ document.getElementById('restore').hidden=!done;
+}
+function openItem(id){
+ const item=allItems.find(x=>x.id===id);if(!item)return;
+ currentId=id;readMs=0;maxDepth=0;bottomSeen=false;contentAvailable=item.blocks.length>0;tickAt=Date.now();
+ feed.hidden=true;reader.hidden=false;
+ document.getElementById('back').textContent='← Back to '+(view==='archive'?'Archive':'Inbox');
+ document.getElementById('readertitle').textContent=item.title;
+ document.getElementById('readersummary').textContent=item.summary;
+ document.getElementById('readerbyline').textContent=[item.source,item.date].filter(Boolean).join('  ·  ');
+ document.getElementById('readtime').textContent=item.reading_minutes?item.reading_minutes+' min read':'';
+ const cover=safeUrl(item.cover_url),img=document.getElementById('readercover');img.hidden=!cover;
+ if(cover){img.src=cover;img.onerror=()=>{img.hidden=true}}else img.removeAttribute('src');
+ const listen=document.getElementById('listen');listen.hidden=!safeUrl(item.audio_url);
+ const toolbar=document.getElementById('toolbar');toolbar.hidden=listen.hidden&&!item.blocks.length;
+ renderArticle(item.blocks);updateReaderState();window.scrollTo(0,0);
+}
+document.getElementById('back').onclick=()=>setView(view);
+document.getElementById('restore').onclick=()=>{if(currentId)markUnread(currentId)};
+document.getElementById('listen').onclick=()=>{
+ const item=allItems.find(x=>x.id===currentId);if(!item)return;
+ const url=safeUrl(item.audio_url);if(!url)return;
+ if(playingId!==item.id){player.src=url;playingId=item.id;listenedSeconds=0;lastAudioPosition=null}
+ playerbar.hidden=false;document.getElementById('nowplaying').textContent=item.title;
+ player.play().catch(()=>{document.getElementById('nowplaying').textContent='Tap the native play control to start audio'});
+};
+document.getElementById('closeaudio').onclick=()=>{player.pause();playerbar.hidden=true};
+player.addEventListener('seeking',()=>{lastAudioPosition=null});
+player.addEventListener('timeupdate',()=>{
+ if(player.paused||player.seeking||!Number.isFinite(player.currentTime))return;
+ const current=player.currentTime;
+ if(lastAudioPosition!==null){const diff=current-lastAudioPosition;if(diff>0&&diff<3)listenedSeconds+=diff}
+ lastAudioPosition=current;
+});
+player.addEventListener('ended',()=>{
+ if(playingId&&Number.isFinite(player.duration)&&player.duration>0&&listenedSeconds>=player.duration*0.8){markDone(playingId,'audio')}
+ else document.getElementById('nowplaying').textContent='Playback ended · Not enough listening time to archive';
+});
+player.addEventListener('error',()=>{document.getElementById('nowplaying').textContent='Audio unavailable. Check Artifact media access.'});
+function updateScroll(){
+ if(!currentId||reader.hidden||!contentAvailable||isDone(currentId))return;
+ const root=document.documentElement,range=Math.max(1,root.scrollHeight-innerHeight);
+ maxDepth=Math.max(maxDepth,scrollY/range);
+ if(readend.getBoundingClientRect().top<innerHeight-55)bottomSeen=true;
+}
+window.addEventListener('scroll',updateScroll,{passive:true});
+function readingTick(){
+ const now=Date.now(),delta=Math.min(2000,Math.max(0,now-tickAt));tickAt=now;
+ if(!currentId||reader.hidden||document.hidden||!contentAvailable||isDone(currentId))return;
+ readMs+=delta;updateScroll();
+ const item=allItems.find(x=>x.id===currentId),textLen=item?item.blocks.reduce((n,b)=>n+String(b.text||'').length,0):0;
+ const minMs=textLen<450?8000:textLen<1800?18000:30000;
+ if(bottomSeen&&maxDepth>=0.7&&readMs>=minMs)markDone(currentId,'article');
+}
+setInterval(readingTick,1000);
+document.addEventListener('visibilitychange',()=>{tickAt=Date.now()});
 async function load(){refresh.disabled=true;status.className='';status.textContent='Loading podcasts…';try{let data,note='';const raw=document.getElementById('embedded-episodes').textContent;const embedded=normalize(JSON.parse(raw));const manifest=params.get('manifest')||'assets/episodes.json';try{const url=safeUrl(manifest);if(!url)throw Error('Invalid manifest URL');const response=await fetch(url,{cache:'no-store'});if(!response.ok)throw Error('HTTP '+response.status);data=normalize(await response.json())}catch(e){data=embedded;note='embedded snapshot (manifest unavailable)';if(!data.length)note='manifest unavailable; no embedded episodes'}render(data,note)}catch(e){grid.replaceChildren();status.textContent='Unable to load podcasts: '+e.message;status.className='error'}finally{refresh.disabled=false}}
 refresh.addEventListener('click',load);load();
-</script></body></html>
+</script>
+</body>
+</html>
