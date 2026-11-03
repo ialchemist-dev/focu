@@ -10,6 +10,8 @@ import re
 import shutil
 import sys
 import tempfile
+from editorial import editorial
+from cover_art import typographic_svg, candidate_source_image, fetch_source_cover, generate_ai_cover
 
 def sha256(path):
     h = hashlib.sha256()
@@ -28,7 +30,7 @@ def episode_date(folder_name):
     except ValueError:
         return ""
 
-def build(deliveries, output, template, limit):
+def build(deliveries, output, template, limit, *, fetch_source_covers=False, generate_ai_covers=False):
     if not 1 <= limit <= 100:
         raise ValueError("limit must be between 1 and 100")
     if not deliveries.is_dir() or not template.is_file():
@@ -37,6 +39,8 @@ def build(deliveries, output, template, limit):
     output = output.resolve()
     if output == deliveries or deliveries in output.parents:
         raise ValueError("output must be outside the source deliveries")
+    if generate_ai_covers and not os.environ.get("OPENAI_API_KEY"):
+        raise ValueError("OPENAI_API_KEY is required with --generate-ai-covers")
     episodes = []
     for audio in deliveries.glob("*/podcast.mp3"):
         if not audio.is_file() or audio.is_symlink() or audio.stat().st_size == 0:
@@ -63,6 +67,7 @@ def build(deliveries, output, template, limit):
         (assets / "articles").mkdir()
         manifest = []
         checksums = {}
+        warnings = []
         for episode_id, title, audio, published_date in episodes:
             safe_id = hashlib.sha256(episode_id.encode()).hexdigest()[:16]
             target = assets / "audio" / (safe_id + ".mp3")
@@ -86,24 +91,86 @@ def build(deliveries, output, template, limit):
                 metadata = json.loads(meta_path.read_text(encoding="utf-8"))
                 if not isinstance(metadata, dict):
                     raise ValueError("content.json must be an object")
-            chosen_title = metadata.get("title")
-            if isinstance(chosen_title, str) and chosen_title.strip():
-                item["title"] = chosen_title.strip()
-            summary = metadata.get("summary")
-            if isinstance(summary, str):
-                item["summary"] = summary.strip()
-            article = audio.parent / "article.html"
+            # Markdown is the canonical reading format; never evaluate untrusted HTML
+            # inside the reader WebView. Existing article.html remains a legacy asset.
+            markdown_path = audio.parent / "article.md"
+            if not markdown_path.is_file() or markdown_path.is_symlink():
+                markdown_path = audio.parent / "research.md"
+            markdown = ""
+            if markdown_path.is_file() and not markdown_path.is_symlink():
+                if markdown_path.stat().st_size > 1_000_000:
+                    raise ValueError("Article source exceeds 1 MB: " + episode_id)
+                markdown = markdown_path.read_text(encoding="utf-8", errors="replace")
+            info = editorial(markdown, metadata)
+            if markdown:
+                item["title"] = info["title"]
+                item["summary"] = info["summary"]
+                item["article_blocks"] = info["article_blocks"]
+                item["reading_minutes"] = info["reading_minutes"]
+            else:
+                if isinstance(metadata.get("title"), str) and metadata["title"].strip():
+                    item["title"] = metadata["title"].strip()
+                if isinstance(metadata.get("summary"), str):
+                    item["summary"] = metadata["summary"].strip()
             formats = {"audio": {"path": item["audio_url"], "mime_type": "audio/mpeg"}}
-            if article.is_file() and not article.is_symlink():
+            legacy_article = audio.parent / "article.html"
+            if legacy_article.is_file() and not legacy_article.is_symlink():
                 article_target = assets / "articles" / (safe_id + ".html")
-                shutil.copyfile(article, article_target)
+                shutil.copyfile(legacy_article, article_target)
                 article_path = "assets/articles/" + article_target.name
                 formats["article"] = {"path": article_path, "mime_type": "text/html"}
                 checksums[article_path] = sha256(article_target)
+            elif markdown:
+                article_target = assets / "articles" / (safe_id + ".md")
+                article_target.write_text(markdown, encoding="utf-8")
+                article_path = "assets/articles/" + article_target.name
+                formats["article"] = {"path": article_path, "mime_type": "text/markdown"}
+                checksums[article_path] = sha256(article_target)
+            # A real supplied image wins. Fetch public source URLs only with opt-in.
+            origin = "source" if item.get("cover_url") else None
+            source_url = candidate_source_image(metadata)
+            if not item.get("cover_url") and fetch_source_covers and source_url:
+                try:
+                    with tempfile.TemporaryDirectory(prefix=".source-cover-", dir=stage) as source_stage:
+                        downloaded = fetch_source_cover(source_url, source_stage)
+                        suffix = downloaded.suffix.lower()
+                        dest = assets / "covers" / (safe_id + suffix)
+                        shutil.copyfile(downloaded, dest)
+                    item["cover_url"] = "assets/covers/" + dest.name
+                    checksums[item["cover_url"]] = sha256(dest)
+                    origin = "source"
+                except (OSError, ValueError, RuntimeError) as exc:
+                    warnings.append(episode_id + ": source image unavailable: " + str(exc))
+            if not item.get("cover_url") and generate_ai_covers:
+                try:
+                    cache = output.parent / ".focu-generated-covers"
+                    cache.mkdir(parents=True, exist_ok=True)
+                    cached = cache / (safe_id + ".png")
+                    if cached.is_file():
+                        png = cached.read_bytes()
+                    else:
+                        png = generate_ai_cover(item["title"], item.get("summary", ""),
+                                                api_key=os.environ["OPENAI_API_KEY"])
+                        cached.write_bytes(png)
+                    dest = assets / "covers" / (safe_id + ".png")
+                    dest.write_bytes(png)
+                    item["cover_url"] = "assets/covers/" + dest.name
+                    checksums[item["cover_url"]] = sha256(dest)
+                    origin = "ai_generated"
+                except (OSError, ValueError, RuntimeError) as exc:
+                    warnings.append(episode_id + ": AI cover generation unavailable: " + str(exc))
+            if not item.get("cover_url"):
+                dest = assets / "covers" / (safe_id + ".svg")
+                dest.write_bytes(typographic_svg(item["title"], item.get("summary", "")))
+                item["cover_url"] = "assets/covers/" + dest.name
+                checksums[item["cover_url"]] = sha256(dest)
+                origin = "offline_art"
             item["content_id"] = episode_id
             item["published_at"] = published_date or None
             item["formats"] = formats
-            item["cover"] = {"path": item.get("cover_url"), "origin": "source" if item.get("cover_url") else "placeholder"}
+            item["cover"] = {"path": item["cover_url"], "origin": origin}
+            if origin == "source" and source_url:
+                item["cover"]["source_url"] = source_url
             manifest.append(item)
         payload = {"schema_version": 1, "items": manifest, "episodes": manifest}
         (assets / "episodes.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -115,7 +182,7 @@ def build(deliveries, output, template, limit):
         end = html.index("</script>", start)
         embedded = json.dumps(payload, ensure_ascii=False).replace("<", "\\u003c")
         (stage / "index.html").write_text(html[:start] + embedded + html[end:], encoding="utf-8")
-        (stage / "build-report.json").write_text(json.dumps({"episode_count": len(manifest), "sha256": checksums, "mode": "immutable-muse-snapshot"}, indent=2) + "\n", encoding="utf-8")
+        (stage / "build-report.json").write_text(json.dumps({"episode_count": len(manifest), "sha256": checksums, "warnings": warnings, "mode": "immutable-muse-snapshot"}, indent=2) + "\n", encoding="utf-8")
         if output.exists():
             raise FileExistsError("output exists; choose a new versioned directory: " + str(output))
         os.replace(stage, output)
@@ -130,9 +197,11 @@ if __name__ == "__main__":
     p.add_argument("--output", type=Path, required=True)
     p.add_argument("--template", type=Path, default=Path(__file__).with_name("index.html"))
     p.add_argument("--limit", type=int, default=15)
+    p.add_argument("--fetch-source-covers", action="store_true", help="Opt in to downloading public HTTPS source images")
+    p.add_argument("--generate-ai-covers", action="store_true", help="Opt in to paid OpenAI image generation, using OPENAI_API_KEY")
     a = p.parse_args()
     try:
-        count = build(a.deliveries, a.output, a.template, a.limit)
+        count = build(a.deliveries, a.output, a.template, a.limit, fetch_source_covers=a.fetch_source_covers, generate_ai_covers=a.generate_ai_covers)
         print(f"Built {count} episodes at {a.output}")
     except (OSError, ValueError, RuntimeError) as exc:
         print(f"Publish failed: {exc}", file=sys.stderr)
