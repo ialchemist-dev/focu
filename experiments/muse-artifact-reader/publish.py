@@ -10,7 +10,7 @@ import re
 import shutil
 import sys
 import tempfile
-from editorial import editorial
+from editorial import editorial, compose_article_with_openai
 from cover_art import typographic_svg, candidate_source_image, fetch_source_cover, generate_ai_cover
 
 def sha256(path):
@@ -30,7 +30,7 @@ def episode_date(folder_name):
     except ValueError:
         return ""
 
-def build(deliveries, output, template, limit, *, fetch_source_covers=False, generate_ai_covers=False):
+def build(deliveries, output, template, limit, *, fetch_source_covers=False, generate_ai_covers=False, generate_editorial=False):
     if not 1 <= limit <= 100:
         raise ValueError("limit must be between 1 and 100")
     if not deliveries.is_dir() or not template.is_file():
@@ -39,8 +39,8 @@ def build(deliveries, output, template, limit, *, fetch_source_covers=False, gen
     output = output.resolve()
     if output == deliveries or deliveries in output.parents:
         raise ValueError("output must be outside the source deliveries")
-    if generate_ai_covers and not os.environ.get("OPENAI_API_KEY"):
-        raise ValueError("OPENAI_API_KEY is required with --generate-ai-covers")
+    if (generate_ai_covers or generate_editorial) and not os.environ.get("OPENAI_API_KEY"):
+        raise ValueError("OPENAI_API_KEY required for opt-in editorial or image generation")
     episodes = []
     for folder in deliveries.iterdir():
         if not folder.is_dir() or folder.is_symlink():
@@ -108,6 +108,29 @@ def build(deliveries, output, template, limit, *, fetch_source_covers=False, gen
                 if markdown_path.stat().st_size > 1_000_000:
                     raise ValueError("Article source exceeds 1 MB: " + episode_id)
                 markdown = markdown_path.read_text(encoding="utf-8", errors="replace")
+            # Curated article.md wins. Otherwise an explicit opt-in may turn
+            # research into original article prose, with a keyed local cache.
+            if (generate_editorial and markdown and markdown_path.name == "research.md"):
+                model = "gpt-4.1-mini"
+                digest = hashlib.sha256((model + "\n" + markdown).encode()).hexdigest()[:20]
+                cache = output.parent / ".focu-editorial-cache"
+                cache.mkdir(parents=True, exist_ok=True)
+                cached = cache / (safe_id + "-" + digest + ".json")
+                try:
+                    if cached.is_file():
+                        generated = json.loads(cached.read_text(encoding="utf-8"))
+                    else:
+                        generated = compose_article_with_openai(
+                            markdown, api_key=os.environ["OPENAI_API_KEY"], model=model)
+                        pending = cache / ("." + cached.name + ".tmp")
+                        pending.write_text(json.dumps(generated, ensure_ascii=False), encoding="utf-8")
+                        os.replace(pending, cached)
+                    if not isinstance(generated.get("article_markdown"), str):
+                        raise ValueError("Invalid editorial cache")
+                    markdown = generated["article_markdown"]
+                    metadata = {**generated, **metadata}
+                except (OSError, ValueError, RuntimeError, KeyError) as exc:
+                    warnings.append(episode_id + ": editorial generation unavailable: " + type(exc).__name__)
             info = editorial(markdown, metadata)
             if markdown:
                 item["title"] = info["title"]
@@ -206,9 +229,10 @@ if __name__ == "__main__":
     p.add_argument("--limit", type=int, default=15)
     p.add_argument("--fetch-source-covers", action="store_true", help="Opt in to downloading public HTTPS source images")
     p.add_argument("--generate-ai-covers", action="store_true", help="Opt in to paid OpenAI image generation, using OPENAI_API_KEY")
+    p.add_argument("--generate-editorial", action="store_true", help="Opt in to paid AI blog article writing, using OPENAI_API_KEY")
     a = p.parse_args()
     try:
-        count = build(a.deliveries, a.output, a.template, a.limit, fetch_source_covers=a.fetch_source_covers, generate_ai_covers=a.generate_ai_covers)
+        count = build(a.deliveries, a.output, a.template, a.limit, fetch_source_covers=a.fetch_source_covers, generate_ai_covers=a.generate_ai_covers, generate_editorial=a.generate_editorial)
         print(f"Built {count} content items at {a.output}")
     except (OSError, ValueError, RuntimeError) as exc:
         print(f"Publish failed: {exc}", file=sys.stderr)
