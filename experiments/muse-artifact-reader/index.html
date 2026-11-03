@@ -132,9 +132,9 @@ function inline(parent,raw){
  while((match=pattern.exec(text))){parent.append(document.createTextNode(text.slice(last,match.index)));if(match[1]){const url=safeUrl(match[2]);if(url&&url.startsWith('http')){const a=el('a',match[1]);a.href=url;a.target='_blank';a.rel='noopener noreferrer';parent.append(a)}else parent.append(document.createTextNode(match[1]))}else{parent.append(el('strong',match[3]))}last=pattern.lastIndex}
  parent.append(document.createTextNode(text.slice(last).replace(/\*([^*]+)\*/g,'$1')));
 }
-function renderArticle(blocks){
+function renderArticle(blocks,legacyUrl){
  articleBody.replaceChildren();
- if(!blocks.length){articleBody.append(el('p','This item has audio but no article yet.','noarticle'));return}
+ if(!blocks.length){const url=safeUrl(legacyUrl);if(url){const p=el('p',undefined,'noarticle'),link=el('a','Open legacy article');link.href=url;link.target='_blank';link.rel='noopener noreferrer';p.append(link);articleBody.append(p)}else articleBody.append(el('p','This item has audio but no article yet.','noarticle'));return}
  let previousList=null;
  for(const block of blocks){
  if(!block||typeof block.text!=='string')continue;
@@ -173,7 +173,7 @@ function openItem(id){
  if(cover){img.src=cover;img.onerror=()=>{img.hidden=true}}else img.removeAttribute('src');
  const listen=document.getElementById('listen');listen.hidden=!safeUrl(item.audio_url);
  const toolbar=document.getElementById('toolbar');toolbar.hidden=listen.hidden&&!item.blocks.length;
- renderArticle(item.blocks);updateReaderState();window.scrollTo(0,0);
+ renderArticle(item.blocks,item.article_url);updateReaderState();window.scrollTo(0,0);
 }
 document.getElementById('back').onclick=()=>setView(view);
 document.getElementById('restore').onclick=()=>{if(currentId)markUnread(currentId)};
@@ -193,17 +193,18 @@ player.addEventListener('timeupdate',()=>{
  lastAudioPosition=current;
 });
 player.addEventListener('ended',()=>{
- if(playingId&&Number.isFinite(player.duration)&&player.duration>0&&listenedSeconds>=player.duration*0.8){markDone(playingId,'audio')}
+ if(playingId&&Number.isFinite(player.duration)&&player.duration>0&&Math.max(listenedSeconds,playedCoverage())>=player.duration*0.8){markDone(playingId,'audio')}
  else document.getElementById('nowplaying').textContent='Playback ended · Not enough listening time to archive';
 });
 player.addEventListener('error',()=>{document.getElementById('nowplaying').textContent='Audio unavailable. Check Artifact media access.'});
 function updateScroll(){
  if(!currentId||reader.hidden||!contentAvailable||isDone(currentId))return;
- const root=document.documentElement,range=Math.max(1,root.scrollHeight-innerHeight);
- maxDepth=Math.max(maxDepth,scrollY/range);
+ const root=document.documentElement,range=Math.max(0,root.scrollHeight-innerHeight);
+ maxDepth=Math.max(maxDepth,range<40?1:scrollY/range);
  if(readend.getBoundingClientRect().top<innerHeight-55)bottomSeen=true;
 }
 window.addEventListener('scroll',updateScroll,{passive:true});
+function playedCoverage(){let count=0;try{for(let i=0;i<player.played.length;i++)count+=player.played.end(i)-player.played.start(i)}catch(e){}return count}
 function readingTick(){
  const now=Date.now(),delta=Math.min(2000,Math.max(0,now-tickAt));tickAt=now;
  if(!currentId||reader.hidden||document.hidden||!contentAvailable||isDone(currentId))return;
