@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
-from publish import build, sha256
+from publish import build, sha256, episode_date
 
 class PublisherTests(unittest.TestCase):
     def test_build_and_checksum(self):
@@ -23,6 +23,24 @@ class PublisherTests(unittest.TestCase):
             self.assertIn("A Research Briefing", (output / "index.html").read_text())
             with self.assertRaises(FileExistsError):
                 build(deliveries, output, template, 15)
+
+    def test_dates_and_chronological_limit(self):
+        self.assertEqual(episode_date("frontier-20261102"), "2026-11-02")
+        self.assertEqual(episode_date("voice-input_20261018"), "2026-10-18")
+        self.assertEqual(episode_date("frontier-20261340"), "")
+        self.assertEqual(episode_date("voice-input"), "")
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            deliveries = root / "deliveries"
+            for name in ("voice-input-20261018", "frontier-20261102", "frontier-20261031"):
+                folder = deliveries / name
+                folder.mkdir(parents=True)
+                (folder / "podcast.mp3").write_bytes(name.encode())
+            output = root / "bundle"
+            build(deliveries, output, Path(__file__).with_name("index.html"), 2)
+            episodes = json.loads((output / "assets/episodes.json").read_text())["episodes"]
+            self.assertEqual([ep["date"] for ep in episodes], ["2026-11-02", "2026-10-31"])
+            self.assertEqual([ep["id"] for ep in episodes], ["frontier-20261102", "frontier-20261031"])
 
     def test_reject_empty_and_unsafe_output(self):
         with tempfile.TemporaryDirectory() as temp:
