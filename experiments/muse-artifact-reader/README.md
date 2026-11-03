@@ -23,3 +23,23 @@ Acceptance gate: same Artifact opens after restart; 2+ real MP3s play and seek; 
 
 ## Security and limitations
 The reader stores no credentials and does not send playback events to a server. It does not currently persist progress, saved/read/archive state, or sync between devices. `episodes.json` fetch can fail inside sandboxed Artifacts; in that case the embedded snapshot is displayed with a warning. The fallback is **not** dynamic updates. A static Artifact alone cannot guarantee visibility of future VM files or their URL mapping. Verify these properties in Muse before declaring the end-to-end flow complete.
+
+
+## Immutable Muse publishing (validated platform model)
+
+Muse static Artifacts are build-time snapshots. Editing `episodes.json` in the VM **does not** change an already published Artifact. Build a new version for each update. Reuse the same Library entry only if Muse's update-in-place capability is verified in its own environment; otherwise explicitly report that a new entry was created.
+
+The staging publisher copies existing MP3 bytes (no encoding), creates relative URLs, optionally copies `cover.jpg/png/jpeg/webp`, embeds the same manifest into the HTML fallback, and writes a SHA-256 audit report. It refuses to overwrite an existing output directory and never touches production files.
+
+```bash
+cd experiments/muse-artifact-reader
+python3 publish.py \
+  --deliveries ~/workspace/the-few-focu-test/data/deliveries \
+  --output ~/workspace/focu-artifact-builds/library-20261102 \
+  --limit 15
+python3 -m unittest -v test_publish.py
+```
+
+Give Muse the resulting `index.html` and `assets/` directory as one private static Artifact bundle. Keep `build-report.json` as an operator-side audit. Do not publish private audio URLs. The publisher only stages files; it **does not** invoke Muse's proprietary Artifact build/update API or schedule daily publication. Test real Muse packaging, same-entry updates, playback, iPhone restarts and negative media cases separately.
+
+**Acceptance correction:** The earlier manifest hot-update test is **Fail (platform snapshot behavior)**, not a feature to implement through fetch. Fresh builds are required. Physical iPhone force-quit/reopen and background playback remain **Unverified**. Never silently upgrade those labels.
