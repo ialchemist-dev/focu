@@ -1,26 +1,25 @@
-# Muse Artifact static reader spike
+# Muse-native Focu Artifact: end-to-end acceptance
 
-This is an **experiment**, not proof that Muse hosts persistent Artifacts.
+This branch is a **Muse-only validation**, not a production sync or hosting deployment. Reuse the existing image-first Focu reader design when integrating; do not create a parallel product. No Tailscale, Google Drive, public MP3 URLs, or external website is required **if** Muse can package local audio as Artifact assets.
 
-## Goal
-Render existing MP3s in a responsive, Xiaohongshu-inspired static library **inside Muse**, with cover images and native HTML audio seeking. No database, build step, cloud credentials, or external hosting required for the initial test.
+## Components
+- `index.html`: standalone, responsive two-column cards and native HTML audio seeking. It tries `episodes.json` on refresh and falls back to the embedded snapshot when network/fetch is unavailable.
+- `episodes.json`: manifest with stable episode IDs; starts empty. Fill from *existing* Focu deliveries, not mock titles.
+- Local MP3s and optional original covers must be **accessible inside the Artifact's browser origin**. A VM filesystem path (e.g. `/home/muse/episode.mp3`) is **not** a browser URL. Relative URLs only work if Muse actually bundles or serves the referenced files. A `file://` URL is intentionally unsupported.
 
-## Files
-- `index.html`: standalone static UI; reads `episodes.json` from the same directory.
-- `episodes.json`: example manifest; replace with **real** media URLs or relative paths available to the hosting origin.
+## Muse agent instruction (copy all)
 
-Manifest shape: `{"episodes":[{"id":"unique-id","title":"Title","date":"2026-11-02","source":"Source","cover_url":"https://.../cover.jpg","audio_url":"https://.../episode.mp3"}]}`.
+Work on the existing Focu checkout and preserve all current deliveries, databases, credentials, and existing reader UI. Use branch `experiment/muse-artifact-static-reader` (PR #17) as the validation fixture. Do not install Tailscale, configure Google Drive, create public links, deploy a website, or regenerate podcasts.
 
-## Muse acceptance procedure
-1. Copy `index.html` and `episodes.json` into Muse's persistent workspace. Replace example entries with 2–5 **already generated** MP3 files and optional original cover images.
-2. Ask Muse to create/open an in-app Artifact/web preview from `index.html`. If it requires a server, use `python3 -m http.server 8765` in this folder; **do not assume localhost is accessible from the iPhone**.
-3. In Muse iOS, open the preview/Artifact; verify cards, audio playback, seeking, cover loading, and reload.
-4. Close the conversation, reopen the **same** Artifact from the Muse library, and repeat after an app restart.
-5. Add one episode to the manifest without rebuilding the UI. Reload the existing Artifact; record whether it reflects the update.
-6. Repeat the following day. Capture the stable entry point (if any), whether it persists, and whether media files remain accessible.
+1. Find 2–5 already generated podcast MP3s and associated titles, timestamps, source names and original cover images, if present. Never fabricate entries. Confirm file sizes are nonzero.
+2. Make a **persistent native Muse Artifact** using the reader HTML. Try bundling MP3s and images as local Artifact assets. Set each `audio_url` and `cover_url` to a browser-resolvable relative path. Create `episodes.json` with stable IDs. If Muse does not support multi-file Artifact assets, embed a small manifest into the `embedded-episodes` JSON script in the HTML and report the limitation; do **not** inline large MP3 files as base64 without explicit approval.
+3. Open the Artifact inside the Muse mobile app. Verify covers, English UI, audio play/pause, seeking to the middle, completion, and switching episodes. Verify no external media origin is used.
+4. Close/reopen the conversation and restart the app. Open the **same Artifact**; record whether media still works and whether its entry point remains stable.
+5. Add one *existing* episode to `episodes.json`, without rebuilding the HTML. Press Refresh or reopen. Record whether the same Artifact shows it. If not, determine whether the Artifact is a frozen snapshot or its manifest is dynamically accessible. Do not report auto-refresh as passing merely because a newly generated Artifact contains the new entry.
+6. Test missing MP3, missing cover, invalid manifest, duplicate ID, and empty list. Confirm graceful UI errors. Restore the original manifest afterward.
+7. Return a concise pass/fail report with exact Artifact entry point, asset paths (not private tokens), media origin, refresh mechanism, failures, and screenshots if possible. Never claim cross-device state sync or playback-position persistence unless explicitly tested.
 
-## Limitations
-- A static page cannot read arbitrary private VM paths; files must be served by the same origin or have browser-accessible URLs. Cross-origin audio must be accessible to the browser, and seeking depends on the media server supporting range requests.
-- No read/archive synchronization, upload API, or authentication in this spike.
-- Do not expose private MP3s through public URLs merely to make the demo work.
-- Muse's in-app Artifact persistence and automatic refresh are **hypotheses to test**, not guaranteed platform features.
+Acceptance gate: same Artifact opens after restart; 2+ real MP3s play and seek; missing assets fail visibly; one new entry appears without rebuilding HTML. If the update gate fails, document the limitation and propose a minimal host-side publishing mechanism, without deploying it.
+
+## Security and limitations
+The reader stores no credentials and does not send playback events to a server. It does not currently persist progress, saved/read/archive state, or sync between devices. `episodes.json` fetch can fail inside sandboxed Artifacts; in that case the embedded snapshot is displayed with a warning. The fallback is **not** dynamic updates. A static Artifact alone cannot guarantee visibility of future VM files or their URL mapping. Verify these properties in Muse before declaring the end-to-end flow complete.
