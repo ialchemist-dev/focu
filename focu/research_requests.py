@@ -6,6 +6,7 @@ does not claim to start a background worker or fetch user-supplied URLs.
 from __future__ import annotations
 
 import hashlib
+import ipaddress
 import json
 from pathlib import Path
 import re
@@ -25,6 +26,22 @@ def validate_seed_url(value: str | None) -> str | None:
     p = urlsplit(value.strip())
     if p.scheme not in {"https", "http"} or not p.hostname or p.username or p.password:
         raise ValueError("Only HTTP(S) source URLs without credentials are accepted")
+    try:
+        port = p.port
+    except ValueError as exc:
+        raise ValueError("Invalid URL port") from exc
+    if port not in (None, 80, 443):
+        raise ValueError("Nonstandard source URL ports are not accepted")
+    host = p.hostname.lower().rstrip(".")
+    if host in {"localhost", "localhost.localdomain"} or host.endswith((".localhost", ".local", ".internal")):
+        raise ValueError("Private hostnames are not accepted as source URLs")
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        pass
+    else:
+        if not ip.is_global:
+            raise ValueError("Private or non-global IP addresses are not accepted")
     return value.strip()
 
 
