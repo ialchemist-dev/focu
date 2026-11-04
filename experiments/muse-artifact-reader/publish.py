@@ -30,7 +30,7 @@ def episode_date(folder_name):
     except ValueError:
         return ""
 
-def build(deliveries, output, template, limit, *, fetch_source_covers=False, generate_ai_covers=False, generate_editorial=False):
+def build(deliveries, output, template, limit, *, fetch_source_covers=False, generate_ai_covers=False, generate_editorial=False, requests=None):
     if not 1 <= limit <= 100:
         raise ValueError("limit must be between 1 and 100")
     if not deliveries.is_dir() or not template.is_file():
@@ -195,14 +195,45 @@ def build(deliveries, output, template, limit, *, fetch_source_covers=False, gen
                 item["cover_url"] = "assets/covers/" + dest.name
                 checksums[item["cover_url"]] = sha256(dest)
                 origin = "offline_art"
-            item["content_id"] = episode_id
+            stable_id = metadata.get("content_id", episode_id)
+            if not isinstance(stable_id, str) or not re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.:-]{0,119}", stable_id):
+                raise ValueError("Invalid content_id for " + episode_id)
+            item["content_id"] = stable_id
             item["published_at"] = published_date or None
             item["formats"] = formats
             item["cover"] = {"path": item["cover_url"], "origin": origin}
             if origin == "source" and source_url:
                 item["cover"]["source_url"] = source_url
             manifest.append(item)
-        payload = {"schema_version": 1, "items": manifest, "episodes": [x for x in manifest if x.get("audio_url")]}
+        pending = []
+        if requests is not None:
+            request_path = Path(requests)
+            if not request_path.is_file() or request_path.is_symlink():
+                raise ValueError("Research requests export is missing or unsafe")
+            data = json.loads(request_path.read_text(encoding="utf-8"))
+            if not isinstance(data, dict) or not isinstance(data.get("requests"), list):
+                raise ValueError("Expected research request export")
+            published_ids = {item["content_id"] for item in manifest}
+            seen = set()
+            for task in data["requests"][:500]:
+                if not isinstance(task, dict):
+                    continue
+                identifier = task.get("intent_id")
+                status = task.get("status")
+                if (not isinstance(identifier, str) or not re.fullmatch(r"int_[a-f0-9]{32}", identifier)
+                        or status not in {"queued", "researching", "completed", "failed"}
+                        or identifier in seen or identifier in published_ids):
+                    continue
+                seen.add(identifier)
+                pending.append({"intent_id": identifier, "status": status,
+                                "title": str(task.get("title") or "Untitled research")[:160],
+                                "created_at": str(task.get("created_at") or "")[:40],
+                                "error": str(task.get("error") or "")[:180] if status == "failed" else None})
+                if len(pending) == 100:
+                    break
+        payload = {"schema_version": 1, "items": manifest,
+                   "episodes": [x for x in manifest if x.get("audio_url")],
+                   "research_requests": pending}
         (assets / "episodes.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         html = template.read_text(encoding="utf-8")
         marker = '<script id="embedded-episodes" type="application/json">'
@@ -227,12 +258,13 @@ if __name__ == "__main__":
     p.add_argument("--output", type=Path, required=True)
     p.add_argument("--template", type=Path, default=Path(__file__).with_name("index.html"))
     p.add_argument("--limit", type=int, default=15)
+    p.add_argument("--requests", type=Path, help="Optional private focu request-export JSON snapshot")
     p.add_argument("--fetch-source-covers", action="store_true", help="Opt in to downloading public HTTPS source images")
     p.add_argument("--generate-ai-covers", action="store_true", help="Opt in to paid OpenAI image generation, using OPENAI_API_KEY")
     p.add_argument("--generate-editorial", action="store_true", help="Opt in to paid AI blog article writing, using OPENAI_API_KEY")
     a = p.parse_args()
     try:
-        count = build(a.deliveries, a.output, a.template, a.limit, fetch_source_covers=a.fetch_source_covers, generate_ai_covers=a.generate_ai_covers, generate_editorial=a.generate_editorial)
+        count = build(a.deliveries, a.output, a.template, a.limit, fetch_source_covers=a.fetch_source_covers, generate_ai_covers=a.generate_ai_covers, generate_editorial=a.generate_editorial, requests=a.requests)
         print(f"Built {count} content items at {a.output}")
     except (OSError, ValueError, RuntimeError) as exc:
         print(f"Publish failed: {exc}", file=sys.stderr)
