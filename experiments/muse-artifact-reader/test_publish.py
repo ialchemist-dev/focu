@@ -227,7 +227,7 @@ class PublisherTests(unittest.TestCase):
             (folder / "research.md").write_text("# A technical article\n\nA factual summary.")
             (folder / "content.json").write_text(json.dumps({
                 "content_id": intent, "title": "A technical article",
-                "summary": "Evidence-backed notes."
+                "origin": "user_initiated", "summary": "Evidence-backed notes."
             }))
             requests = root / "requests.json"
             requests.write_text(json.dumps({"schema_version": 1, "requests": [
@@ -241,6 +241,7 @@ class PublisherTests(unittest.TestCase):
                   15, requests=requests)
             data = json.loads((output / "assets/episodes.json").read_text())
             self.assertEqual(data["items"][0]["content_id"], intent)
+            self.assertEqual(data["items"][0]["source"], "Your research")
             self.assertEqual(len(data["research_requests"]), 1)
             self.assertEqual(data["research_requests"][0]["intent_id"], queued)
             self.assertIn(queued, (output / "index.html").read_text())
