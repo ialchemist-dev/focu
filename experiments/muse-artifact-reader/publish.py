@@ -98,6 +98,8 @@ def build(deliveries, output, template, limit, *, fetch_source_covers=False, gen
                 metadata = json.loads(meta_path.read_text(encoding="utf-8"))
                 if not isinstance(metadata, dict):
                     raise ValueError("content.json must be an object")
+            if metadata.get("origin") == "user_initiated":
+                item["source"] = "Your research"
             # Markdown is the canonical reading format; never evaluate untrusted HTML
             # inside the reader WebView. Existing article.html remains a legacy asset.
             markdown_path = folder / "article.md"
