@@ -95,6 +95,7 @@ content.json MUST use the intent ID as stable content_id:
 
     {
       "content_id": "int_<32 hex characters>",
+      "origin": "user_initiated",
       "title": "Finding-led editorial headline",
       "summary": "Concise overview grounded in the report",
       "published_at": "YYYY-MM-DD"
