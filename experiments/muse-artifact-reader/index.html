@@ -61,7 +61,7 @@ main{max-width:760px;margin:0 auto;padding:25px 22px 70px}
 </style>
 </head>
 <body>
-<header><div class="head"><div class="brand">focu<span class="dot">.</span></div><nav class="nav" aria-label="Library"><button id="inbox" class="active">Inbox</button><button id="archive">Archive</button><button id="refresh" aria-label="Refresh" title="Refresh">↻</button></nav></div></header>
+<header><div class="head"><div class="brand">focu<span class="dot">.</span></div><nav class="nav" aria-label="Library"><button id="inbox" class="active">Inbox</button><button id="archive">Archive</button><button id="researchtab">Research</button><button id="refresh" aria-label="Refresh" title="Refresh">↻</button></nav></div></header>
 <main>
 <section id="feed"><h1 class="sectiontitle" id="feedheading">For you to read</h1><div id="status" aria-live="polite">Loading…</div><div class="feed" id="grid"></div></section>
 <section id="reader" hidden>
@@ -86,7 +86,7 @@ const feed=document.getElementById('feed'),reader=document.getElementById('reade
 const player=document.getElementById('player'),playerbar=document.getElementById('playerbar'),readend=document.getElementById('readend');
 const params=new URLSearchParams(location.search);
 const STORE_KEY='focu:content-consumption:v1';
-let view='inbox',allItems=[],storageOK=true,currentId=null,readMs=0,maxDepth=0,bottomSeen=false,contentAvailable=false;
+let view='inbox',allItems=[],allRequests=[],storageOK=true,currentId=null,readMs=0,maxDepth=0,bottomSeen=false,contentAvailable=false;
 let tickAt=Date.now(),lastNote='',playingId=null,lastAudioPosition=null,listenedSeconds=0;
 function readStates(){try{const obj=JSON.parse(localStorage.getItem(STORE_KEY)||'{}');return obj&&typeof obj==='object'&&!Array.isArray(obj)?obj:{}}catch(e){storageOK=false;return {}}}
 let states=readStates();
@@ -105,11 +105,27 @@ function normalize(data){
  return {id,title:x.title||'Untitled',summary:x.summary||'',date:x.published_at||x.date||'',source:typeof x.source==='string'?x.source:(x.source?.kind||'Focu'),cover_url:x.cover?.path||x.cover_url||'',audio_url:x.formats?.audio?.path||x.audio_url||'',article_url:x.formats?.article?.path||'',blocks:Array.isArray(x.article_blocks)?x.article_blocks:[],reading_minutes:Number(x.reading_minutes)||0};
  });
 }
-function setView(which){view=which;currentId=null;reader.hidden=true;feed.hidden=false;document.getElementById('inbox').classList.toggle('active',which==='inbox');document.getElementById('archive').classList.toggle('active',which==='archive');document.getElementById('feedheading').textContent=which==='archive'?'Your Archive':'Latest stories';render(allItems,lastNote);window.scrollTo(0,0)}
+function setView(which){view=which;currentId=null;reader.hidden=true;feed.hidden=false;document.getElementById('inbox').classList.toggle('active',which==='inbox');document.getElementById('archive').classList.toggle('active',which==='archive');document.getElementById('researchtab').classList.toggle('active',which==='research');document.getElementById('feedheading').textContent=which==='archive'?'Your Archive':which==='research'?'Research requests':'Latest stories';render(allItems,lastNote);window.scrollTo(0,0)}
 document.getElementById('inbox').onclick=()=>setView('inbox');
 document.getElementById('archive').onclick=()=>setView('archive');
+document.getElementById('researchtab').onclick=()=>setView('research');
 function render(items,note){
  allItems=items;lastNote=note;grid.replaceChildren();
+ if(view==='research'){
+   status.textContent=allRequests.length+' research requests · Snapshot at last publication';
+   const info=el('p','Tell Muse: "Research this link or idea and add the report to Focu." This page shows a snapshot; new requests and progress appear after Muse republishes the Artifact.','feedsummary');
+   grid.append(info);
+   if(!allRequests.length){grid.append(el('p','No outstanding research. Completed reports appear in Inbox.','empty'));return}
+   for(const request of allRequests){
+     const card=el('div',undefined,'feedcard'),body=el('div',undefined,'cardbody');
+     const labels={queued:'Queued',researching:'Researching',completed:'Research completed · Awaiting publication',failed:'Research failed'};
+     body.append(el('div',labels[request.status]||'Unknown','cardmeta'));
+     body.append(el('h2',request.title||'Untitled research','feedtitle'));
+     if(request.status==='failed'&&request.error)body.append(el('p',request.error,'feedsummary'));
+     card.append(body);grid.append(card);
+   }
+   return;
+ }
  const visible=items.filter(x=>isDone(x.id)===(view==='archive'));
  status.textContent=visible.length+' '+(view==='archive'?'saved stories':'new stories')+(note?' · '+note:'')+(!storageOK?' · Reading state cannot be saved':'');
  if(!visible.length){grid.append(el('p',view==='archive'?'Nothing here yet. Finished stories will appear here.':'You are all caught up.','empty'));return}
@@ -215,7 +231,9 @@ function readingTick(){
 }
 setInterval(readingTick,1000);
 document.addEventListener('visibilitychange',()=>{tickAt=Date.now()});
-async function load(){refresh.disabled=true;status.className='';status.textContent='Loading podcasts…';try{let data,note='';const raw=document.getElementById('embedded-episodes').textContent;const embedded=normalize(JSON.parse(raw));const manifest=params.get('manifest')||'assets/episodes.json';try{const url=safeUrl(manifest);if(!url)throw Error('Invalid manifest URL');const response=await fetch(url,{cache:'no-store'});if(!response.ok)throw Error('HTTP '+response.status);data=normalize(await response.json())}catch(e){data=embedded;note='embedded snapshot (manifest unavailable)';if(!data.length)note='manifest unavailable; no embedded episodes'}render(data,note)}catch(e){grid.replaceChildren();status.textContent='Unable to load podcasts: '+e.message;status.className='error'}finally{refresh.disabled=false}}
+async function load(){refresh.disabled=true;status.className='';status.textContent='Loading stories…';try{let data,note='';const raw=document.getElementById('embedded-episodes').textContent;const snapshot=JSON.parse(raw);const embedded=normalize(snapshot);let current=snapshot;const manifest=params.get('manifest')||'assets/episodes.json';try{const url=safeUrl(manifest);if(!url)throw Error('Invalid manifest URL');const response=await fetch(url,{cache:'no-store'});if(!response.ok)throw Error('HTTP '+response.status);const received=await response.json();data=normalize(received);current=received}catch(e){data=embedded;note='embedded snapshot (manifest unavailable)';if(!data.length)note='manifest unavailable; no embedded stories'}
+allRequests=Array.isArray(current.research_requests)?current.research_requests.filter(r=>r&&typeof r.intent_id==='string'&&['queued','researching','failed','completed'].includes(r.status)).slice(0,100):[];
+render(data,note)}catch(e){grid.replaceChildren();status.textContent='Unable to load stories: '+e.message;status.className='error'}finally{refresh.disabled=false}}
 refresh.addEventListener('click',load);load();
 </script>
 </body>
