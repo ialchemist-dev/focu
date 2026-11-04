@@ -25,6 +25,27 @@ sources.yaml → ingest → digest → compose → synthesize → episode.mp3 + 
 5. **Content only.** Episodes never explain how they were made, what the
    selection logic is, or the philosophy behind the pipeline.
 
+## Muse on-demand research: spoken idea or URL
+
+When the user tells Muse "research this link", "look into this idea", or
+"research this and add it to Focu", treat it as a one-time user-initiated
+research request, **not** a registration or subscription.
+
+**Load [Muse on-demand research protocol](docs/MUSE_ON_DEMAND_RESEARCH.md)**
+before handling this workflow. On the new feature branch, the agent can:
+
+```bash
+.venv/bin/focu request "Evaluate whether this technical claim is credible" --url "https://example.org/post"
+.venv/bin/focu requests
+```
+
+The command durably captures an intent; it does **not** autonomously launch
+research. The host agent must actually execute or schedule research with
+supported capabilities, produce a verified Evidence Pack and readable report,
+and rebuild the private Muse Artifact to surface the result. The UI Research
+tab is a static status snapshot, never live synchronization. Do not claim
+background completion without a real running worker.
+
 ## Quick start
 
 1. Copy `examples/sources.yaml` to `sources.yaml` and list your sources.
