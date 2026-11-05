@@ -24,6 +24,20 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_*.py' -v
       - name: Run HTTP fixture tests
         run: python -m unittest discover -s tests/unit -p 'test_*.py' -v
+      - name: Muse Artifact publisher and reader regression tests
+        run: |
+          cd experiments/muse-artifact-reader
+          python -m unittest discover -p 'test_*.py' -v
+      - name: Muse reader JavaScript syntax check
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          page = Path('experiments/muse-artifact-reader/index.html').read_text()
+          scripts = re.findall(r'<script(?:\s+[^>]*)?>(.*?)</script>', page, re.S)
+          Path('/tmp/focu-muse-reader.js').write_text(scripts[-1])
+          PY
+          node --check /tmp/focu-muse-reader.js
   live-web:
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
