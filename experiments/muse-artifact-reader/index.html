@@ -54,7 +54,7 @@ main{max-width:760px;margin:0 auto;padding:25px 22px 70px}
 #articlebody pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f0ede8;padding:14px;border-radius:10px;font-size:13px;line-height:1.65}
 .readend{margin:36px 0 15px;border-top:1px solid #e9e5df;padding-top:21px;text-align:center;color:#958c82;font-size:13px}
 #readerstate{font-size:13px;color:#82786e;text-align:center;min-height:20px;margin:10px 0}.notice{font-size:12px;color:#8a7169;line-height:1.5}.listen:disabled{opacity:.55}
-#restore{display:block;margin:10px auto;color:#826a60;text-decoration:underline;background:none;border:0;font-size:12px}
+#readerarchive[hidden],#restore[hidden]{display:none!important}
 #playerbar{position:fixed;z-index:8;bottom:0;left:0;right:0;background:#fff;border-top:1px solid #e5dfd8;box-shadow:0 -6px 24px #00000010;padding:9px 16px 12px}
 .playinner{max-width:710px;margin:auto}
 .playtop{display:flex;align-items:center;justify-content:space-between;gap:12px}
@@ -76,11 +76,11 @@ main{max-width:760px;margin:0 auto;padding:25px 22px 70px}
 <div class="byline" id="readerbyline"></div>
 <h1 id="readertitle"></h1>
 <p id="readersummary"></p>
-<div class="readeractions" id="toolbar"><button id="listen" class="listen" hidden>▶ Listen</button><span id="readtime" class="readtime"></span><button id="readerarchive" class="card-action reader-archive" type="button">Archive</button></div>
+<div class="readeractions" id="toolbar"><button id="listen" class="listen" hidden>▶ Listen</button><span id="readtime" class="readtime"></span><button id="readerarchive" class="card-action reader-archive" type="button">Archive</button><button id="restore" class="card-action reader-archive" type="button" hidden>Restore</button></div>
 <div id="articlebody"></div>
 <div class="readend" id="readend">End of article</div>
 <div id="readerstate" aria-live="polite"></div>
-<button id="restore" hidden>Restore to Inbox</button>
+
 </section>
 </main>
 <div id="playerbar" hidden><div class="playinner"><div class="playtop"><span id="nowplaying"></span><button id="closeaudio" aria-label="Close player">×</button></div><audio id="player" controls preload="metadata"></audio></div></div>
