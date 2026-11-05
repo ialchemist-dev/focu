@@ -13,6 +13,7 @@ from .collectors import FetchResult, collect
 from .config import enabled_sources
 from .errors import FewError
 from focu.media_integrity import inspect_mp3, MediaIntegrityError
+from focu.audience import load_profile, detect_domain, mismatch_report
 from .store import now_utc
 
 
@@ -142,11 +143,19 @@ def compose(store, cfg, run, channel=None):
         if any(u.get("origin") == "user_initiated" or u.get("podcast_mode") in ("single", "none") for u in units):
             raise FewError("Daily compilation refuses user-initiated items", "invalid_daily_origin", 4)
         script = ep["script"] or render_skeleton(channels[ep["channel_id"]], units)
+        # Record which owner-authorized audience profile and domain were applied
+        # to this source-grounded (non-introductory) compilation. PR #22's
+        # secretary-style composer can retain this independent diagnostic.
+        profile = load_profile()
+        domain = detect_domain(" ".join(u.get("title", "") + " " + u.get("body", "")
+                                        for u in units))
+        audience_qc = mismatch_report(script, domain, profile)
         if not all(p.startswith("Host: ") for p in script.strip().split("\n\n")):
             raise FewError("invalid Host labels", "invalid_script", 4)
         script_path = ep_dir / f"{ep['channel_id']}-script.txt"
         atomic_write(script_path, script)
         write_json(ep_dir / f"{ep['channel_id']}-units.json", units)
+        write_json(ep_dir / f"{ep['channel_id']}-audience-qc.json", audience_qc)
         with store.db:
             store.db.execute("UPDATE episodes SET status='script_ready',script=?,script_hash=? WHERE episode_id=?",
                              (script, hashlib.sha256(script.encode()).hexdigest(), ep["episode_id"]))
