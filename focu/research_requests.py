@@ -53,7 +53,7 @@ def make_title(question: str, url: str | None) -> str:
 
 def capture_request(db_path: str | Path, question: str = "", *,
                     url: str | None = None, note: str = "",
-                    force_new: bool = False) -> dict:
+                    force_new: bool = False, podcast: bool = False) -> dict:
     """Create a durable one-time request; duplicate submissions are idempotent.
 
     Stable fingerprint is scoped to this local Focu DB, not to a global URL
@@ -74,7 +74,7 @@ def capture_request(db_path: str | Path, question: str = "", *,
     intent_id = "int_" + digest
 
     store = IntentStore(db_path)
-    intent = store.capture(task_question, kind="one_time_research", intent_id=intent_id)
+    intent = store.capture(task_question, kind="one_time_research", intent_id=intent_id, podcast=podcast)
 
     with sqlite3.connect(str(db_path), timeout=30) as db:
         db.execute("""CREATE TABLE IF NOT EXISTS research_requests (
@@ -92,7 +92,9 @@ def capture_request(db_path: str | Path, question: str = "", *,
     return {"intent_id": intent_id, "status": intent["status"],
             "title": make_title(question, url), "source_url": url,
             "note": note, "origin": "user_initiated",
-            "created_at": intent["created_at"], "automatic_research_started": False}
+            "created_at": intent["created_at"], "podcast_mode": intent["podcast_mode"],
+            "podcast_requested_at": intent["podcast_requested_at"],
+            "automatic_research_started": False
 
 
 def list_requests(db_path: str | Path) -> dict:
@@ -110,7 +112,7 @@ def list_requests(db_path: str | Path) -> dict:
         )""")
         rows = db.execute("""SELECT r.intent_id, r.submitted_text, r.seed_url,
                                    r.note, r.created_at, i.status, i.updated_at,
-                                   i.error, i.evidence_pack_id
+                                   i.error, i.evidence_pack_id, i.podcast_mode, i.podcast_requested_at
                               FROM research_requests AS r
                               JOIN intents AS i ON r.intent_id=i.id
                              ORDER BY r.created_at DESC, r.intent_id DESC""").fetchall()
@@ -123,6 +125,8 @@ def list_requests(db_path: str | Path) -> dict:
             "created_at": row["created_at"], "updated_at": row["updated_at"],
             "evidence_pack_id": row["evidence_pack_id"],
             "error": row["error"], "origin": "user_initiated",
+            "podcast_mode": row["podcast_mode"],
+            "podcast_requested_at": row["podcast_requested_at"],
         })
     return {"schema_version": 1, "requests": items}
 
@@ -155,13 +159,14 @@ def main(argv: list[str] | None = None):
     add.add_argument("--url")
     add.add_argument("--note", default="")
     add.add_argument("--force-new", action="store_true")
+    add.add_argument("--podcast", action="store_true")
     sub.add_parser("list", help="List one-off research requests")
     exp = sub.add_parser("export", help="Export private Muse snapshot of queue states")
     exp.add_argument("--output", required=True)
     args = parser.parse_args(argv)
     if args.action == "add":
         result = capture_request(args.db, args.question, url=args.url, note=args.note,
-                                 force_new=args.force_new)
+                                 force_new=args.force_new, podcast=args.podcast)
     elif args.action == "list":
         result = list_requests(args.db)
     else:
