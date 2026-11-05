@@ -218,7 +218,15 @@ def build(deliveries, output, template, limit, *, fetch_source_covers=False, gen
             if not isinstance(stable_id, str) or not re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.:-]{0,119}", stable_id):
                 raise ValueError("Invalid content_id for " + episode_id)
             item["content_id"] = stable_id
-            item["published_at"] = published_date or None
+            meta_date = metadata.get("published_at")
+            if isinstance(meta_date, str):
+                try:
+                    date.fromisoformat(meta_date)
+                except ValueError:
+                    meta_date = None
+            else:
+                meta_date = None
+            item["published_at"] = meta_date or published_date or None
             item["formats"] = formats
             item["cover"] = {"path": item["cover_url"], "origin": origin}
             if origin == "source" and source_url:
