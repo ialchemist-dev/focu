@@ -6,7 +6,7 @@ to render with textContent in an untrusted-source WebView.
 """
 import re
 from html.parser import HTMLParser
-from focu.audience import writing_guidance
+from focu.audience import writing_guidance, detect_domain
 
 
 class _HTMLReader(HTMLParser):
@@ -224,7 +224,7 @@ def compose_article_with_openai(research_markdown, *, api_key, model="gpt-4.1-mi
         "and a concise conclusion. Output ONLY a JSON object with exactly "
         "three string keys: title, summary, article_markdown."
     )
-    policy += "\n" + writing_guidance(audience_domain)
+    policy += "\n" + writing_guidance(audience_domain or detect_domain(source))
     payload = json.dumps({
         "model": model, "temperature": 0.2,
         "response_format": {"type": "json_object"},
