@@ -8,11 +8,13 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import tempfile
 import sys
 import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
+from focu.media_integrity import inspect_mp3
 
 DEFAULT_URL = "http://127.0.0.1:5055"
 MAX_CONTENT_BYTES = 2_000_000
@@ -90,16 +92,29 @@ class OpenNotebookClient:
             raise RuntimeError("Expected list of episodes")
         return result
 
-    def download(self, episode_id: str, output: Path) -> dict:
+    def download(self, episode_id: str, output: Path, *, validate_audio: bool = True) -> dict:
         if not episode_id:
             raise ValueError("Episode ID required")
         path = "/api/podcasts/episodes/" + urllib.parse.quote(episode_id, safe="") + "/audio"
         audio = self.request("GET", path, binary=True)
         if not audio:
             raise RuntimeError("Empty audio response")
+        if len(audio) > 300 * 1024 * 1024:
+            raise RuntimeError("Audio response exceeded 300 MB")
         output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_bytes(audio)
-        return {"status": "downloaded", "output": str(output), "bytes": len(audio)}
+        fd, name = tempfile.mkstemp(prefix=".focu-audio-", suffix=".mp3", dir=output.parent)
+        pending = Path(name)
+        try:
+            with os.fdopen(fd, "wb") as stream:
+                stream.write(audio)
+                stream.flush()
+                os.fsync(stream.fileno())
+            audit = inspect_mp3(pending) if validate_audio else None
+            os.replace(pending, output)
+        finally:
+            pending.unlink(missing_ok=True)
+        return {"status": "downloaded", "output": str(output), "bytes": len(audio),
+                "audio_audit": audit}
 
 
 def main(argv: list[str] | None = None) -> int:
