@@ -25,6 +25,40 @@ sources.yaml → ingest → digest → compose → synthesize → episode.mp3 + 
 5. **Content only.** Episodes never explain how they were made, what the
    selection logic is, or the philosophy behind the pipeline.
 
+## Podcast decisions and audience calibration — required
+
+Load [the origin-specific policy and Muse handoff](docs/PODCAST_ORIGIN_AUDIENCE_POLICY.md)
+and [the owner-authorized audience profile](references/audience-profile.md)
+before writing a Focu article or generating its audio.
+
+When the owner says **"research this"** or shares a URL:
+- Capture a one-time intent with focu request. The default podcast_mode is
+  none. Do not generate audio without a direct podcast request.
+- If the owner requests research *and* a podcast in one sentence, use
+  focu request --podcast when capturing it.
+- If the owner later says **"make this one a podcast"**, resolve the
+  canonical content/intent ID, then call focu request-podcast <intent-id>.
+  Never guess the target item when more than one candidate exists.
+- After the evidence-backed article exists, use focu podcast-for <intent-id>
+  with the established Open Notebook profiles and real delivery folder.
+  The command checks every section heading and figure; two QC failures
+  stop without attaching audio. Never silently override or reduce the gate.
+
+For a subject outside the owner's expert fields, the same profile requires
+additional basic orientation. Use focu audience-prompt --domain <domain>
+to obtain the authoritative constraints for a host-agent-written article.
+No per-provider copy of this profile and no background inferred skill edits.
+
+Daily source articles get no individual podcast. Their audio is a single
+daily compilation linked with covered_content_ids. The daily generator
+must refuse any user-initiated content, even if its URL also resembles a
+registered source. Device Read aloud is a separate, low-cost feature and is
+not a newly generated podcast MP3.
+
+A static Muse Artifact only learns about a newly attached MP3 after the
+host republishes an immutable snapshot. The existing article and podcast
+remain one Content Item with the same Inbox/Archive state.
+
 ## Muse on-demand research: spoken idea or URL
 
 When the user tells Muse "research this link", "look into this idea", or
