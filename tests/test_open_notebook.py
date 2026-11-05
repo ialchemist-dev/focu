@@ -39,6 +39,23 @@ class OpenNotebookTests(unittest.TestCase):
         self.assertEqual(json.loads(req.data)["content"], "Evidence only")
         self.assertEqual(result["job_id"], "job:123")
 
+    def test_host_briefing_prompt_uses_versioned_style_and_all_items(self):
+        root = Path(__file__).resolve().parents[1]
+        units = root / "examples" / "secretary-briefing-demo-units.json"
+        with patch("urllib.request.urlopen", return_value=FakeResponse(
+                b'{"job_id":"job:briefing","status":"submitted"}')) as mocked:
+            rc = main(["generate", "--briefing-units", str(units),
+                       "--episode-name", "Secretary update",
+                       "--episode-profile", "solo_expert",
+                       "--speaker-profile", "nova"])
+        self.assertEqual(rc, 0)
+        payload = json.loads(mocked.call_args.args[0].data)
+        self.assertIn("Personal secretary", payload["content"].replace("personal secretary", "Personal secretary"))
+        self.assertIn("948", payload["content"])
+        self.assertIn("5,034", payload["content"])
+        self.assertIn("Changelog", payload["content"])
+        self.assertIn("sample-followup", payload["content"])
+
     def test_job_url_encodes_record_id(self):
         with patch("urllib.request.urlopen", return_value=FakeResponse(b'{"status":"completed"}')) as mock:
             self.client.job("job:123")

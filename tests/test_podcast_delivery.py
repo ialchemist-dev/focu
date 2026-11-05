@@ -50,6 +50,31 @@ class DeliveryTests(unittest.TestCase):
         result = wait_and_deliver("ev_one", "job:1", self.output, self.db, FakeClient())
         self.assertEqual(result["episode_id"], "episode:123")
 
+    def test_briefing_transcript_qc_rejects_missing_item_without_audio_delivery(self):
+        units = [{"id": "item1", "title": "Important 948 report",
+                  "body": "The source measured 948 events and 20 failures.",
+                  "source": "Example Company"}]
+        with self.assertRaisesRegex(ValueError, "briefing transcript failed item/figure QC"):
+            deliver("ev_one", "episode:123", self.output, self.db,
+                    FakeClient(), briefing_units=units)
+        self.assertFalse((self.output / "podcast.mp3").exists())
+
+    def test_briefing_transcript_qc_allows_complete_single_host_script(self):
+        from focu.briefing import read_style, render_script
+        units = [{"id": "item1", "title": "Important 948 report",
+                  "body": "The source measured 948 events and 20 failures.",
+                  "source": "Example Company"}]
+        script = render_script(units, read_style())
+        class CompleteClient(FakeClient):
+            def request(self, method, path):
+                episode = super().request(method, path)
+                episode["transcript"] = {"segments": [{"text": p} for p in script.strip().split("\\n\\n")]}
+                return episode
+        result = deliver("ev_one", "episode:123", self.output, self.db,
+                         CompleteClient(), briefing_units=units, download_audio=False)
+        self.assertTrue(result["briefing_qc"]["passed"])
+        self.assertTrue((self.output / "briefing-qc.json").exists())
+
     def test_failed_job(self):
         with self.assertRaises(RuntimeError):
             wait_and_deliver("ev_one", "job:1", self.output, self.db, FakeClient("failed"))

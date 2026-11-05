@@ -13,6 +13,7 @@ from .collectors import FetchResult, collect
 from .config import enabled_sources
 from .errors import FewError
 from focu.media_integrity import inspect_mp3, MediaIntegrityError
+from focu.briefing import read_style, render_script, validate_script, BriefingQCError
 from .store import now_utc
 
 
@@ -114,37 +115,47 @@ def digest(store, cfg, run):
 
 
 def render_skeleton(channel, units):
-    # Explicitly retained M1 skeleton. LLM/prompt/feedback work is M3.
-    zh = channel.get("language") == "zh"
-    lines = ["Host: 今天的更新。" if zh else "Host: Today's updates."]
-    for unit in units:
-        prefix = f"Host: 来自{unit['source']}：" if zh else f"Host: From {unit['source']}: "
-        lines.append(prefix + unit["title"] + ". " + unit["body"])
-    lines.append("Host: 以上就是今天的内容。" if zh else "Host: That's everything for today.")
-    return "\n\n".join(lines) + "\n"
+    """Compatibility entry point: read the authoritative briefing style on use."""
+    return render_script(units, read_style())
 
 
 def compose(store, cfg, run, channel=None):
     channels = {c["id"]: c for c in cfg["channels"]}
     artifacts = []
     ep_dir = store.data_dir / "episodes" / run["episode_date"]
+    try:
+        style = read_style()
+    except (BriefingQCError, OSError, ValueError) as exc:
+        raise FewError("cannot load briefing style: " + str(exc), "invalid_briefing_style", 4) from exc
     for ep in store.episodes(run["run_id"]):
         if channel and channel != ep["channel_id"]:
             continue
         if ep["status"] == "finalized":
             continue
         units = store.units(ep["episode_id"])
-        script = ep["script"] or render_skeleton(channels[ep["channel_id"]], units)
-        if not all(p.startswith("Host: ") for p in script.strip().split("\n\n")):
-            raise FewError("invalid Host labels", "invalid_script", 4)
+        try:
+            script = ep["script"] or render_script(units, style)
+            qc = validate_script(script, units, style)
+        except (BriefingQCError, ValueError, KeyError) as exc:
+            raise FewError("briefing composition failed: " + str(exc), "briefing_qc_failed", 4) from exc
+        if not qc["passed"]:
+            raise FewError("briefing script omitted source items or figures: " +
+                           json.dumps(qc["issues"], ensure_ascii=False),
+                           "briefing_qc_failed", 4)
+        if not all(p.startswith(style["speaker_label"]) for p in script.strip().split("\n\n")):
+            raise FewError("invalid single-speaker turn labels", "invalid_script", 4)
         script_path = ep_dir / f"{ep['channel_id']}-script.txt"
+        script_digest = hashlib.sha256(script.encode()).hexdigest()
+        qc["script_sha256"] = script_digest
         atomic_write(script_path, script)
         write_json(ep_dir / f"{ep['channel_id']}-units.json", units)
+        write_json(ep_dir / f"{ep['channel_id']}-briefing-qc.json", qc)
         with store.db:
             store.db.execute("UPDATE episodes SET status='script_ready',script=?,script_hash=? WHERE episode_id=?",
-                             (script, hashlib.sha256(script.encode()).hexdigest(), ep["episode_id"]))
+                             (script, script_digest, ep["episode_id"]))
         artifacts.append(str(script_path))
-    return {"artifacts": artifacts, "composer": "deterministic_skeleton"}
+    return {"artifacts": artifacts, "composer": "secretary_briefing_v1",
+            "style_version": style["version"], "style_sha256": style["style_sha256"]}
 
 
 def file_hash(path):
@@ -190,10 +201,18 @@ def finalize_episodes(store, cfg, run, channel=None):
             script_path = ep_dir / f"{ep['channel_id']}-script.txt"
             if not script_path.exists() or file_hash(script_path) != ep["script_hash"]:
                 raise FewError("script changed since compose; re-run compose to restore the frozen script", "script_changed", 4)
+            qc_path = ep_dir / f"{ep['channel_id']}-briefing-qc.json"
+            if not qc_path.is_file():
+                raise FewError("missing briefing QC; re-run compose", "briefing_qc_missing", 4)
+            qc = json.loads(qc_path.read_text(encoding="utf-8"))
+            if not qc.get("passed") or qc.get("script_sha256") != ep["script_hash"]:
+                raise FewError("briefing QC is stale or failed; re-run compose", "briefing_qc_failed", 4)
             manifest = {"schema_version": 1, "episode_id": ep["episode_id"], "mode": run["output_mode"],
+                        "briefing_style_version": qc["style_version"],
+                        "briefing_style_sha256": qc["style_sha256"],
                         "script": str(script_path), "script_hash": ep["script_hash"],
                         "units": str(ep_dir / f"{ep['channel_id']}-units.json"),
-                        "composer": "deterministic_skeleton", "completed_at": now_utc()}
+                        "composer": "secretary_briefing_v1", "completed_at": now_utc()}
             if run["output_mode"] == "audio":
                 argv = tts_argv(cfg)
                 if not shutil.which("ffmpeg") or not shutil.which("ffprobe"):
