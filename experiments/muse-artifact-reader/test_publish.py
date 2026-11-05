@@ -147,7 +147,7 @@ class PublisherTests(unittest.TestCase):
         self.assertIn("focu:content-consumption:v1", html)
         self.assertIn("markDone(playingId,'audio')", html)
         self.assertIn("markDone(currentId,'article')", html)
-        self.assertIn("bottomSeen&&maxDepth", html)
+        self.assertIn("bottomSeen&&readMs>=minMs", html)
         self.assertIn("reader.hidden=false", html)
         self.assertNotIn("Done reading", html)
         self.assertNotIn("Mark done", html)
