@@ -70,7 +70,7 @@ main{max-width:760px;margin:0 auto;padding:25px 22px 70px}
 <div class="byline" id="readerbyline"></div><button id="coveredby" class="smallbutton" type="button" hidden></button>
 <h1 id="readertitle"></h1>
 <p id="readersummary"></p>
-<div class="readeractions" id="toolbar"><button id="listen" class="listen" hidden>▶ Listen</button><span id="readtime" class="readtime"></span></div>
+<div class="readeractions" id="toolbar"><button id="listen" class="listen" hidden>▶ Listen</button><button id="readaloud" class="listen" hidden>▶ Read aloud</button><span id="readtime" class="readtime"></span></div>
 <div id="articlebody"></div>
 <div class="readend" id="readend">End of article</div>
 <div id="readerstate" aria-live="polite"></div>
@@ -199,8 +199,11 @@ function openItem(id){
  document.getElementById('readtime').textContent=item.reading_minutes?item.reading_minutes+' min read':'';
  const cover=item.cover_origin==='offline_art'?null:safeUrl(item.cover_url),img=document.getElementById('readercover');img.hidden=!cover;
  if(cover){img.src=cover;img.onerror=()=>{img.hidden=true}}else img.removeAttribute('src');
- const listen=document.getElementById('listen');listen.hidden=!(safeUrl(item.audio_url)||item.blocks.length);listen.textContent=(safeUrl(item.audio_url)&&failedAudioId!==item.id)?'▶ Listen':'▶ Read aloud';
- const toolbar=document.getElementById('toolbar');toolbar.hidden=listen.hidden&&!item.blocks.length;
+ const listen=document.getElementById('listen'),readaloud=document.getElementById('readaloud');
+ listen.hidden=!safeUrl(item.audio_url)||failedAudioId===item.id;
+ readaloud.hidden=!!safeUrl(item.audio_url)&&failedAudioId!==item.id||!item.blocks.length;
+ listen.textContent='▶ Listen';readaloud.textContent='▶ Read aloud';
+ const toolbar=document.getElementById('toolbar');toolbar.hidden=listen.hidden&&readaloud.hidden&&!item.blocks.length;
  renderArticle(item.blocks,item.article_url);updateReaderState();window.scrollTo(0,0);
 }
 document.getElementById('back').onclick=()=>{stopNarration();setView(view)};
@@ -250,8 +253,8 @@ function readAloud(item){
   document.getElementById('readerstate').textContent='Device voice is unavailable here. Ask Muse to generate and cache a podcast.';return;
  }
  if(speechRunning&&speechId===item.id){
-   if(speechPaused){speechSynthesis.resume();speechPaused=false;document.getElementById('listen').textContent='Ⅱ Pause reading'}
-   else{speechSynthesis.pause();speechPaused=true;document.getElementById('listen').textContent='▶ Resume reading'}
+   if(speechPaused){speechSynthesis.resume();speechPaused=false;document.getElementById('readaloud').textContent='Ⅱ Pause reading'}
+   else{speechSynthesis.pause();speechPaused=true;document.getElementById('readaloud').textContent='▶ Resume reading'}
    return;
  }
  const text=readableText(item);
@@ -262,6 +265,7 @@ function readAloud(item){
  document.getElementById('listen').textContent='Ⅱ Pause reading';
  nextSpeechChunk();
 }
+document.getElementById('readaloud').onclick=()=>{const item=allItems.find(x=>x.id===currentId);if(item)readAloud(item)};
 document.getElementById('listen').onclick=()=>{
  const item=allItems.find(x=>x.id===currentId);if(!item)return;
  const url=safeUrl(item.audio_url);
@@ -302,7 +306,8 @@ player.addEventListener('error',()=>{
  failedAudioId=playingId;
  document.getElementById('nowplaying').textContent='Podcast audio unavailable. You can still read the article.';
  if(currentId===playingId&&allItems.some(x=>x.id===currentId&&x.blocks.length)){
-    document.getElementById('listen').textContent='▶ Read aloud';
+    document.getElementById('listen').hidden=true;
+    document.getElementById('readaloud').hidden=false;
     document.getElementById('readerstate').textContent='Cached audio could not load. Try device read-aloud instead.';
  }
 });
