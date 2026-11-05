@@ -14,6 +14,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
+from focu.briefing import read_style, make_prompt, ordered_units, DEFAULT_STYLE
 from focu.media_integrity import inspect_mp3
 
 DEFAULT_URL = "http://127.0.0.1:5055"
@@ -127,6 +128,8 @@ def main(argv: list[str] | None = None) -> int:
     generate.add_argument("--episode-profile", required=True)
     generate.add_argument("--speaker-profile", required=True)
     generate.add_argument("--briefing-suffix")
+    generate.add_argument("--briefing-units", help="JSON ordered report items; use secretary style prompt")
+    generate.add_argument("--briefing-style", default=str(DEFAULT_STYLE), help="Versioned briefing style file")
     job = sub.add_parser("job")
     job.add_argument("job_id")
     sub.add_parser("episodes")
@@ -139,10 +142,22 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "doctor":
             result = client.doctor()
         elif args.command == "generate":
-            content = Path(args.content_file).read_text(encoding="utf-8")
+            if args.briefing_units:
+                style = read_style(args.briefing_style)
+                units = json.loads(Path(args.briefing_units).read_text(encoding="utf-8"))
+                content = make_prompt(units, style)
+                # Never silently truncate a complete briefing in a bounded API.
+                if len(content.encode("utf-8")) > MAX_CONTENT_BYTES:
+                    raise ValueError("Briefing prompt exceeds provider limit; do not omit items")
+            else:
+                content = Path(args.content_file).read_text(encoding="utf-8")
             result = client.generate(episode_name=args.episode_name,
                 episode_profile=args.episode_profile, speaker_profile=args.speaker_profile,
                 content=content, briefing_suffix=args.briefing_suffix)
+            if args.briefing_units:
+                result["briefing_style_version"] = style["version"]
+                result["briefing_style_sha256"] = style["style_sha256"]
+                result["briefing_item_count"] = len(ordered_units(units))
         elif args.command == "job":
             result = client.job(args.job_id)
         elif args.command == "episodes":
