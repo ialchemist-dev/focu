@@ -2,6 +2,8 @@ import json
 from pathlib import Path
 import tempfile
 import os
+import shutil
+import subprocess
 from unittest.mock import patch
 import unittest
 from publish import build, sha256, episode_date
@@ -264,6 +266,40 @@ class PublisherTests(unittest.TestCase):
                   15, requests=requests)
             data = json.loads((output / "assets/episodes.json").read_text())
             self.assertEqual(data["research_requests"], [])
+
+    @unittest.skipUnless(shutil.which("ffmpeg") and shutil.which("ffprobe"), "requires local audio tools")
+    def test_strict_media_audit_rejects_truncated_source(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            folder = root / "deliveries" / "article-20261103"
+            folder.mkdir(parents=True)
+            (folder / "article.md").write_text("# Important research result\\n\\nFull article.")
+            audio = folder / "podcast.mp3"
+            subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error",
+                            "-y", "-f", "lavfi", "-i", "sine=frequency=400:duration=6",
+                            "-codec:a", "libmp3lame", "-b:a", "64k", str(audio)],
+                           check=True, timeout=30, capture_output=True)
+            target = root / "good-bundle"
+            build(root / "deliveries", target, Path(__file__).with_name("index.html"),
+                  15, verify_audio=True)
+            data = json.loads((target / "assets/episodes.json").read_text())
+            self.assertGreater(data["items"][0]["formats"]["audio"]["duration_seconds"], 5)
+            report = json.loads((target / "build-report.json").read_text())
+            self.assertTrue(report["audio_audit"]["article-20261103"]["verified"])
+            original = audio.read_bytes()
+            audio.write_bytes(original[:len(original)//3])
+            with self.assertRaisesRegex(ValueError, "Audio validation failed"):
+                build(root / "deliveries", root / "rejected-bundle",
+                      Path(__file__).with_name("index.html"), 15, verify_audio=True)
+            self.assertFalse((root / "rejected-bundle").exists())
+
+    def test_zero_cost_article_narration_and_consumption_contract(self):
+        html = Path(__file__).with_name("index.html").read_text()
+        self.assertIn("speechSynthesis.speak(utterance)", html)
+        self.assertIn("markDone(completedId,'device_voice')", html)
+        self.assertIn("stopNarration()", html)
+        self.assertIn("bottomSeen&&readMs>=minMs", html)
+        self.assertIn("Reading history cannot be saved", html)
 
     def test_reject_empty_and_unsafe_output(self):
         with tempfile.TemporaryDirectory() as temp:
