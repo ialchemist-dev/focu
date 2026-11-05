@@ -293,6 +293,24 @@ class PublisherTests(unittest.TestCase):
                       Path(__file__).with_name("index.html"), 15, verify_audio=True)
             self.assertFalse((root / "rejected-bundle").exists())
 
+    def test_legacy_html_article_is_safe_and_auto_readable(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            folder = root / "deliveries" / "legacy-20261103"
+            folder.mkdir(parents=True)
+            (folder / "article.html").write_text(
+                "<article><h1>Old research</h1><p>Important finding with "
+                "<a href='https://example.org/first'>a source</a>.</p>"
+                "<script>throw new Error('must not run')</script></article>")
+            out = root / "bundle"
+            build(root / "deliveries", out, Path(__file__).with_name("index.html"), 15)
+            item = json.loads((out / "assets/episodes.json").read_text())["items"][0]
+            blocks = item["article_blocks"]
+            self.assertTrue(any("Important finding" in b["text"] for b in blocks))
+            self.assertTrue(any("https://example.org/first" in b["text"] for b in blocks))
+            self.assertNotIn("must not run", json.dumps(blocks))
+            self.assertGreater(item["reading_minutes"], 0)
+
     def test_zero_cost_article_narration_and_consumption_contract(self):
         html = Path(__file__).with_name("index.html").read_text()
         self.assertIn("speechSynthesis.speak(utterance)", html)
