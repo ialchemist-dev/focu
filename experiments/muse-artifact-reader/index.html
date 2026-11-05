@@ -88,7 +88,7 @@ const params=new URLSearchParams(location.search);
 const STORE_KEY='focu:content-consumption:v1';
 let view='inbox',allItems=[],allRequests=[],storageOK=true,currentId=null,readMs=0,maxDepth=0,bottomSeen=false,contentAvailable=false;
 let tickAt=Date.now(),lastNote='',playingId=null,lastAudioPosition=null,listenedSeconds=0;
-let speechId=null,speechSegments=[],speechIndex=0,speechRunning=false,speechPaused=false,failedAudioId=null;
+let speechId=null,speechSegments=[],speechIndex=0,speechRunning=false,speechPaused=false,failedAudioId=null,speechEpoch=0;
 function canNarrate(){return !!(typeof speechSynthesis!=='undefined'&&typeof SpeechSynthesisUtterance!=='undefined')}
 function readStates(){try{const obj=JSON.parse(localStorage.getItem(STORE_KEY)||'{}');return obj&&typeof obj==='object'&&!Array.isArray(obj)?obj:{}}catch(e){storageOK=false;return {}}}
 let states=readStates();
@@ -104,7 +104,7 @@ function normalize(data){
  const seen=new Set();
  return a.filter(x=>{const id=x&&(x.content_id||x.id);if(typeof id!=='string'||!id.trim()||seen.has(id))return false;seen.add(id);return true}).slice(0,500).map(x=>{
  const id=x.content_id||x.id;
- return {id,title:x.title||'Untitled',summary:x.summary||'',date:x.published_at||x.date||'',source:typeof x.source==='string'?x.source:(x.source?.kind||'Focu'),cover_url:x.cover?.path||x.cover_url||'',cover_origin:x.cover?.origin||'',audio_url:x.formats?.audio?.path||x.audio_url||'',article_url:x.formats?.article?.path||'',blocks:Array.isArray(x.article_blocks)?x.article_blocks:[],reading_minutes:Number(x.reading_minutes)||0};
+ return {id,title:x.title||'Untitled',summary:x.summary||'',date:x.published_at||x.date||'',source:typeof x.source==='string'?x.source:(x.source?.kind||'Focu'),cover_url:x.cover?.path||x.cover_url||'',cover_origin:x.cover?.origin||'',audio_url:x.formats?.audio?.path||x.audio_url||'',audio_duration:Number(x.formats?.audio?.duration_seconds)||null,article_url:x.formats?.article?.path||'',blocks:Array.isArray(x.article_blocks)?x.article_blocks:[],reading_minutes:Number(x.reading_minutes)||0};
  });
 }
 function setView(which){if(speechRunning)stopNarration();view=which;currentId=null;reader.hidden=true;feed.hidden=false;document.getElementById('inbox').classList.toggle('active',which==='inbox');document.getElementById('archive').classList.toggle('active',which==='archive');document.getElementById('researchtab').classList.toggle('active',which==='research');document.getElementById('feedheading').textContent=which==='archive'?'Your Archive':which==='research'?'Research requests':'Latest stories';render(allItems,lastNote);window.scrollTo(0,0)}
@@ -197,7 +197,7 @@ function openItem(id){
 document.getElementById('back').onclick=()=>{stopNarration();setView(view)};
 document.getElementById('restore').onclick=()=>{if(currentId)markUnread(currentId)};
 function stopNarration(){
- speechRunning=false;speechPaused=false;speechId=null;speechSegments=[];speechIndex=0;
+ speechRunning=false;speechPaused=false;speechId=null;speechSegments=[];speechIndex=0;speechEpoch++;
  if(canNarrate())speechSynthesis.cancel();
 }
 function readableText(item){
@@ -224,11 +224,12 @@ function nextSpeechChunk(){
    const completedId=speechId;stopNarration();
    markDone(completedId,'device_voice');return;
  }
+ const epoch=speechEpoch;
  const utterance=new SpeechSynthesisUtterance(speechSegments[speechIndex]);
  utterance.lang='en-US';utterance.rate=1;
- utterance.onend=()=>{if(speechRunning&&!speechPaused){speechIndex++;nextSpeechChunk()}};
+ utterance.onend=()=>{if(speechRunning&&!speechPaused&&epoch===speechEpoch){speechIndex++;nextSpeechChunk()}};
  utterance.onerror=event=>{
-   if(!speechRunning)return;
+   if(!speechRunning||epoch!==speechEpoch)return;
    stopNarration();
    document.getElementById('readerstate').textContent='Device narration stopped ('+(event.error||'speech error')+'). This story was not archived.';
  };
@@ -270,9 +271,24 @@ player.addEventListener('timeupdate',()=>{
  lastAudioPosition=current;
 });
 player.addEventListener('ended',()=>{
+ const item=allItems.find(x=>x.id===playingId);
+ if(item&&Number.isFinite(item.audio_duration)&&item.audio_duration>0&&
+    player.currentTime<item.audio_duration*0.95){
+   document.getElementById('nowplaying').textContent='Audio ended earlier than the verified file duration. Please report this playback problem.';
+   return;
+ }
  if(playingId&&Number.isFinite(player.duration)&&player.duration>0&&Math.max(listenedSeconds,playedCoverage())>=player.duration*0.8){markDone(playingId,'audio')}
  else document.getElementById('nowplaying').textContent='Playback ended · Not enough listening time to archive';
 });
+player.addEventListener('loadedmetadata',()=>{
+ const item=allItems.find(x=>x.id===playingId);
+ if(item&&item.audio_duration&&Number.isFinite(player.duration)&&
+    Math.abs(player.duration-item.audio_duration)>Math.max(4,item.audio_duration*0.05)){
+    document.getElementById('nowplaying').textContent='Player duration differs from verified audio · Try reopening if playback cuts off';
+ }
+});
+player.addEventListener('stalled',()=>{document.getElementById('nowplaying').textContent='Playback stalled · Waiting for audio data'});
+
 player.addEventListener('error',()=>{
  failedAudioId=playingId;
  document.getElementById('nowplaying').textContent='Podcast audio unavailable. You can still read the article.';
