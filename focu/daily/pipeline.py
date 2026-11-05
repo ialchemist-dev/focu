@@ -12,6 +12,7 @@ from pathlib import Path
 from .collectors import FetchResult, collect
 from .config import enabled_sources
 from .errors import FewError
+from focu.media_integrity import inspect_mp3, MediaIntegrityError
 from .store import now_utc
 
 
@@ -151,22 +152,10 @@ def file_hash(path):
 
 
 def audio_probe(path):
-    if not shutil.which("ffprobe") or not shutil.which("ffmpeg"):
-        raise FewError("ffprobe and ffmpeg are required to validate audio", "missing_audio_tools", 4)
-    if not Path(path).is_file() or Path(path).stat().st_size == 0:
-        raise FewError("TTS did not produce a non-empty audio file", "empty_audio", 4)
     try:
-        result = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration,format_name",
-                                 "-of", "json", str(path)], capture_output=True, text=True, timeout=30, check=True)
-        fmt = json.loads(result.stdout)["format"]
-        duration = float(fmt["duration"])
-        if "mp3" not in fmt["format_name"].split(",") or duration <= 0:
-            raise ValueError("output must be a non-empty MP3")
-        subprocess.run(["ffmpeg", "-v", "error", "-xerror", "-i", str(path), "-f", "null", "-"],
-                       capture_output=True, timeout=60, check=True)
-        return duration
-    except (subprocess.SubprocessError, ValueError, KeyError) as ex:
-        raise FewError(f"invalid TTS audio: {ex}", "invalid_audio", 4) from ex
+        return inspect_mp3(path)["decoded_duration_seconds"]
+    except MediaIntegrityError as exc:
+        raise FewError("invalid TTS audio: " + str(exc), "invalid_audio", 4) from exc
 
 
 def tts_argv(cfg):

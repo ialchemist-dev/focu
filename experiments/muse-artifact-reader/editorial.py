@@ -5,6 +5,78 @@ existing research or explicit content.json. Structured article blocks are safe
 to render with textContent in an untrusted-source WebView.
 """
 import re
+from html.parser import HTMLParser
+
+
+class _HTMLReader(HTMLParser):
+    """Extract readable text safely; never execute or expose raw HTML in Muse."""
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.blocks = []
+        self.chunks = []
+        self.kind = "paragraph"
+        self.level = 0
+        self.skipped = 0
+        self.href = None
+
+    def flush(self):
+        raw = "".join(self.chunks)
+        text = re.sub(r"\s+", " ", raw).strip()
+        if text:
+            block = {"type": self.kind, "text": text}
+            if self.kind == "heading":
+                block["level"] = self.level
+            self.blocks.append(block)
+        self.chunks = []
+        self.kind = "paragraph"
+
+    def handle_starttag(self, tag, attrs):
+        if tag in {"script", "style", "noscript"}:
+            self.skipped += 1
+            return
+        if self.skipped:
+            return
+        if tag in {"h1", "h2", "h3", "h4", "p", "li", "blockquote"}:
+            self.flush()
+            self.kind = "heading" if tag.startswith("h") else "bullet" if tag == "li" else "quote" if tag == "blockquote" else "paragraph"
+            self.level = int(tag[1]) if tag.startswith("h") else 0
+        elif tag == "br":
+            self.chunks.append(" ")
+        elif tag == "a":
+            href = dict(attrs).get("href")
+            if isinstance(href, str) and href.startswith(("https://", "http://")):
+                self.href = href
+                self.chunks.append("[")
+
+    def handle_data(self, data):
+        if not self.skipped:
+            self.chunks.append(data)
+
+    def handle_endtag(self, tag):
+        if tag in {"script", "style", "noscript"}:
+            self.skipped = max(0, self.skipped - 1)
+            return
+        if self.skipped:
+            return
+        if tag == "a" and self.href:
+            self.chunks.append("](" + self.href + ")")
+            self.href = None
+        elif tag in {"h1", "h2", "h3", "h4", "p", "li", "blockquote"}:
+            self.flush()
+
+
+def markdown_from_html(html):
+    """Convert legacy article.html into readable, inert Markdown paragraphs."""
+    parser = _HTMLReader()
+    parser.feed(html or "")
+    parser.flush()
+    lines = []
+    for block in parser.blocks[:500]:
+        typ = block["type"]
+        prefix = "#" * block["level"] + " " if typ == "heading" else "- " if typ == "bullet" else "> " if typ == "quote" else ""
+        lines.append(prefix + block["text"])
+    return "\n\n".join(lines) + ("\n" if lines else "")
+
 
 GENERIC_TITLE = re.compile(
     r"^(what is new|what.s new|latest updates?|daily|weekly|frontier briefing|"

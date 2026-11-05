@@ -48,11 +48,21 @@ class OpenNotebookTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             target = Path(d) / "audio.mp3"
             with patch("urllib.request.urlopen", return_value=FakeResponse(b"mp3bytes")):
-                self.assertEqual(self.client.download("episode:1", target)["bytes"], 8)
+                self.assertEqual(self.client.download("episode:1", target, validate_audio=False)["bytes"], 8)
             self.assertEqual(target.read_bytes(), b"mp3bytes")
             with patch("urllib.request.urlopen", return_value=FakeResponse(b"")):
                 with self.assertRaisesRegex(RuntimeError, "Empty audio"):
                     self.client.download("episode:2", target)
+
+    def test_invalid_download_does_not_replace_existing_audio(self):
+        with tempfile.TemporaryDirectory() as d:
+            target = Path(d) / "audio.mp3"
+            target.write_bytes(b"previous-complete-file")
+            with patch("urllib.request.urlopen", return_value=FakeResponse(b"corrupt-mp3")):
+                with self.assertRaises(ValueError):
+                    self.client.download("episode:1", target)
+            self.assertEqual(target.read_bytes(), b"previous-complete-file")
+            self.assertFalse(list(Path(d).glob(".focu-audio-*")))
 
     def test_provider_error_redacts_secret(self):
         with patch("urllib.request.urlopen", side_effect=urllib.error.HTTPError(

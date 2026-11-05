@@ -2,6 +2,8 @@ import json
 from pathlib import Path
 import tempfile
 import os
+import shutil
+import subprocess
 from unittest.mock import patch
 import unittest
 from publish import build, sha256, episode_date
@@ -45,6 +47,29 @@ class PublisherTests(unittest.TestCase):
             episodes = json.loads((output / "assets/episodes.json").read_text())["episodes"]
             self.assertEqual([ep["date"] for ep in episodes], ["2026-11-02", "2026-10-31"])
             self.assertEqual([ep["id"] for ep in episodes], ["frontier-20261102", "frontier-20261031"])
+
+    def test_content_json_published_at_is_honored(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            deliveries = root / "deliveries"
+            # Folder name carries no date suffix: the explicit metadata date must win.
+            folder = deliveries / "cleanslate-briefing"
+            folder.mkdir(parents=True)
+            (folder / "research.md").write_text("# Briefing\n\nBody.\n")
+            (folder / "content.json").write_text(json.dumps(
+                {"title": "Briefing", "published_at": "2026-11-04"}))
+            # Folder suffix disagrees with the metadata: metadata still wins.
+            folder2 = deliveries / "other-20260101"
+            folder2.mkdir(parents=True)
+            (folder2 / "research.md").write_text("# Other\n\nBody.\n")
+            (folder2 / "content.json").write_text(json.dumps(
+                {"title": "Other", "published_at": "2026-11-03"}))
+            output = root / "bundle"
+            build(deliveries, output, Path(__file__).with_name("index.html"), 15)
+            items = json.loads((output / "assets/episodes.json").read_text())["items"]
+            by_id = {it["content_id"]: it["published_at"] for it in items}
+            self.assertEqual(by_id["cleanslate-briefing"], "2026-11-04")
+            self.assertEqual(by_id["other-20260101"], "2026-11-03")
 
     def test_muse_loader_fallback_structure(self):
         html = Path(__file__).with_name("index.html").read_text()
@@ -145,7 +170,7 @@ class PublisherTests(unittest.TestCase):
         self.assertIn("focu:content-consumption:v1", html)
         self.assertIn("markDone(playingId,'audio')", html)
         self.assertIn("markDone(currentId,'article')", html)
-        self.assertIn("bottomSeen&&maxDepth", html)
+        self.assertIn("bottomSeen&&readMs>=minMs", html)
         self.assertIn("reader.hidden=false", html)
         self.assertNotIn("Done reading", html)
         self.assertNotIn("Mark done", html)
@@ -264,6 +289,58 @@ class PublisherTests(unittest.TestCase):
                   15, requests=requests)
             data = json.loads((output / "assets/episodes.json").read_text())
             self.assertEqual(data["research_requests"], [])
+
+    @unittest.skipUnless(shutil.which("ffmpeg") and shutil.which("ffprobe"), "requires local audio tools")
+    def test_strict_media_audit_rejects_truncated_source(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            folder = root / "deliveries" / "article-20261103"
+            folder.mkdir(parents=True)
+            (folder / "article.md").write_text("# Important research result\\n\\nFull article.")
+            audio = folder / "podcast.mp3"
+            subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error",
+                            "-y", "-f", "lavfi", "-i", "sine=frequency=400:duration=6",
+                            "-codec:a", "libmp3lame", "-b:a", "64k", str(audio)],
+                           check=True, timeout=30, capture_output=True)
+            target = root / "good-bundle"
+            build(root / "deliveries", target, Path(__file__).with_name("index.html"),
+                  15, verify_audio=True)
+            data = json.loads((target / "assets/episodes.json").read_text())
+            self.assertGreater(data["items"][0]["formats"]["audio"]["duration_seconds"], 5)
+            report = json.loads((target / "build-report.json").read_text())
+            self.assertTrue(report["audio_audit"]["article-20261103"]["verified"])
+            original = audio.read_bytes()
+            audio.write_bytes(original[:len(original)//3])
+            with self.assertRaisesRegex(ValueError, "Audio validation failed"):
+                build(root / "deliveries", root / "rejected-bundle",
+                      Path(__file__).with_name("index.html"), 15, verify_audio=True)
+            self.assertFalse((root / "rejected-bundle").exists())
+
+    def test_legacy_html_article_is_safe_and_auto_readable(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            folder = root / "deliveries" / "legacy-20261103"
+            folder.mkdir(parents=True)
+            (folder / "article.html").write_text(
+                "<article><h1>Old research</h1><p>Important finding with "
+                "<a href='https://example.org/first'>a source</a>.</p>"
+                "<script>throw new Error('must not run')</script></article>")
+            out = root / "bundle"
+            build(root / "deliveries", out, Path(__file__).with_name("index.html"), 15)
+            item = json.loads((out / "assets/episodes.json").read_text())["items"][0]
+            blocks = item["article_blocks"]
+            self.assertTrue(any("Important finding" in b["text"] for b in blocks))
+            self.assertTrue(any("https://example.org/first" in b["text"] for b in blocks))
+            self.assertNotIn("must not run", json.dumps(blocks))
+            self.assertGreater(item["reading_minutes"], 0)
+
+    def test_zero_cost_article_narration_and_consumption_contract(self):
+        html = Path(__file__).with_name("index.html").read_text()
+        self.assertIn("speechSynthesis.speak(utterance)", html)
+        self.assertIn("markDone(completedId,'device_voice')", html)
+        self.assertIn("stopNarration()", html)
+        self.assertIn("bottomSeen&&readMs>=minMs", html)
+        self.assertIn("Reading history cannot be saved", html)
 
     def test_reject_empty_and_unsafe_output(self):
         with tempfile.TemporaryDirectory() as temp:

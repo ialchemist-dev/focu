@@ -1,0 +1,113 @@
+// DOM-independent tests for Focu's inline WebView reader. Node built-ins only.
+'use strict';
+const fs = require('fs');
+const path = require('path');
+const vm = require('vm');
+const assert = require('node:assert/strict');
+const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
+const source = html.split('<script>\n')[1].split('</script>')[0];
+
+class FakeElement {
+  constructor(name = 'div') {
+    this.name = name; this.textContent = ''; this.children = [];
+    this.hidden = false; this.events = {};
+    this.classList = { toggle() {} };
+    this.src = ''; this.currentTime = 0; this.duration = 100;
+    this.paused = true; this.seeking = false;
+    this.played = { length:1,start:()=>0,end:()=>0 };
+  }
+  append(...nodes) { this.children.push(...nodes); }
+  replaceChildren(...nodes) { this.children = [...nodes]; }
+  addEventListener(name, callback) { this.events[name] = callback; }
+  getBoundingClientRect() { return { top:10,height:200,bottom:210 }; }
+  remove() {}
+  removeAttribute() {}
+  pause() { this.paused = true; }
+  play() { this.paused = false; return Promise.resolve(); }
+}
+function makeEnvironment(saved = {}) {
+  const elements = new Map();
+  const get = id => {
+    if (!elements.has(id)) elements.set(id,new FakeElement(id));
+    return elements.get(id);
+  };
+  const storage = { ...saved };
+  const speech = {
+    spoken:[],
+    speak(utterance) {
+      this.spoken.push(utterance.text);
+      if (typeof utterance.onend === 'function') utterance.onend();
+    },
+    cancel() {}, pause() {}, resume() {},
+  };
+  const document = {
+    getElementById:get,
+    createElement:tag=>new FakeElement(tag),
+    createTextNode:value=>({textContent:value}),
+    addEventListener() {},
+    hidden:false,
+  };
+  const ctx = {
+    console,URL,URLSearchParams,Date,document,
+    window:{addEventListener(){},scrollTo(){}},
+    innerHeight:650,scrollY:0,location:{search:''},
+    localStorage:{
+      getItem(k){return storage[k] || null},
+      setItem(k,v){storage[k]=v},
+    },
+    speechSynthesis:speech,
+    SpeechSynthesisUtterance:function(t){this.text=t},
+    setInterval(){},
+    fetch:async()=>{throw new Error('Muse embedded snapshot fallback')},
+  };
+  vm.createContext(ctx);
+  vm.runInContext(source,ctx,{filename:'index.html'});
+  return {run:expression=>vm.runInContext(expression,ctx),get,storage,speech};
+}
+function article(id){
+  return "{id:'"+id+"',title:'A grounded research story',summary:'Short context',source:'Your research',"+
+    "date:'2026-11-04',cover_url:'',audio_url:'',"+
+    "blocks:[{type:'heading',level:1,text:'A grounded research story'},"+
+    "{type:'paragraph',text:'The source provides evidence about the tradeoff.'}],reading_minutes:1}";
+}
+{
+  const e=makeEnvironment();
+  e.run('render(['+article('read-story')+'],"")');
+  e.run("openItem('read-story')");
+  assert.equal(e.run("isDone('read-story')"),false);
+  e.run("tickAt=Date.now()-2000;readingTick()");
+  assert.equal(e.run("isDone('read-story')"),false);
+  e.run("playingId='read-story';player.paused=false");
+  for(let i=0;i<6;i++) e.run("tickAt=Date.now()-2000;readingTick()");
+  assert.equal(e.run("isDone('read-story')"),false,'listening cannot count as article reading');
+  e.run("player.paused=true;playingId=null");
+  for(let i=0;i<4;i++)e.run("tickAt=Date.now()-2000;readingTick()");
+  assert.equal(e.run("isDone('read-story')"),true);
+  const state=JSON.parse(e.storage['focu:content-consumption:v1']);
+  assert.equal(state['read-story'].via,'article');
+  assert.equal(makeEnvironment(e.storage).run("isDone('read-story')"),true);
+}
+{
+  const e=makeEnvironment();
+  e.run('render(['+article('voice-story')+'],"")');
+  e.run("openItem('voice-story')");
+  e.run("readAloud(allItems[0])");
+  assert.ok(e.speech.spoken.length>=1);
+  assert.equal(e.run("isDone('voice-story')"),true);
+  assert.equal(JSON.parse(e.storage['focu:content-consumption:v1'])['voice-story'].via,'device_voice');
+}
+{
+  const e=makeEnvironment();
+  e.run("render([{id:'mp3-story',title:'Audio report',summary:'',date:'',source:'Focu',cover_url:'',audio_url:'assets/audio/example.mp3',audio_duration:100,blocks:[],reading_minutes:1}],'')");
+  e.run("playingId='mp3-story'");
+  const player=e.get('player');
+  player.duration=100;
+  player.played={length:1,start:()=>0,end:()=>100};
+  player.currentTime=35;
+  player.events.ended();
+  assert.equal(e.run("isDone('mp3-story')"),false,'premature end must not archive');
+  player.currentTime=100;
+  player.events.ended();
+  assert.equal(e.run("isDone('mp3-story')"),true,'completed MP3 should archive');
+}
+console.log('Focu reader behavior: article, local read-aloud, persistence and audio end passed');
