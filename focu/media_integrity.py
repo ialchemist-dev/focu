@@ -73,3 +73,36 @@ def inspect_mp3(path: str | Path, *, timeout_seconds: int = 120) -> dict:
             json.JSONDecodeError) as exc:
         raise MediaIntegrityError(
             "MP3 metadata/decode failed: " + type(exc).__name__) from exc
+
+
+
+def main(argv=None) -> int:
+    """Audit existing private delivery MP3 files before publishing to Muse."""
+    import argparse
+    parser = argparse.ArgumentParser(description="Audit actual MP3 decoded durations")
+    parser.add_argument("--deliveries", type=Path, required=True)
+    parser.add_argument("--output", type=Path, help="Optional JSON audit report")
+    args = parser.parse_args(argv)
+    if not args.deliveries.is_dir():
+        parser.error("Delivery directory not found")
+    results = []
+    for path in sorted(args.deliveries.glob("*/podcast.mp3")):
+        try:
+            result = {"delivery": path.parent.name, "status": "pass",
+                      **inspect_mp3(path)}
+        except (MediaIntegrityError, OSError) as exc:
+            result = {"delivery": path.parent.name, "status": "fail",
+                      "error": str(exc)}
+        results.append(result)
+    report = {"audited": len(results), "failed": sum(x["status"] == "fail" for x in results),
+              "results": results}
+    encoded = json.dumps(report, ensure_ascii=False, indent=2) + "\n"
+    if args.output:
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(encoded, encoding="utf-8")
+    print(encoded, end="")
+    return 1 if report["failed"] else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
