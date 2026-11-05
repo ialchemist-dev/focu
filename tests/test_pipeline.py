@@ -92,6 +92,17 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(self.store.persist_fetch(self.src, second), 0)
         self.assertEqual(self.count("contents"), 3)
 
+    def test_daily_source_podcast_mode_persisted(self):
+        self.store.persist_fetch(self.src, FetchResult(items=[self.item(111)]))
+        row = self.store.db.execute("SELECT podcast_mode FROM contents").fetchone()
+        self.assertEqual(row[0], "daily_compilation")
+
+    def test_daily_import_refuses_user_research(self):
+        submitted = self.units_file([self.item(1, origin="user_initiated", podcast_mode="none")])
+        with self.assertRaisesRegex(FewError, "cannot enter registered-source daily compilation"):
+            ingest(self.store, self.cfg, self.today, submitted)
+        self.assertEqual(self.count("contents"), 0)
+
     def test_all_items_persist_but_daily_cap_keeps_backlog(self):
         file = self.units_file([self.item(i) for i in range(8)])
         first = run_pipeline(self.store, self.cfg, self.today, "text_only", file)
