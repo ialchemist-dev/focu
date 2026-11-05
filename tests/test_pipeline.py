@@ -97,6 +97,25 @@ class PipelineTests(unittest.TestCase):
         row = self.store.db.execute("SELECT podcast_mode FROM contents").fetchone()
         self.assertEqual(row[0], "daily_compilation")
 
+    def test_existing_source_database_is_upgraded_in_place(self):
+        import sqlite3
+        folder = self.root / 'legacy'
+        folder.mkdir()
+        legacy_sql = (Path(__file__).resolve().parents[1] /
+                      'focu/daily/migrations/001_initial.sql').read_text()
+        with sqlite3.connect(folder / 'few.sqlite3') as conn:
+            conn.executescript(legacy_sql)
+            conn.execute("""INSERT INTO contents
+                (content_id, canonical_url, provisional, first_seen_at, latest_revision_id)
+                VALUES ('src-old','https://example.org/old',0,'2026-01-01',NULL)""")
+        old = Store(folder)
+        try:
+            row = old.db.execute("SELECT content_id,podcast_mode FROM contents").fetchone()
+            self.assertEqual(row['content_id'], 'src-old')
+            self.assertEqual(row['podcast_mode'], 'daily_compilation')
+        finally:
+            old.close()
+
     def test_daily_import_refuses_user_research(self):
         submitted = self.units_file([self.item(1, origin="user_initiated", podcast_mode="none")])
         with self.assertRaisesRegex(FewError, "cannot enter registered-source daily compilation"):
