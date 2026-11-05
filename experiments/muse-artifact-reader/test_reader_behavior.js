@@ -48,7 +48,7 @@ function makeEnvironment(saved = {}) {
     hidden:false,
   };
   const ctx = {
-    console,URL,Date,document,
+    console,URL,URLSearchParams,Date,document,
     window:{addEventListener(){},scrollTo(){}},
     innerHeight:650,scrollY:0,location:{search:''},
     localStorage:{
