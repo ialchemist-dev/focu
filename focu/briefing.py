@@ -57,6 +57,9 @@ def read_style(path=DEFAULT_STYLE):
 
 def origin(item):
     kind = item.get("origin_kind") or item.get("origin") or "registered_source"
+    aliases = {"user_initiated": "requested_research", "on_demand": "requested_research",
+               "registered": "registered_source", "follow_up": "interest_follow_up"}
+    kind = aliases.get(kind, kind)
     return kind if kind in ORDER else "registered_source"
 
 
