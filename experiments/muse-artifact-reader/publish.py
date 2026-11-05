@@ -274,6 +274,20 @@ def build(deliveries, output, template, limit, *, fetch_source_covers=False, gen
             if origin == "source" and source_url:
                 item["cover"]["source_url"] = source_url
             manifest.append(item)
+        # New daily compilations must be one per date and reference exactly the
+        # published registered-source articles; no unsolicited per-item audio.
+        compilations = {}
+        for item in manifest:
+            if item["origin"] != "daily_compilation":
+                continue
+            if not item.get("covered_content_ids"):
+                raise ValueError("Daily compilation must list covered_content_ids")
+            day = item.get("published_at") or item.get("date")
+            if not day:
+                raise ValueError("Daily compilation is missing its publication date")
+            if day in compilations:
+                raise ValueError("Multiple daily compilations for " + day)
+            compilations[day] = item["content_id"]
         seen_ids = set()
         for item in manifest:
             if item["content_id"] in seen_ids:
@@ -289,6 +303,8 @@ def build(deliveries, output, template, limit, *, fetch_source_covers=False, gen
                     raise ValueError("Daily compilation references missing content: " + ref)
                 if other["origin"] != "registered_source" or other["podcast_mode"] != "daily_compilation":
                     raise ValueError("Daily compilation cannot include on-demand research")
+                if "article" not in other["formats"]:
+                    raise ValueError("Every registered-source item must have an individual readable article")
         pending = []
         if requests is not None:
             request_path = Path(requests)
