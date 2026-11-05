@@ -307,7 +307,8 @@ window.addEventListener('scroll',updateScroll,{passive:true});
 function playedCoverage(){let count=0;try{for(let i=0;i<player.played.length;i++)count+=player.played.end(i)-player.played.start(i)}catch(e){}return count}
 function readingTick(){
  const now=Date.now(),delta=Math.min(2000,Math.max(0,now-tickAt));tickAt=now;
- if(!currentId||reader.hidden||document.hidden||!contentAvailable||isDone(currentId))return;
+ if(!currentId||reader.hidden||document.hidden||!contentAvailable||isDone(currentId)||
+    (playingId===currentId&&!player.paused)||(speechRunning&&speechId===currentId))return;
  readMs+=delta;updateScroll();
  const item=allItems.find(x=>x.id===currentId),textLen=item?item.blocks.reduce((n,b)=>n+String(b.text||'').length,0):0;
  const minMs=textLen<450?7000:textLen<1800?13000:20000;
