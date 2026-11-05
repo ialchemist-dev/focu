@@ -121,7 +121,7 @@ def check_fidelity(article, transcript, domain=None):
     cursor = 0
     for section in sections:
         title = section["heading"]
-        pattern = r"(?:^|[.!?]\\s+|\\n)\\s*(" + re.escape(title) + r")(?=\\s*[:.!?\\u2014-])"
+        pattern = r"(?:^|[.!?]\s+|\n)\s*(" + re.escape(title) + r")(?=\s*[:.!?\u2014-])"
         match = re.search(pattern, transcript[cursor:], flags=re.I)
         if not match:
             issues.append({"section": section["id"], "issue": "missing_or_reordered_heading",
