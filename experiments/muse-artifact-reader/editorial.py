@@ -6,6 +6,7 @@ to render with textContent in an untrusted-source WebView.
 """
 import re
 from html.parser import HTMLParser
+from focu.audience import writing_guidance
 
 
 class _HTMLReader(HTMLParser):
@@ -197,7 +198,7 @@ def editorial(markdown, metadata=None):
             "reading_minutes": max(1, round(word_count / 220))}
 
 
-def compose_article_with_openai(research_markdown, *, api_key, model="gpt-4.1-mini"):
+def compose_article_with_openai(research_markdown, *, api_key, model="gpt-4.1-mini", audience_domain=None):
     """Optional editorial prose generation using user's own key (never called by default).
 
     Retains sources from the evidence report and rejects newly invented URLs.
@@ -223,6 +224,7 @@ def compose_article_with_openai(research_markdown, *, api_key, model="gpt-4.1-mi
         "and a concise conclusion. Output ONLY a JSON object with exactly "
         "three string keys: title, summary, article_markdown."
     )
+    policy += "\n" + writing_guidance(audience_domain)
     payload = json.dumps({
         "model": model, "temperature": 0.2,
         "response_format": {"type": "json_object"},
