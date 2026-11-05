@@ -57,6 +57,40 @@ def calibration(domain=None, profile=None):
             "preferences": profile.get("preferences", [])}
 
 
+def detect_domain(source_text):
+    """Conservative subject classifier; does not infer or modify user expertise."""
+    source = (source_text or "")[:15000]
+    groups = {
+        "machine_learning": (
+            r"\b(?:LLM|transformer|neural network|machine learning|deep learning)\b",
+            r"\b(?:weight.space|gradient|model weights|fine.tun(?:e|ing)|backpropagation)\b",
+            r"\b(?:language model|benchmark|inference|attention heads)\b",
+        ),
+        "programming": (
+            r"\b(?:Python|JavaScript|TypeScript|Rust|Go language)\b",
+            r"\b(?:software engineering|compiler|codebase|source code)\b",
+            r"\b(?:API|dependency|programming|runtime error)\b",
+        ),
+        "computer_science": (
+            r"\b(?:algorithmic complexity|computability|data structures)\b",
+            r"\b(?:graph algorithm|distributed systems|database engine)\b",
+        ),
+        "sociology": (
+            r"\b(?:sociology|sociological)\b",
+            r"\b(?:habitus|anomie|ethnograph|social stratification)\b",
+            r"\b(?:social institution|social mobility|sociological theory)\b",
+        ),
+    }
+    scores = {domain: sum(bool(re.search(p, source, re.I)) for p in patterns)
+              for domain, patterns in groups.items()}
+    leader = max(scores, key=scores.get)
+    if scores[leader] >= 2 and sum(scores[d] >= scores[leader] for d in scores) == 1:
+        return leader
+    if scores["sociology"] >= 1 and not any(scores[d] for d in scores if d != "sociology"):
+        return "sociology"
+    return None
+
+
 def writing_guidance(domain=None, profile=None):
     choice = calibration(domain, profile)
     return (
