@@ -38,6 +38,8 @@ jobs:
           Path('/tmp/focu-muse-reader.js').write_text(scripts[-1])
           PY
           node --check /tmp/focu-muse-reader.js
+      - name: Muse reader behavior regression tests
+        run: node experiments/muse-artifact-reader/test_reader_behavior.js
   live-web:
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
