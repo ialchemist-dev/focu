@@ -14,7 +14,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
-from focu.briefing import read_style, make_prompt, ordered_units, DEFAULT_STYLE
+from focu.briefing import read_style, make_prompt, ordered_units
 from focu.media_integrity import inspect_mp3
 
 DEFAULT_URL = "http://127.0.0.1:5055"
@@ -130,7 +130,6 @@ def main(argv: list[str] | None = None) -> int:
     generate.add_argument("--speaker-profile", required=True)
     generate.add_argument("--briefing-suffix")
     content_source.add_argument("--briefing-units", help="JSON ordered report items; use secretary style prompt")
-    generate.add_argument("--briefing-style", default=str(DEFAULT_STYLE), help="Versioned briefing style file")
     job = sub.add_parser("job")
     job.add_argument("job_id")
     sub.add_parser("episodes")
@@ -144,7 +143,7 @@ def main(argv: list[str] | None = None) -> int:
             result = client.doctor()
         elif args.command == "generate":
             if args.briefing_units:
-                style = read_style(args.briefing_style)
+                style = read_style()
                 units = json.loads(Path(args.briefing_units).read_text(encoding="utf-8"))
                 content = make_prompt(units, style)
                 # Never silently truncate a complete briefing in a bounded API.
