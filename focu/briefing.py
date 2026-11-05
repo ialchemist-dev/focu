@@ -112,16 +112,21 @@ def validate_script(script, units, style):
     items = ordered_units(units)
     issues, sections, starts = [], [], []
     text = script or ""
+    cursor = 0
     for item in items:
         title = _plain(item["title"])
-        found = list(re.finditer(re.escape(title), text, re.I))
-        starts.append(found[0].start() if len(found) == 1 else None)
-        if len(found) != 1:
+        # Different source items can legitimately share a headline. Match
+        # successive section occurrences, then validate each section's own
+        # numeric facts and source rather than assuming globally unique text.
+        match = re.search(re.escape(title), text[cursor:], re.I)
+        if match:
+            start = cursor + match.start()
+            starts.append(start)
+            cursor += match.end()
+        else:
+            starts.append(None)
             issues.append({"id": item.get("content_id") or item.get("id"),
-                           "issue": "missing_or_duplicate_headline", "title": title})
-    positions = [x for x in starts if x is not None]
-    if positions != sorted(positions):
-        issues.append({"issue": "source_item_order_changed"})
+                           "issue": "missing_headline_or_wrong_order", "title": title})
     for index, item in enumerate(items):
         begin = starts[index]
         if begin is None:
