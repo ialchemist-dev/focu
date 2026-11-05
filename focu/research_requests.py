@@ -94,7 +94,7 @@ def capture_request(db_path: str | Path, question: str = "", *,
             "note": note, "origin": "user_initiated",
             "created_at": intent["created_at"], "podcast_mode": intent["podcast_mode"],
             "podcast_requested_at": intent["podcast_requested_at"],
-            "automatic_research_started": False
+            "automatic_research_started": False}
 
 
 def list_requests(db_path: str | Path) -> dict:
