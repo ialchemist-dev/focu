@@ -48,6 +48,29 @@ class PublisherTests(unittest.TestCase):
             self.assertEqual([ep["date"] for ep in episodes], ["2026-11-02", "2026-10-31"])
             self.assertEqual([ep["id"] for ep in episodes], ["frontier-20261102", "frontier-20261031"])
 
+    def test_content_json_published_at_is_honored(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            deliveries = root / "deliveries"
+            # Folder name carries no date suffix: the explicit metadata date must win.
+            folder = deliveries / "cleanslate-briefing"
+            folder.mkdir(parents=True)
+            (folder / "research.md").write_text("# Briefing\n\nBody.\n")
+            (folder / "content.json").write_text(json.dumps(
+                {"title": "Briefing", "published_at": "2026-11-04"}))
+            # Folder suffix disagrees with the metadata: metadata still wins.
+            folder2 = deliveries / "other-20260101"
+            folder2.mkdir(parents=True)
+            (folder2 / "research.md").write_text("# Other\n\nBody.\n")
+            (folder2 / "content.json").write_text(json.dumps(
+                {"title": "Other", "published_at": "2026-11-03"}))
+            output = root / "bundle"
+            build(deliveries, output, Path(__file__).with_name("index.html"), 15)
+            items = json.loads((output / "assets/episodes.json").read_text())["items"]
+            by_id = {it["content_id"]: it["published_at"] for it in items}
+            self.assertEqual(by_id["cleanslate-briefing"], "2026-11-04")
+            self.assertEqual(by_id["other-20260101"], "2026-11-03")
+
     def test_muse_loader_fallback_structure(self):
         html = Path(__file__).with_name("index.html").read_text()
         self.assertIn("const manifest=params.get('manifest')||'assets/episodes.json'", html)
