@@ -77,6 +77,10 @@ function article(id){
   assert.equal(e.run("isDone('read-story')"),false);
   e.run("tickAt=Date.now()-2000;readingTick()");
   assert.equal(e.run("isDone('read-story')"),false);
+  e.run("playingId='read-story';player.paused=false");
+  for(let i=0;i<6;i++) e.run("tickAt=Date.now()-2000;readingTick()");
+  assert.equal(e.run("isDone('read-story')"),false,'listening cannot count as article reading');
+  e.run("player.paused=true;playingId=null");
   for(let i=0;i<4;i++)e.run("tickAt=Date.now()-2000;readingTick()");
   assert.equal(e.run("isDone('read-story')"),true);
   const state=JSON.parse(e.storage['focu:content-consumption:v1']);
