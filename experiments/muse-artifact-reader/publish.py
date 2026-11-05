@@ -13,7 +13,7 @@ import tempfile
 from editorial import editorial, compose_article_with_openai, markdown_from_html
 from cover_art import typographic_svg, candidate_source_image, fetch_source_cover, generate_ai_cover
 from focu.media_integrity import inspect_mp3, MediaIntegrityError
-from focu.audience import load_profile, calibration, mismatch_report
+from focu.audience import load_profile, calibration, mismatch_report, detect_domain
 
 def sha256(path):
     h = hashlib.sha256()
@@ -161,7 +161,7 @@ def build(deliveries, output, template, limit, *, fetch_source_covers=False, gen
             if (generate_editorial and markdown and markdown_path.name == "research.md"):
                 model = "gpt-4.1-mini"
                 profile = load_profile()
-                audience = calibration(metadata.get("audience_domain"), profile)
+                audience = calibration(metadata.get("audience_domain") or detect_domain(markdown), profile)
                 digest = hashlib.sha256((model + "\n" + profile["profile_sha256"] +
                                         "\n" + audience["domain"] + "\n" + markdown).encode()).hexdigest()[:20]
                 cache = output.parent / ".focu-editorial-cache"
@@ -173,7 +173,7 @@ def build(deliveries, output, template, limit, *, fetch_source_covers=False, gen
                     else:
                         generated = compose_article_with_openai(
                             markdown, api_key=os.environ["OPENAI_API_KEY"], model=model,
-                            audience_domain=metadata.get("audience_domain"))
+                            audience_domain=metadata.get("audience_domain") or detect_domain(markdown))
                         pending = cache / ("." + cached.name + ".tmp")
                         pending.write_text(json.dumps(generated, ensure_ascii=False), encoding="utf-8")
                         os.replace(pending, cached)
@@ -184,13 +184,13 @@ def build(deliveries, output, template, limit, *, fetch_source_covers=False, gen
                 except (OSError, ValueError, RuntimeError, KeyError) as exc:
                     warnings.append(episode_id + ": editorial generation unavailable: " + type(exc).__name__)
             info = editorial(markdown, metadata)
-            profile = calibration(metadata.get("audience_domain"))
+            profile = calibration(metadata.get("audience_domain") or detect_domain(markdown))
             item["audience_profile_version"] = profile["profile_version"]
             item["audience_profile_sha256"] = profile["profile_sha256"]
             item["audience_domain"] = profile["domain"]
             item["audience_level"] = profile["level"]
             if markdown:
-                item["audience_qc"] = mismatch_report(markdown, metadata.get("audience_domain"))
+                item["audience_qc"] = mismatch_report(markdown, metadata.get("audience_domain") or detect_domain(markdown))
             if markdown:
                 item["title"] = info["title"]
                 item["summary"] = info["summary"]
