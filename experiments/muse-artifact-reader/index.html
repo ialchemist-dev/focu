@@ -88,7 +88,7 @@ const params=new URLSearchParams(location.search);
 const STORE_KEY='focu:content-consumption:v1';
 let view='inbox',allItems=[],allRequests=[],storageOK=true,currentId=null,readMs=0,maxDepth=0,bottomSeen=false,contentAvailable=false;
 let tickAt=Date.now(),lastNote='',playingId=null,lastAudioPosition=null,listenedSeconds=0;
-let speechId=null,speechSegments=[],speechIndex=0,speechRunning=false,speechPaused=false;
+let speechId=null,speechSegments=[],speechIndex=0,speechRunning=false,speechPaused=false,failedAudioId=null;
 function canNarrate(){return !!(typeof speechSynthesis!=='undefined'&&typeof SpeechSynthesisUtterance!=='undefined')}
 function readStates(){try{const obj=JSON.parse(localStorage.getItem(STORE_KEY)||'{}');return obj&&typeof obj==='object'&&!Array.isArray(obj)?obj:{}}catch(e){storageOK=false;return {}}}
 let states=readStates();
@@ -107,7 +107,7 @@ function normalize(data){
  return {id,title:x.title||'Untitled',summary:x.summary||'',date:x.published_at||x.date||'',source:typeof x.source==='string'?x.source:(x.source?.kind||'Focu'),cover_url:x.cover?.path||x.cover_url||'',cover_origin:x.cover?.origin||'',audio_url:x.formats?.audio?.path||x.audio_url||'',article_url:x.formats?.article?.path||'',blocks:Array.isArray(x.article_blocks)?x.article_blocks:[],reading_minutes:Number(x.reading_minutes)||0};
  });
 }
-function setView(which){view=which;currentId=null;reader.hidden=true;feed.hidden=false;document.getElementById('inbox').classList.toggle('active',which==='inbox');document.getElementById('archive').classList.toggle('active',which==='archive');document.getElementById('researchtab').classList.toggle('active',which==='research');document.getElementById('feedheading').textContent=which==='archive'?'Your Archive':which==='research'?'Research requests':'Latest stories';render(allItems,lastNote);window.scrollTo(0,0)}
+function setView(which){if(speechRunning)stopNarration();view=which;currentId=null;reader.hidden=true;feed.hidden=false;document.getElementById('inbox').classList.toggle('active',which==='inbox');document.getElementById('archive').classList.toggle('active',which==='archive');document.getElementById('researchtab').classList.toggle('active',which==='research');document.getElementById('feedheading').textContent=which==='archive'?'Your Archive':which==='research'?'Research requests':'Latest stories';render(allItems,lastNote);window.scrollTo(0,0)}
 document.getElementById('inbox').onclick=()=>setView('inbox');
 document.getElementById('archive').onclick=()=>setView('archive');
 document.getElementById('researchtab').onclick=()=>setView('research');
@@ -180,6 +180,7 @@ function updateReaderState(){
 }
 function openItem(id){
  const item=allItems.find(x=>x.id===id);if(!item)return;
+ if(speechRunning&&speechId!==id)stopNarration();
  currentId=id;readMs=0;maxDepth=0;bottomSeen=false;contentAvailable=item.blocks.length>0;tickAt=Date.now();
  feed.hidden=true;reader.hidden=false;
  document.getElementById('back').textContent='← Back to '+(view==='archive'?'Archive':'Inbox');
@@ -189,15 +190,73 @@ function openItem(id){
  document.getElementById('readtime').textContent=item.reading_minutes?item.reading_minutes+' min read':'';
  const cover=item.cover_origin==='offline_art'?null:safeUrl(item.cover_url),img=document.getElementById('readercover');img.hidden=!cover;
  if(cover){img.src=cover;img.onerror=()=>{img.hidden=true}}else img.removeAttribute('src');
- const listen=document.getElementById('listen');listen.hidden=!(safeUrl(item.audio_url)||item.blocks.length);listen.textContent=safeUrl(item.audio_url)?'▶ Listen':'▶ Read aloud';
+ const listen=document.getElementById('listen');listen.hidden=!(safeUrl(item.audio_url)||item.blocks.length);listen.textContent=(safeUrl(item.audio_url)&&failedAudioId!==item.id)?'▶ Listen':'▶ Read aloud';
  const toolbar=document.getElementById('toolbar');toolbar.hidden=listen.hidden&&!item.blocks.length;
  renderArticle(item.blocks,item.article_url);updateReaderState();window.scrollTo(0,0);
 }
-document.getElementById('back').onclick=()=>setView(view);
+document.getElementById('back').onclick=()=>{stopNarration();setView(view)};
 document.getElementById('restore').onclick=()=>{if(currentId)markUnread(currentId)};
+function stopNarration(){
+ speechRunning=false;speechPaused=false;speechId=null;speechSegments=[];speechIndex=0;
+ if(canNarrate())speechSynthesis.cancel();
+}
+function readableText(item){
+ let section=false;
+ return (item.blocks||[]).filter(b=>b&&typeof b.text==='string'&&b.type!=='code')
+  .filter(b=>{if(b.type==='heading'&&String(b.text).trim().toLowerCase()==='sources')section=true;return !section})
+  .map(b=>String(b.text).replace(/\[([^\]]+)\]\(https?:\/\/[^)]+\)/g,'$1')
+       .replace(/[*_\x60#]/g,'').replace(/https?:\/\/\S+/g,'').trim()).filter(Boolean).join('. ');
+}
+function speechChunks(text){
+ const result=[];let rest=text.replace(/\s+/g,' ').trim();
+ while(rest.length){
+   if(rest.length<=150){result.push(rest);break}
+   let stop=Math.max(rest.lastIndexOf('. ',150),rest.lastIndexOf('! ',150),rest.lastIndexOf('? ',150),rest.lastIndexOf(' ',150));
+   if(stop<60)stop=149;
+   result.push(rest.slice(0,stop+1).trim());
+   rest=rest.slice(stop+1).trim();
+ }
+ return result;
+}
+function nextSpeechChunk(){
+ if(!speechRunning)return;
+ if(speechIndex>=speechSegments.length){
+   const completedId=speechId;stopNarration();
+   markDone(completedId,'device_voice');return;
+ }
+ const utterance=new SpeechSynthesisUtterance(speechSegments[speechIndex]);
+ utterance.lang='en-US';utterance.rate=1;
+ utterance.onend=()=>{if(speechRunning&&!speechPaused){speechIndex++;nextSpeechChunk()}};
+ utterance.onerror=event=>{
+   if(!speechRunning)return;
+   stopNarration();
+   document.getElementById('readerstate').textContent='Device narration stopped ('+(event.error||'speech error')+'). This story was not archived.';
+ };
+ try{speechSynthesis.speak(utterance)}
+ catch(e){stopNarration();document.getElementById('readerstate').textContent='Device narration is unavailable in this reader.'}
+}
+function readAloud(item){
+ if(!canNarrate()){
+  document.getElementById('readerstate').textContent='Device voice is unavailable here. Ask Muse to generate and cache a podcast.';return;
+ }
+ if(speechRunning&&speechId===item.id){
+   if(speechPaused){speechSynthesis.resume();speechPaused=false;document.getElementById('listen').textContent='Ⅱ Pause reading'}
+   else{speechSynthesis.pause();speechPaused=true;document.getElementById('listen').textContent='▶ Resume reading'}
+   return;
+ }
+ const text=readableText(item);
+ if(!text){document.getElementById('readerstate').textContent='There is no article text available for read-aloud.';return}
+ player.pause();playerbar.hidden=true;stopNarration();
+ speechSegments=speechChunks(text);speechIndex=0;speechId=item.id;speechRunning=true;speechPaused=false;
+ document.getElementById('readerstate').textContent='Reading aloud using your device voice · No AI tokens';
+ document.getElementById('listen').textContent='Ⅱ Pause reading';
+ nextSpeechChunk();
+}
 document.getElementById('listen').onclick=()=>{
  const item=allItems.find(x=>x.id===currentId);if(!item)return;
- const url=safeUrl(item.audio_url);if(!url)return;
+ const url=safeUrl(item.audio_url);
+ if(!url||failedAudioId===item.id){readAloud(item);return}
+ stopNarration();
  if(playingId!==item.id){player.src=url;playingId=item.id;listenedSeconds=0;lastAudioPosition=null}
  playerbar.hidden=false;document.getElementById('nowplaying').textContent=item.title;
  player.play().catch(()=>{document.getElementById('nowplaying').textContent='Tap the native play control to start audio'});
@@ -214,7 +273,14 @@ player.addEventListener('ended',()=>{
  if(playingId&&Number.isFinite(player.duration)&&player.duration>0&&Math.max(listenedSeconds,playedCoverage())>=player.duration*0.8){markDone(playingId,'audio')}
  else document.getElementById('nowplaying').textContent='Playback ended · Not enough listening time to archive';
 });
-player.addEventListener('error',()=>{document.getElementById('nowplaying').textContent='Audio unavailable. Check Artifact media access.'});
+player.addEventListener('error',()=>{
+ failedAudioId=playingId;
+ document.getElementById('nowplaying').textContent='Podcast audio unavailable. You can still read the article.';
+ if(currentId===playingId&&allItems.some(x=>x.id===currentId&&x.blocks.length)){
+    document.getElementById('listen').textContent='▶ Read aloud';
+    document.getElementById('readerstate').textContent='Cached audio could not load. Try device read-aloud instead.';
+ }
+});
 function updateScroll(){
  if(!currentId||reader.hidden||!contentAvailable||isDone(currentId))return;
  const end=readend.getBoundingClientRect();const body=articleBody.getBoundingClientRect();
