@@ -10,7 +10,7 @@ import re
 import shutil
 import sys
 import tempfile
-from editorial import editorial, compose_article_with_openai
+from editorial import editorial, compose_article_with_openai, markdown_from_html
 from cover_art import typographic_svg, candidate_source_image, fetch_source_cover, generate_ai_cover
 from focu.media_integrity import inspect_mp3, MediaIntegrityError
 
@@ -118,6 +118,13 @@ def build(deliveries, output, template, limit, *, fetch_source_covers=False, gen
                 if markdown_path.stat().st_size > 1_000_000:
                     raise ValueError("Article source exceeds 1 MB: " + episode_id)
                 markdown = markdown_path.read_text(encoding="utf-8", errors="replace")
+            # Legacy HTML-only content can also be read in the native article
+            # reader, without opening an untrusted HTML file in a new tab.
+            legacy_html = folder / "article.html"
+            if not markdown and legacy_html.is_file() and not legacy_html.is_symlink():
+                if legacy_html.stat().st_size > 1_000_000:
+                    raise ValueError("Legacy HTML article exceeds 1 MB: " + episode_id)
+                markdown = markdown_from_html(legacy_html.read_text(encoding="utf-8", errors="replace"))
             # Curated article.md wins. Otherwise an explicit opt-in may turn
             # research into original article prose, with a keyed local cache.
             if (generate_editorial and markdown and markdown_path.name == "research.md"):
