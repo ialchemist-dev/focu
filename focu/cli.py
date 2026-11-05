@@ -92,6 +92,8 @@ def main(argv: list[str] | None = None) -> int:
     choice.add_argument("--job-id")
     delivery.add_argument("--output-dir", required=True)
     delivery.add_argument("--timeout", type=int, default=900)
+    delivery.add_argument("--briefing-units", help="Full original items JSON for mandatory transcript QC")
+    delivery.add_argument("--briefing-style", help="Versioned style override (default repository style)")
     collect = sub.add_parser("collect", help="Opt-in source collector PoC")
     collect_sub = collect.add_subparsers(dest="platform", required=True)
     yt = collect_sub.add_parser("youtube", help="Fetch a single video transcript")
@@ -133,10 +135,17 @@ def main(argv: list[str] | None = None) -> int:
                 _json(collect_export(args.input, "linkedin", args.db, args.scope, args.output))
             return 0
         if args.command == "deliver":
+            from focu.briefing import DEFAULT_STYLE
+            briefing_units = (json.loads(Path(args.briefing_units).read_text(encoding="utf-8"))
+                              if args.briefing_units else None)
+            style = args.briefing_style or DEFAULT_STYLE
             if args.episode_id:
-                result = deliver(args.evidence_id, args.episode_id, args.output_dir, args.db)
+                result = deliver(args.evidence_id, args.episode_id, args.output_dir, args.db,
+                                 briefing_units=briefing_units, briefing_style=style)
             else:
-                result = wait_and_deliver(args.evidence_id, args.job_id, args.output_dir, args.db, timeout=args.timeout)
+                result = wait_and_deliver(args.evidence_id, args.job_id, args.output_dir, args.db,
+                                          timeout=args.timeout, briefing_units=briefing_units,
+                                          briefing_style=style)
             _json(result)
             return 0
         if args.command == "podcast":
