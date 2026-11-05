@@ -13,6 +13,7 @@ import tempfile
 from editorial import editorial, compose_article_with_openai, markdown_from_html
 from cover_art import typographic_svg, candidate_source_image, fetch_source_cover, generate_ai_cover
 from focu.media_integrity import inspect_mp3, MediaIntegrityError
+from focu.audience import load_profile, calibration, mismatch_report
 
 def sha256(path):
     h = hashlib.sha256()
@@ -106,8 +107,38 @@ def build(deliveries, output, template, limit, *, fetch_source_covers=False, gen
                 metadata = json.loads(meta_path.read_text(encoding="utf-8"))
                 if not isinstance(metadata, dict):
                     raise ValueError("content.json must be an object")
-            if metadata.get("origin") == "user_initiated":
+            content_origin = metadata.get("origin") or "registered_source"
+            if content_origin not in ("registered_source", "user_initiated", "daily_compilation"):
+                raise ValueError("Unknown content origin: " + str(content_origin))
+            mode = metadata.get("podcast_mode")
+            if mode is None:
+                mode = "none" if content_origin == "user_initiated" else "daily_compilation"
+            if mode not in ("none", "single", "daily_compilation"):
+                raise ValueError("Invalid podcast_mode: " + str(mode))
+            if content_origin == "user_initiated" and mode == "daily_compilation":
+                raise ValueError("User research must not enter daily compilation")
+            if content_origin != "user_initiated" and mode == "single":
+                raise ValueError("Standalone audio only belongs to user-initiated research")
+            if mode == "none" and audio:
+                raise ValueError("podcast_mode=none item has a stray MP3: " + episode_id)
+            if (content_origin == "registered_source" and audio
+                    and metadata.get("podcast_mode") == "daily_compilation"
+                    and not metadata.get("covered_content_ids")):
+                raise ValueError("Registered-source article cannot receive its own daily podcast")
+            if content_origin == "user_initiated":
                 item["source"] = "Your research"
+            item["origin"] = content_origin
+            item["podcast_mode"] = mode
+            if metadata.get("podcast_requested_at"):
+                item["podcast_requested_at"] = metadata["podcast_requested_at"]
+            covered = metadata.get("covered_content_ids", [])
+            if not isinstance(covered, list) or not all(isinstance(x, str) and x for x in covered):
+                raise ValueError("covered_content_ids must be a list of content IDs")
+            if covered and (content_origin != "daily_compilation"
+                            or not audio or mode != "daily_compilation"):
+                raise ValueError("Only a compiled daily briefing may cover individual items")
+            if covered:
+                item["covered_content_ids"] = covered
             # Markdown is the canonical reading format; never evaluate untrusted HTML
             # inside the reader WebView. Existing article.html remains a legacy asset.
             markdown_path = folder / "article.md"
@@ -129,7 +160,10 @@ def build(deliveries, output, template, limit, *, fetch_source_covers=False, gen
             # research into original article prose, with a keyed local cache.
             if (generate_editorial and markdown and markdown_path.name == "research.md"):
                 model = "gpt-4.1-mini"
-                digest = hashlib.sha256((model + "\n" + markdown).encode()).hexdigest()[:20]
+                profile = load_profile()
+                audience = calibration(metadata.get("audience_domain"), profile)
+                digest = hashlib.sha256((model + "\n" + profile["profile_sha256"] +
+                                        "\n" + audience["domain"] + "\n" + markdown).encode()).hexdigest()[:20]
                 cache = output.parent / ".focu-editorial-cache"
                 cache.mkdir(parents=True, exist_ok=True)
                 cached = cache / (safe_id + "-" + digest + ".json")
@@ -138,7 +172,8 @@ def build(deliveries, output, template, limit, *, fetch_source_covers=False, gen
                         generated = json.loads(cached.read_text(encoding="utf-8"))
                     else:
                         generated = compose_article_with_openai(
-                            markdown, api_key=os.environ["OPENAI_API_KEY"], model=model)
+                            markdown, api_key=os.environ["OPENAI_API_KEY"], model=model,
+                            audience_domain=metadata.get("audience_domain"))
                         pending = cache / ("." + cached.name + ".tmp")
                         pending.write_text(json.dumps(generated, ensure_ascii=False), encoding="utf-8")
                         os.replace(pending, cached)
@@ -149,6 +184,13 @@ def build(deliveries, output, template, limit, *, fetch_source_covers=False, gen
                 except (OSError, ValueError, RuntimeError, KeyError) as exc:
                     warnings.append(episode_id + ": editorial generation unavailable: " + type(exc).__name__)
             info = editorial(markdown, metadata)
+            profile = calibration(metadata.get("audience_domain"))
+            item["audience_profile_version"] = profile["profile_version"]
+            item["audience_profile_sha256"] = profile["profile_sha256"]
+            item["audience_domain"] = profile["domain"]
+            item["audience_level"] = profile["level"]
+            if markdown:
+                item["audience_qc"] = mismatch_report(markdown, metadata.get("audience_domain"))
             if markdown:
                 item["title"] = info["title"]
                 item["summary"] = info["summary"]
@@ -232,6 +274,21 @@ def build(deliveries, output, template, limit, *, fetch_source_covers=False, gen
             if origin == "source" and source_url:
                 item["cover"]["source_url"] = source_url
             manifest.append(item)
+        seen_ids = set()
+        for item in manifest:
+            if item["content_id"] in seen_ids:
+                raise ValueError("Duplicate canonical content ID: " + item["content_id"])
+            seen_ids.add(item["content_id"])
+        for item in manifest:
+            refs = item.get("covered_content_ids", [])
+            if len(refs) != len(set(refs)):
+                raise ValueError("Duplicate daily coverage IDs")
+            for ref in refs:
+                other = next((x for x in manifest if x["content_id"] == ref), None)
+                if not other:
+                    raise ValueError("Daily compilation references missing content: " + ref)
+                if other["origin"] != "registered_source" or other["podcast_mode"] != "daily_compilation":
+                    raise ValueError("Daily compilation cannot include on-demand research")
         pending = []
         if requests is not None:
             request_path = Path(requests)
