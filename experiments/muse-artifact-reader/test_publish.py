@@ -165,6 +165,91 @@ class PublisherTests(unittest.TestCase):
             self.assertEqual(item["cover"]["origin"], "source")
             self.assertEqual((output / item["cover"]["path"]).read_bytes(), b"source-owned-cover-fixture")
 
+    def test_origin_policy_article_first_with_podcast_only_after_opt_in(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            folder = root / "deliveries" / "idea-20261105"
+            folder.mkdir(parents=True)
+            intent = "int_" + "a"*32
+            (folder / "article.md").write_text("# Research article\n\n## Mechanism\nA measured improvement.")
+            metadata = {"content_id": intent, "origin": "user_initiated",
+                        "title": "Research article", "podcast_mode": "none"}
+            (folder / "content.json").write_text(json.dumps(metadata))
+            output = root / "article-only"
+            build(root / "deliveries", output, Path(__file__).with_name("index.html"), 15)
+            item = json.loads((output / "assets/episodes.json").read_text())["items"][0]
+            self.assertEqual(item["podcast_mode"], "none")
+            self.assertNotIn("audio", item["formats"])
+            self.assertEqual(item["content_id"], intent)
+            (folder / "podcast.mp3").write_bytes(b"synthetic-mp3-fixture")
+            with self.assertRaisesRegex(ValueError, "stray MP3"):
+                build(root / "deliveries", root / "rejected", Path(__file__).with_name("index.html"), 15)
+            metadata["podcast_mode"] = "single"
+            (folder / "content.json").write_text(json.dumps(metadata))
+            build(root / "deliveries", root / "podcast", Path(__file__).with_name("index.html"), 15)
+            updated = json.loads((root / "podcast/assets/episodes.json").read_text())["items"][0]
+            self.assertEqual(updated["content_id"], intent)
+            self.assertEqual(updated["podcast_mode"], "single")
+            self.assertIn("audio", updated["formats"])
+            self.assertEqual(len(json.loads((root / "podcast/assets/episodes.json").read_text())["episodes"]), 1)
+
+    def test_daily_source_articles_and_one_compilation_link(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            for index in range(3):
+                folder = root / "deliveries" / ("source-" + str(index) + "-20261105")
+                folder.mkdir(parents=True)
+                (folder / "article.md").write_text("# Source " + str(index) + "\n\nFactual source report.")
+                (folder / "content.json").write_text(json.dumps({
+                    "content_id": "source-"+str(index), "origin": "registered_source",
+                    "podcast_mode": "daily_compilation"
+                }))
+            compilation = root / "deliveries" / "daily-briefing-20261105"
+            compilation.mkdir(parents=True)
+            (compilation / "podcast.mp3").write_bytes(b"synthetic-single-daily-briefing")
+            (compilation / "content.json").write_text(json.dumps({
+                "content_id": "daily-2026-11-05", "origin": "daily_compilation",
+                "podcast_mode": "daily_compilation", "published_at": "2026-11-05",
+                "covered_content_ids": ["source-0", "source-1", "source-2"]
+            }))
+            output = root / "bundle"
+            build(root / "deliveries", output, Path(__file__).with_name("index.html"), 15)
+            data = json.loads((output / "assets/episodes.json").read_text())
+            self.assertEqual(len(data["items"]), 4)
+            self.assertEqual(len(data["episodes"]), 1)
+            by_id = {item["content_id"]: item for item in data["items"]}
+            self.assertEqual(by_id["daily-2026-11-05"]["covered_content_ids"],
+                             ["source-0", "source-1", "source-2"])
+            for n in range(3):
+                self.assertNotIn("audio", by_id["source-"+str(n)]["formats"])
+                self.assertEqual(by_id["source-"+str(n)]["podcast_mode"], "daily_compilation")
+
+    def test_compilation_rejects_user_research_or_missing_item(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            user = root / "deliveries" / "idea-20261105"
+            user.mkdir(parents=True)
+            (user / "article.md").write_text("# User research\n\nA grounded article.")
+            (user / "content.json").write_text(json.dumps({
+                "content_id": "int_"+"a"*32, "origin": "user_initiated",
+                "podcast_mode": "none"
+            }))
+            daily = root / "deliveries" / "daily-20261105"
+            daily.mkdir()
+            (daily / "podcast.mp3").write_bytes(b"daily-fixture")
+            (daily / "content.json").write_text(json.dumps({
+                "content_id": "daily-1", "origin": "daily_compilation",
+                "covered_content_ids": ["int_"+"a"*32]
+            }))
+            with self.assertRaisesRegex(ValueError, "cannot include on-demand research"):
+                build(root / "deliveries", root / "rejected", Path(__file__).with_name("index.html"), 15)
+            (daily / "content.json").write_text(json.dumps({
+                "content_id": "daily-1", "origin": "daily_compilation",
+                "covered_content_ids": ["missing-source"]
+            }))
+            with self.assertRaisesRegex(ValueError, "references missing"):
+                build(root / "deliveries", root / "rejected-again", Path(__file__).with_name("index.html"), 15)
+
     def test_reader_automatic_completion_contract(self):
         html = Path(__file__).with_name("index.html").read_text()
         self.assertIn("focu:content-consumption:v1", html)
