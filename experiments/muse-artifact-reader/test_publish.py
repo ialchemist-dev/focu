@@ -217,6 +217,54 @@ class PublisherTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "introduced citations"):
                 compose_article_with_openai(original, api_key="test-only")
 
+    def test_on_demand_research_queue_and_stable_content_identity(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            folder = root / "deliveries" / "idea-012345-20261103"
+            folder.mkdir(parents=True)
+            intent = "int_" + "a" * 32
+            queued = "int_" + "b" * 32
+            (folder / "research.md").write_text("# A technical article\n\nA factual summary.")
+            (folder / "content.json").write_text(json.dumps({
+                "content_id": intent, "title": "A technical article",
+                "origin": "user_initiated", "summary": "Evidence-backed notes."
+            }))
+            requests = root / "requests.json"
+            requests.write_text(json.dumps({"schema_version": 1, "requests": [
+                {"intent_id": intent, "title": "A technical article",
+                 "status": "completed", "created_at": "2026-11-03"},
+                {"intent_id": queued, "title": "Could this work?",
+                 "status": "queued", "created_at": "2026-11-03"}
+            ]}))
+            output = root / "bundle"
+            build(root / "deliveries", output, Path(__file__).with_name("index.html"),
+                  15, requests=requests)
+            data = json.loads((output / "assets/episodes.json").read_text())
+            self.assertEqual(data["items"][0]["content_id"], intent)
+            self.assertEqual(data["items"][0]["source"], "Your research")
+            self.assertEqual(len(data["research_requests"]), 1)
+            self.assertEqual(data["research_requests"][0]["intent_id"], queued)
+            self.assertIn(queued, (output / "index.html").read_text())
+            self.assertNotIn('"intent_id": "' + intent + '"', json.dumps(data["research_requests"]))
+            self.assertEqual(len(data["episodes"]), 0)
+
+    def test_untrusted_research_status_is_rejected(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            folder = root / "deliveries" / "article-20261103"
+            folder.mkdir(parents=True)
+            (folder / "article.md").write_text("# Topic\n\nSome content.")
+            requests = root / "bad.json"
+            requests.write_text(json.dumps({"requests": [
+                {"intent_id": "bad", "status": "researching", "title": "untrusted"},
+                {"intent_id": "int_" + "b"*32, "status": "hacked", "title": "untrusted"}
+            ]}))
+            output = root / "bundle"
+            build(root / "deliveries", output, Path(__file__).with_name("index.html"),
+                  15, requests=requests)
+            data = json.loads((output / "assets/episodes.json").read_text())
+            self.assertEqual(data["research_requests"], [])
+
     def test_reject_empty_and_unsafe_output(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

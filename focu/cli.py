@@ -31,6 +31,14 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("init", help="Create local SQLite stores")
     sub.add_parser("doctor", help="Inspect local installation without external API calls")
+    request_cmd = sub.add_parser("request", help="Save an on-demand link or idea for agent research")
+    request_cmd.add_argument("question", nargs="?", default="")
+    request_cmd.add_argument("--url", help="User-submitted source link; stored but not fetched")
+    request_cmd.add_argument("--note", default="")
+    request_cmd.add_argument("--force-new", action="store_true")
+    request_export = sub.add_parser("request-export", help="Export private research queue states for static UI")
+    request_export.add_argument("--output", required=True)
+    sub.add_parser("requests", help="List on-demand research task statuses")
     capture = sub.add_parser("capture", help="Capture a one-time research question")
     capture.add_argument("question")
     capture.add_argument("--id", dest="intent_id")
@@ -161,6 +169,17 @@ def main(argv: list[str] | None = None) -> int:
             if not isinstance(episode, dict) or str(episode.get("id")) != args.episode_id:
                 raise ValueError("Episode ID mismatch")
             _json(DeliveryArchive(args.db).sync_podcast(args.evidence_id, episode))
+            return 0
+        if args.command in {"request", "requests", "request-export"}:
+            from focu.research_requests import capture_request, list_requests, export_requests
+            if args.command == "request":
+                result = capture_request(args.db, args.question, url=args.url,
+                                         note=args.note, force_new=args.force_new)
+            elif args.command == "requests":
+                result = list_requests(args.db)
+            else:
+                result = export_requests(args.db, args.output)
+            _json(result)
             return 0
         if args.command == "doctor":
             path = Path(args.db)
