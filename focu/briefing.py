@@ -135,7 +135,7 @@ def validate_script(script, units, style):
         end = min(next_positions) if next_positions else len(text)
         section = text[begin:end]
         missing = [value for value in key_figures(item)
-                   if not re.search(r"(?<![\d,.])" + re.escape(value) + r"(?![\d,.])", section)]
+                   if not re.search(r"(?<![\d,.])" + re.escape(value) + r"(?!\d|[,.]\d)", section)]
         item_id = str(item.get("content_id") or item.get("id"))
         if missing:
             issues.append({"id": item_id, "issue": "missing_key_figures", "values": missing})
