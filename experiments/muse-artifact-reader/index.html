@@ -267,7 +267,7 @@ player.addEventListener('seeking',()=>{lastAudioPosition=null});
 player.addEventListener('timeupdate',()=>{
  if(player.paused||player.seeking||!Number.isFinite(player.currentTime))return;
  const current=player.currentTime;
- if(lastAudioPosition!==null){const diff=current-lastAudioPosition;if(diff>0&&diff<3)listenedSeconds+=diff}
+ if(lastAudioPosition!==null){const diff=current-lastAudioPosition;if(diff>0&&diff<60)listenedSeconds+=diff}
  lastAudioPosition=current;
 });
 player.addEventListener('ended',()=>{
