@@ -13,7 +13,7 @@ import tempfile
 import time
 import urllib.parse
 
-from focu.audience import calibration, writing_guidance, mismatch_report
+from focu.audience import calibration, writing_guidance, mismatch_report, detect_domain
 from focu.intents import IntentStore
 from focu.open_notebook import OpenNotebookClient
 
@@ -217,7 +217,7 @@ def generate_for_intent(db_path, intent_id, deliveries, *, domain=None,
     article = article_path.read_text(encoding="utf-8")
     if not article.strip() or len(article.encode("utf-8")) > 250_000:
         raise ValueError("Article is empty or too large for safe generation")
-    selected_domain = domain or metadata.get("audience_domain")
+    selected_domain = domain or metadata.get("audience_domain") or detect_domain(article)
     profile = calibration(selected_domain)
     prompt = podcast_prompt(article, selected_domain)
     client = client or OpenNotebookClient()
@@ -235,6 +235,7 @@ def generate_for_intent(db_path, intent_id, deliveries, *, domain=None,
         transcript = _transcript_text(episode.get("transcript"))
         qc = check_fidelity(article, transcript, selected_domain)
         qc.update({"attempt": attempt, "episode_id": episode_id,
+                   "domain_selection": "explicit" if domain or metadata.get("audience_domain") else "article_keywords",
                    "content_id": intent_id, "audience_profile": profile,
                    "status": "passed" if qc["passed"] else "failed"})
         attempts.append(qc)
