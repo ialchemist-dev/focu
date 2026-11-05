@@ -313,6 +313,27 @@ class PublisherTests(unittest.TestCase):
             self.assertTrue(item["article_blocks"])
             self.assertEqual((folder / "research.md").read_text().splitlines()[0], "# What is new?")
 
+    def test_editorial_prompt_calibrates_expert_vs_novice_without_changing_facts(self):
+        import io
+        research = "# Evidence\n\nPublished results ([ref](https://example.org/a))."
+        article = ("# Research Analysis\n\n" + "This evidence requires evaluation of its mechanism. " * 8 +
+                   "\n\n## Sources\n- [ref](https://example.org/a)\n")
+        response = {"choices": [{"message": {"content": json.dumps({
+            "title": "Research Analysis", "summary": "The study reports a result needing verification.",
+            "article_markdown": article
+        })}}]}
+        prompts = []
+        for domain in ("machine_learning", "sociology"):
+            with patch("urllib.request.urlopen",
+                       return_value=io.BytesIO(json.dumps(response).encode())) as mocked:
+                compose_article_with_openai(research, api_key="fixture-only",
+                                            audience_domain=domain)
+                payload = json.loads(mocked.call_args.args[0].data)
+                prompts.append(payload["messages"][0]["content"])
+        self.assertIn("Assume technical fluency", prompts[0])
+        self.assertIn("Build foundational context", prompts[1])
+        self.assertNotEqual(prompts[0], prompts[1])
+
     def test_editorial_provider_rejects_fabricated_citations(self):
         import io
         original = "# Research\n\nEvidence ([s1](https://example.org/a))."
