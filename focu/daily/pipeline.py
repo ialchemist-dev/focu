@@ -71,6 +71,9 @@ def ingest(store, cfg, date, input_units=None, collector=None):
         by_name = {s["name"]: s for s in sources}
         by_id = {s["source_id"]: s for s in sources}
         for item in imported:
+            if item.get("origin") == "user_initiated" or item.get("podcast_mode") in ("single", "none"):
+                raise FewError("User-initiated research cannot enter registered-source daily compilation",
+                               "invalid_daily_origin", 4)
             source = by_id.get(item.get("source_id")) or by_name.get(item.get("source"))
             if not source:
                 raise FewError("unit source must match an enabled configured source")
@@ -114,6 +117,8 @@ def digest(store, cfg, run):
 
 
 def render_skeleton(channel, units):
+    if any(u.get("origin") == "user_initiated" or u.get("podcast_mode") in ("single", "none") for u in units):
+        raise FewError("Daily compilation refuses user-initiated items", "invalid_daily_origin", 4)
     # Explicitly retained M1 skeleton. LLM/prompt/feedback work is M3.
     zh = channel.get("language") == "zh"
     lines = ["Host: 今天的更新。" if zh else "Host: Today's updates."]
@@ -134,6 +139,8 @@ def compose(store, cfg, run, channel=None):
         if ep["status"] == "finalized":
             continue
         units = store.units(ep["episode_id"])
+        if any(u.get("origin") == "user_initiated" or u.get("podcast_mode") in ("single", "none") for u in units):
+            raise FewError("Daily compilation refuses user-initiated items", "invalid_daily_origin", 4)
         script = ep["script"] or render_skeleton(channels[ep["channel_id"]], units)
         if not all(p.startswith("Host: ") for p in script.strip().split("\n\n")):
             raise FewError("invalid Host labels", "invalid_script", 4)
