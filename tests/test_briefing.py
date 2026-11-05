@@ -28,6 +28,20 @@ def units():
 
 
 class BriefingTests(unittest.TestCase):
+    def test_five_item_sample_episode_matches_golden_script_and_qc(self):
+        root = Path(__file__).resolve().parents[1]
+        items = json.loads((root / "examples/secretary-briefing-demo-units.json").read_text())
+        golden = (root / "examples/secretary-briefing-demo-script.txt").read_text()
+        style = read_style()
+        self.assertEqual(render_script(items, style), golden)
+        qc = validate_script(golden, items, style)
+        self.assertTrue(qc["passed"], qc["issues"])
+        self.assertEqual(qc["item_count"], 5)
+        self.assertEqual(qc["covered_sections"], 5)
+        self.assertTrue(all(not row["missing_figures"] for row in qc["sections"]))
+        self.assertIn("You asked me to research this.", golden)
+        self.assertNotIn("welcome back", golden.casefold())
+
     def test_style_loads_from_single_versioned_source(self):
         style = read_style()
         self.assertEqual(style["language"], "en")
