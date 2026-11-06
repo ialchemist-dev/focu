@@ -119,7 +119,7 @@ Synthetic fixtures in the isolated environment only (never published to any Arti
 
 ## 13. iPhone acceptance (§15)
 
-**UNVERIFIED / pending owner action.** The private Artifact "Focu V04 Test" now holds the Sleeper Agents article (Version B state). Because the podcast failed QC, checklist items 4–9 (Listen button, playback, seeking, ending, correspondence) cannot pass on this snapshot — there is deliberately no audio attached. What the owner can verify on device: the article is present exactly once, readable, with no duplicate, and no Listen button (the correct presentation of a QC-blocked item). A passing audio checklist requires a future provider episode that satisfies the fidelity contract; none was produced within the authorized attempts.
+**Owner-confirmed 2026-11-05 (evening, America/Denver).** The owner checked the private Artifact "Focu V04 Test" on his iPhone and confirmed the article state: the Sleeper Agents article is present exactly once, readable, with no duplicate, and shows no Listen button — the correct presentation of a QC-blocked item. Those device checks **PASS**. Checklist items 4–9 (Listen button, playback, seeking, ending, correspondence) remain **BLOCKED**: because the podcast failed QC there is deliberately no audio attached, and a passing audio checklist requires a future provider episode that satisfies the fidelity contract; none was produced within the authorized attempts.
 
 ## 14. Remaining limitations
 
@@ -127,7 +127,7 @@ Synthetic fixtures in the isolated environment only (never published to any Arti
 - The transcript-extraction defect fixed here (§8) means any `podcast-for` result produced before commit `92bef63` was audited against an empty transcript; results on or after that head are audited against real text (covered by the new regression tests).
 - The audience mismatch detector is report-only and pattern-based; its list does not cover all decorative analogies (see §8).
 - The research evidence is partial by design (see §5): exact persistence rates are the paper's own measurements; no independent replication of the training pipeline was found.
-- iPhone verification is pending (§13).
+- iPhone verification of the article state is owner-confirmed (see §13); the audio checklist remains blocked by the QC outcome.
 
 ## 15. Final state
 
