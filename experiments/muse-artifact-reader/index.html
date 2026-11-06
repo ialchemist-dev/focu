@@ -67,10 +67,10 @@ main{max-width:760px;margin:0 auto;padding:25px 22px 70px}
 <section id="reader" hidden>
 <button id="back" class="readerback">← Back to Inbox</button>
 <img id="readercover" class="readercover" hidden alt="">
-<div class="byline" id="readerbyline"></div>
+<div class="byline" id="readerbyline"></div><button id="coveredby" class="smallbutton" type="button" hidden></button>
 <h1 id="readertitle"></h1>
 <p id="readersummary"></p>
-<div class="readeractions" id="toolbar"><button id="listen" class="listen" hidden>▶ Listen</button><span id="readtime" class="readtime"></span></div>
+<div class="readeractions" id="toolbar"><button id="listen" class="listen" hidden>▶ Listen</button><button id="readaloud" class="listen" hidden>▶ Read aloud</button><span id="readtime" class="readtime"></span></div>
 <div id="articlebody"></div>
 <div class="readend" id="readend">End of article</div>
 <div id="readerstate" aria-live="polite"></div>
@@ -104,13 +104,16 @@ function normalize(data){
  const seen=new Set();
  return a.filter(x=>{const id=x&&(x.content_id||x.id);if(typeof id!=='string'||!id.trim()||seen.has(id))return false;seen.add(id);return true}).slice(0,500).map(x=>{
  const id=x.content_id||x.id;
- return {id,title:x.title||'Untitled',summary:x.summary||'',date:x.published_at||x.date||'',source:typeof x.source==='string'?x.source:(x.source?.kind||'Focu'),cover_url:x.cover?.path||x.cover_url||'',cover_origin:x.cover?.origin||'',audio_url:x.formats?.audio?.path||x.audio_url||'',audio_duration:Number(x.formats?.audio?.duration_seconds)||null,article_url:x.formats?.article?.path||'',blocks:Array.isArray(x.article_blocks)?x.article_blocks:[],reading_minutes:Number(x.reading_minutes)||0};
+ return {id,title:x.title||'Untitled',summary:x.summary||'',date:x.published_at||x.date||'',source:typeof x.source==='string'?x.source:(x.source?.kind||'Focu'),cover_url:x.cover?.path||x.cover_url||'',cover_origin:x.cover?.origin||'',audio_url:x.formats?.audio?.path||x.audio_url||'',audio_duration:Number(x.formats?.audio?.duration_seconds)||null,podcast_mode:x.podcast_mode||null,origin:x.origin||null,covered_content_ids:Array.isArray(x.covered_content_ids)?x.covered_content_ids:[],article_url:x.formats?.article?.path||'',blocks:Array.isArray(x.article_blocks)?x.article_blocks:[],reading_minutes:Number(x.reading_minutes)||0};
  });
 }
 function setView(which){if(speechRunning)stopNarration();view=which;currentId=null;reader.hidden=true;feed.hidden=false;document.getElementById('inbox').classList.toggle('active',which==='inbox');document.getElementById('archive').classList.toggle('active',which==='archive');document.getElementById('researchtab').classList.toggle('active',which==='research');document.getElementById('feedheading').textContent=which==='archive'?'Your Archive':which==='research'?'Research requests':'Latest stories';render(allItems,lastNote);window.scrollTo(0,0)}
 document.getElementById('inbox').onclick=()=>setView('inbox');
 document.getElementById('archive').onclick=()=>setView('archive');
 document.getElementById('researchtab').onclick=()=>setView('research');
+function compilationFor(id){
+ return allItems.find(item=>Array.isArray(item.covered_content_ids)&&item.covered_content_ids.includes(id))||null;
+}
 function render(items,note){
  allItems=items;lastNote=note;grid.replaceChildren();
  if(view==='research'){
@@ -137,6 +140,8 @@ function render(items,note){
  body.append(el('div',[item.source,item.date].filter(Boolean).join('  ·  '),'cardmeta'));
  body.append(el('h2',item.title,'feedtitle'));
  if(item.summary)body.append(el('p',item.summary,'feedsummary'));
+ const compiled=compilationFor(item.id);
+ if(compiled)body.append(el('div','In '+(compiled.date||'daily')+' briefing','cardmeta'));
 
  card.append(body);
  const cover=safeUrl(item.cover_url);
@@ -187,11 +192,18 @@ function openItem(id){
  document.getElementById('readertitle').textContent=item.title;
  document.getElementById('readersummary').textContent=item.summary;
  document.getElementById('readerbyline').textContent=[item.source,item.date].filter(Boolean).join('  ·  ');
+ const linked=compilationFor(item.id),coveredButton=document.getElementById('coveredby');
+ coveredButton.hidden=!linked;
+ if(linked){coveredButton.textContent='In the '+(linked.date||'daily')+' briefing';
+ coveredButton.onclick=()=>openItem(linked.id)}
  document.getElementById('readtime').textContent=item.reading_minutes?item.reading_minutes+' min read':'';
  const cover=item.cover_origin==='offline_art'?null:safeUrl(item.cover_url),img=document.getElementById('readercover');img.hidden=!cover;
  if(cover){img.src=cover;img.onerror=()=>{img.hidden=true}}else img.removeAttribute('src');
- const listen=document.getElementById('listen');listen.hidden=!(safeUrl(item.audio_url)||item.blocks.length);listen.textContent=(safeUrl(item.audio_url)&&failedAudioId!==item.id)?'▶ Listen':'▶ Read aloud';
- const toolbar=document.getElementById('toolbar');toolbar.hidden=listen.hidden&&!item.blocks.length;
+ const listen=document.getElementById('listen'),readaloud=document.getElementById('readaloud');
+ listen.hidden=!safeUrl(item.audio_url)||failedAudioId===item.id;
+ readaloud.hidden=!!safeUrl(item.audio_url)&&failedAudioId!==item.id||!item.blocks.length;
+ listen.textContent='▶ Listen';readaloud.textContent='▶ Read aloud';
+ const toolbar=document.getElementById('toolbar');toolbar.hidden=listen.hidden&&readaloud.hidden&&!item.blocks.length;
  renderArticle(item.blocks,item.article_url);updateReaderState();window.scrollTo(0,0);
 }
 document.getElementById('back').onclick=()=>{stopNarration();setView(view)};
@@ -241,8 +253,8 @@ function readAloud(item){
   document.getElementById('readerstate').textContent='Device voice is unavailable here. Ask Muse to generate and cache a podcast.';return;
  }
  if(speechRunning&&speechId===item.id){
-   if(speechPaused){speechSynthesis.resume();speechPaused=false;document.getElementById('listen').textContent='Ⅱ Pause reading'}
-   else{speechSynthesis.pause();speechPaused=true;document.getElementById('listen').textContent='▶ Resume reading'}
+   if(speechPaused){speechSynthesis.resume();speechPaused=false;document.getElementById('readaloud').textContent='Ⅱ Pause reading'}
+   else{speechSynthesis.pause();speechPaused=true;document.getElementById('readaloud').textContent='▶ Resume reading'}
    return;
  }
  const text=readableText(item);
@@ -253,6 +265,7 @@ function readAloud(item){
  document.getElementById('listen').textContent='Ⅱ Pause reading';
  nextSpeechChunk();
 }
+document.getElementById('readaloud').onclick=()=>{const item=allItems.find(x=>x.id===currentId);if(item)readAloud(item)};
 document.getElementById('listen').onclick=()=>{
  const item=allItems.find(x=>x.id===currentId);if(!item)return;
  const url=safeUrl(item.audio_url);
@@ -293,7 +306,8 @@ player.addEventListener('error',()=>{
  failedAudioId=playingId;
  document.getElementById('nowplaying').textContent='Podcast audio unavailable. You can still read the article.';
  if(currentId===playingId&&allItems.some(x=>x.id===currentId&&x.blocks.length)){
-    document.getElementById('listen').textContent='▶ Read aloud';
+    document.getElementById('listen').hidden=true;
+    document.getElementById('readaloud').hidden=false;
     document.getElementById('readerstate').textContent='Cached audio could not load. Try device read-aloud instead.';
  }
 });
