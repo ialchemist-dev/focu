@@ -9,7 +9,8 @@ from focu.audience import calibration, load_profile, mismatch_report, writing_gu
 from focu.intents import IntentStore
 from focu.research_requests import capture_request, list_requests
 from focu.single_podcast import (record_podcast_request, generate_for_intent,
-                                check_fidelity, podcast_prompt, article_sections)
+                                check_fidelity, podcast_prompt, article_sections,
+                                _transcript_text)
 
 ARTICLE = """# Editing Model Weights
 
@@ -57,6 +58,22 @@ class FakeClient:
     def download(self, episode_id, output):
         Path(output).write_bytes(b"fresh-provider-audio-fixture")
         return {"status": "downloaded", "audio_audit": {"verified": True}}
+
+
+class RealShapeClient(FakeClient):
+    """Same flow as FakeClient, but the episode payload uses Open Notebook's
+    real transcript shape: {"transcript": [{"speaker": ..., "dialogue": ...}]}.
+    Regression fixture for the 2026-11-05 acceptance finding, where the
+    extractor silently produced "" for this shape and QC audited nothing."""
+
+    def request(self, method, path):
+        index = int(path.split("-")[-1]) - 1
+        text = self.results[index] if index < len(self.results) else self.results[-1]
+        segments = [{"speaker": "Professor Sarah Kim", "dialogue": line}
+                    for line in text.split("\n") if line.strip()]
+        return {"id": "episode-job-" + str(index + 1), "job_status": "completed",
+                "audio_url": "http://example.com/audio.mp3",
+                "transcript": {"transcript": segments}}
 
 
 class PodcastPolicyTests(unittest.TestCase):
@@ -142,6 +159,34 @@ class PodcastPolicyTests(unittest.TestCase):
             metadata = json.loads((folder / "content.json").read_text())
             self.assertEqual(metadata["podcast_mode"], "single")
             self.assertEqual(metadata["audience_profile_version"], load_profile()["version"])
+
+    def test_transcript_text_accepts_real_open_notebook_shape(self):
+        real = {"transcript": [{"speaker": "Professor Sarah Kim",
+                                "dialogue": "Mechanism."},
+                               {"speaker": "Professor Sarah Kim",
+                                "dialogue": "A 131,072-weight edit."}]}
+        self.assertEqual(_transcript_text(real),
+                         "Mechanism.\nA 131,072-weight edit.")
+        self.assertEqual(_transcript_text({"transcript": "plain text"}),
+                         "plain text")
+        self.assertEqual(_transcript_text({"segments": [{"text": "legacy"}]}),
+                         "legacy")
+        self.assertEqual(_transcript_text("already text"), "already text")
+        self.assertEqual(_transcript_text(None), "")
+        self.assertEqual(_transcript_text({"unrelated": 1}), "")
+
+    def test_single_item_success_with_real_provider_transcript_shape(self):
+        with tempfile.TemporaryDirectory() as root:
+            db, request, folder = self.make_request(root, podcast=True)
+            client = RealShapeClient()
+            result = generate_for_intent(db, request["intent_id"], folder.parent,
+                                         client=client)
+            self.assertEqual(result["status"], "delivered")
+            self.assertEqual((folder / "podcast.mp3").read_bytes(),
+                             b"fresh-provider-audio-fixture")
+            qc = json.loads((folder / "podcast-qc.json").read_text())
+            self.assertTrue(qc["passed"])
+            self.assertEqual(qc["attempts"][0]["covered_sections"], 4)
 
     def test_two_failed_transcripts_leave_item_article_only(self):
         with tempfile.TemporaryDirectory() as root:
