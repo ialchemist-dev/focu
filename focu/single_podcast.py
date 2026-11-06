@@ -101,14 +101,23 @@ def article_sections(article):
 
 
 def _transcript_text(value):
+    """Flatten an episode transcript payload to plain text.
+
+    Open Notebook's real shape is {"transcript": [{"speaker": ..., "dialogue":
+    ...}]}: a mapping whose "transcript" value is a list of dialogue segments.
+    Earlier fixtures used {"segments": [{"text": ...}]}; accept both, plus
+    plain strings, so QC always audits the words the provider actually made.
+    """
     if isinstance(value, str):
         return value
     if isinstance(value, dict):
         if isinstance(value.get("segments"), list):
             return "\n".join(_transcript_text(x) for x in value["segments"])
-        for key in ("text", "transcript", "script"):
-            if isinstance(value.get(key), str):
-                return value[key]
+        for key in ("text", "transcript", "script", "dialogue"):
+            if key in value:
+                text = _transcript_text(value[key])
+                if text:
+                    return text
         return ""
     if isinstance(value, list):
         return "\n".join(_transcript_text(x) for x in value)
