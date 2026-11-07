@@ -66,7 +66,7 @@ Delivery has `origin=user_initiated`, `podcast_mode=none`, canonical content_id,
 
 ## 6. Unified briefing policy and knowledge
 
-Build a **single private test daily compilation** that summarizes both registered-source article(s) and the finished on-demand article, and references original content IDs through `covered_content_ids`. The on-demand article's mode stays `none` and gets no MP3. Registered source collector must still reject injected on-demand records; editorial linkage is a separate operation. Test valid coverage and negative cases: missing IDs, duplicate compilation, item with `none` plus stray MP3.
+Build a **single private test daily compilation with its own article.md** summarizing both registered-source article(s) and the finished on-demand article, and reference original content IDs through `covered_content_ids`. A QC-blocked audio attempt must leave this daily article-only briefing publishable with no MP3 or phantom Listen. The on-demand article's mode stays `none` and gets no MP3. Registered source collector must still reject injected on-demand records; editorial linkage is a separate operation. Test valid coverage and negative cases: missing IDs, duplicate compilation, item with `none` plus stray MP3.
 
 Read canonical llm-wiki SCHEMA.md and use it to propose factual links and conflicts in a SANDBOX COPY only. Do not mutate canonical Wiki. Distinguish a manual host-agent Wiki update demonstration from an actually implemented automated Wiki bridge. If auto-bridge is absent, report NOT IMPLEMENTED.
 
