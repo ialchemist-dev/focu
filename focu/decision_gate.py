@@ -239,7 +239,10 @@ class GateLedger:
               AND provider=? AND context_sha=? AND policy_version=?
             ORDER BY id DESC LIMIT 1""", (date, item["content_id"], item["revision_id"],
                                            provider, context_sha, POLICY_VERSION)).fetchone()
-        return json.loads(row[0]) if row else None
+        if not row:
+            return None
+        result = json.loads(row[0])
+        return result if result.get("status") == "ok" else None
 
     def save(self, date, item, provider, context_sha, result):
         with self.db:
@@ -269,13 +272,13 @@ def pending_candidates(store, limit=20):
         JOIN content_revisions r ON r.revision_id=c.latest_revision_id
         JOIN observations o ON o.content_id=c.content_id
         JOIN sources s USING(source_id) JOIN subscriptions sub USING(source_id)
-        WHERE k.state='pending' AND sub.enabled=1 AND c.provisional=0
+        WHERE k.state='pending' AND k.expires_at>=? AND sub.enabled=1 AND c.provisional=0
           AND length(trim(r.body))>0
           AND NOT EXISTS(SELECT 1 FROM coverage cv WHERE cv.content_id=c.content_id)
           AND NOT EXISTS(SELECT 1 FROM episode_items ei JOIN episodes ep USING(episode_id)
              WHERE ei.content_id=c.content_id AND ep.status!='finalized')
         GROUP BY c.content_id ORDER BY c.first_seen_at DESC, c.content_id LIMIT ?""",
-        (limit,)).fetchall()
+        (datetime.now(timezone.utc).isoformat(), limit)).fetchall()
     return [dict(row) for row in rows]
 
 
@@ -338,8 +341,12 @@ def evaluate_pending(store, date, *, mode="shadow", provider="off", compare=(),
                             result = evaluate_fn(arm, text)
                             result["decision"] = recommend(result["signals"])
                             result["status"] = "ok"
-                        except (GateError, OSError, ValueError, RuntimeError) as exc:
-                            result = {"status": "error", "error": str(exc), "provider": arm}
+                        except Exception as exc:
+                            # Provider data and SDK/library decoding are untrusted.
+                            # Fail this arm open, not the whole daily run.
+                            message = (str(exc) if isinstance(exc, GateError)
+                                       else "invalid provider response (" + type(exc).__name__ + ")")
+                            result = {"status": "error", "error": message, "provider": arm}
                         ledger.save(date, item, arm, input_sha, result)
                     results[arm] = result
                 records.append({"content_id": item["content_id"], "revision_id": item["revision_id"],
