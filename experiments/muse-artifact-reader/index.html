@@ -24,6 +24,12 @@ main{max-width:760px;margin:0 auto;padding:25px 22px 70px}
 .feed{display:flex;flex-direction:column;gap:0}
 .feedcard{border:0;border-bottom:1px solid #ebe8e3;background:transparent;padding:18px 0;display:flex;gap:14px;width:100%;text-align:left;color:inherit;align-items:flex-start}
 .feedcard:first-child{padding-top:2px}
+.feed-open{display:flex;align-items:flex-start;gap:14px;flex:1;min-width:0;border:0;background:transparent;color:inherit;text-align:left;padding:0;width:100%;font:inherit}
+.card-action{border:1px solid #e4e0db;border-radius:12px;background:transparent;color:#716c65;padding:7px 12px;font-size:12px;font-weight:600;min-height:36px}
+.card-action:hover{background:#f0ece7;color:#332d28}
+.card-controls{display:flex;justify-content:flex-end;flex-shrink:0}
+.reader-archive{margin-left:auto}
+@media(max-width:480px){.feedcard{flex-wrap:wrap}.card-controls{width:100%;justify-content:flex-end}}
 .feedcard:hover .feedtitle{color:#b44e43}
 .cardbody{flex:1;min-width:0}
 .cardmeta,.byline{font-size:12px;color:#968e85;letter-spacing:.02em}
@@ -48,7 +54,7 @@ main{max-width:760px;margin:0 auto;padding:25px 22px 70px}
 #articlebody pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f0ede8;padding:14px;border-radius:10px;font-size:13px;line-height:1.65}
 .readend{margin:36px 0 15px;border-top:1px solid #e9e5df;padding-top:21px;text-align:center;color:#958c82;font-size:13px}
 #readerstate{font-size:13px;color:#82786e;text-align:center;min-height:20px;margin:10px 0}.notice{font-size:12px;color:#8a7169;line-height:1.5}.listen:disabled{opacity:.55}
-#restore{display:block;margin:10px auto;color:#826a60;text-decoration:underline;background:none;border:0;font-size:12px}
+#readerarchive[hidden],#restore[hidden]{display:none!important}
 #playerbar{position:fixed;z-index:8;bottom:0;left:0;right:0;background:#fff;border-top:1px solid #e5dfd8;box-shadow:0 -6px 24px #00000010;padding:9px 16px 12px}
 .playinner{max-width:710px;margin:auto}
 .playtop{display:flex;align-items:center;justify-content:space-between;gap:12px}
@@ -70,11 +76,11 @@ main{max-width:760px;margin:0 auto;padding:25px 22px 70px}
 <div class="byline" id="readerbyline"></div><button id="coveredby" class="smallbutton" type="button" hidden></button>
 <h1 id="readertitle"></h1>
 <p id="readersummary"></p>
-<div class="readeractions" id="toolbar"><button id="listen" class="listen" hidden>▶ Listen</button><button id="readaloud" class="listen" hidden>▶ Read aloud</button><span id="readtime" class="readtime"></span></div>
+<div class="readeractions" id="toolbar"><button id="listen" class="listen" hidden>▶ Listen</button><button id="readaloud" class="listen" hidden>▶ Read aloud</button><span id="readtime" class="readtime"></span><button id="readerarchive" class="card-action reader-archive" type="button">Archive</button><button id="restore" class="card-action reader-archive" type="button" hidden>Restore</button></div>
 <div id="articlebody"></div>
 <div class="readend" id="readend">End of article</div>
 <div id="readerstate" aria-live="polite"></div>
-<button id="restore" hidden>Restore to Inbox</button>
+
 </section>
 </main>
 <div id="playerbar" hidden><div class="playinner"><div class="playtop"><span id="nowplaying"></span><button id="closeaudio" aria-label="Close player">×</button></div><audio id="player" controls preload="metadata"></audio></div></div>
@@ -96,6 +102,15 @@ function saveStates(){try{const value=JSON.stringify(states);localStorage.setIte
 function isDone(id){return states[id]?.status==='consumed'}
 function markDone(id,via){if(!id||isDone(id))return;states[id]={status:'consumed',via,updated_at:new Date().toISOString()};saveStates();render(allItems,lastNote);updateReaderState()}
 function markUnread(id){delete states[id];saveStates();render(allItems,lastNote);updateReaderState()}
+function manualArchive(id){
+ if(!id)return;
+ markDone(id,'manual');
+ if(currentId===id){
+   if(speechRunning)stopNarration();
+   if(playingId===id){player.pause();playerbar.hidden=true}
+   setView('inbox');
+ }
+}
 function el(tag,text,cls){const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n}
 function safeUrl(value){if(typeof value!=='string'||!value.trim())return null;const v=value.trim();if(v.startsWith('//')){try{const u=new URL('https:'+v);return ['https:','http:','blob:'].includes(u.protocol)?v:null}catch{return null}}if(/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(v)){try{const u=new URL(v);return ['https:','http:','blob:'].includes(u.protocol)?v:null}catch{return null}}if(v.startsWith('/')||v.startsWith('\\\\')||v.includes('\\\\'))return null;return v}
 function normalize(data){
@@ -135,7 +150,8 @@ function render(items,note){
  status.textContent=visible.length+' '+(view==='archive'?'saved stories':'new stories')+(note?' · '+note:'')+(!storageOK?' · Reading state cannot be saved':'');
  if(!visible.length){grid.append(el('p',view==='archive'?'Nothing here yet. Finished stories will appear here.':'You are all caught up.','empty'));return}
  for(const item of visible){
- const card=el('button',undefined,'feedcard');card.type='button';card.onclick=()=>openItem(item.id);
+ const card=el('div',undefined,'feedcard');
+ const open=el('button',undefined,'feed-open');open.type='button';open.setAttribute('aria-label','Read '+item.title);open.onclick=()=>openItem(item.id);
  const body=el('div',undefined,'cardbody');
  body.append(el('div',[item.source,item.date].filter(Boolean).join('  ·  '),'cardmeta'));
  body.append(el('h2',item.title,'feedtitle'));
@@ -143,10 +159,15 @@ function render(items,note){
  const compiled=compilationFor(item.id);
  if(compiled)body.append(el('div','In '+(compiled.date||'daily')+' briefing','cardmeta'));
 
- card.append(body);
+ open.append(body);
  const cover=safeUrl(item.cover_url);
- if(cover&&item.cover_origin!=='offline_art'){const img=el('img',undefined,'cover');img.src=cover;img.alt='';img.loading='lazy';img.onerror=()=>img.remove();card.append(img)}
- grid.append(card);
+ if(cover&&item.cover_origin!=='offline_art'){const img=el('img',undefined,'cover');img.src=cover;img.alt='';img.loading='lazy';img.onerror=()=>img.remove();open.append(img)}
+ card.append(open);
+ const controls=el('div',undefined,'card-controls');
+ const action=el('button',view==='archive'?'Restore':'Archive','card-action');action.type='button';
+ action.setAttribute('aria-label',(view==='archive'?'Restore ':'Archive ')+item.title);
+ action.onclick=()=>{if(view==='archive')markUnread(item.id);else manualArchive(item.id)};
+ controls.append(action);card.append(controls);grid.append(card);
  }
 }
 function inline(parent,raw){
@@ -182,6 +203,7 @@ function updateReaderState(){
  const done=isDone(currentId);
  document.getElementById('readerstate').textContent=done?'Finished · Saved in Archive':'';
  document.getElementById('restore').hidden=!done;
+ document.getElementById('readerarchive').hidden=done;
 }
 function openItem(id){
  const item=allItems.find(x=>x.id===id);if(!item)return;
@@ -201,13 +223,14 @@ function openItem(id){
  if(cover){img.src=cover;img.onerror=()=>{img.hidden=true}}else img.removeAttribute('src');
  const listen=document.getElementById('listen'),readaloud=document.getElementById('readaloud');
  listen.hidden=!safeUrl(item.audio_url)||failedAudioId===item.id;
- readaloud.hidden=!!safeUrl(item.audio_url)&&failedAudioId!==item.id||!item.blocks.length;
+ readaloud.hidden=(!!safeUrl(item.audio_url)&&failedAudioId!==item.id)||!item.blocks.length;
  listen.textContent='▶ Listen';readaloud.textContent='▶ Read aloud';
- const toolbar=document.getElementById('toolbar');toolbar.hidden=listen.hidden&&readaloud.hidden&&!item.blocks.length;
+ const toolbar=document.getElementById('toolbar');toolbar.hidden=false;
  renderArticle(item.blocks,item.article_url);updateReaderState();window.scrollTo(0,0);
 }
 document.getElementById('back').onclick=()=>{stopNarration();setView(view)};
 document.getElementById('restore').onclick=()=>{if(currentId)markUnread(currentId)};
+document.getElementById('readerarchive').onclick=()=>manualArchive(currentId);
 function stopNarration(){
  speechRunning=false;speechPaused=false;speechId=null;speechSegments=[];speechIndex=0;speechEpoch++;
  if(canNarrate())speechSynthesis.cancel();
@@ -262,7 +285,7 @@ function readAloud(item){
  player.pause();playerbar.hidden=true;stopNarration();
  speechSegments=speechChunks(text);speechIndex=0;speechId=item.id;speechRunning=true;speechPaused=false;
  document.getElementById('readerstate').textContent='Reading aloud using your device voice · No AI tokens';
- document.getElementById('listen').textContent='Ⅱ Pause reading';
+ document.getElementById('readaloud').textContent='Ⅱ Pause reading';
  nextSpeechChunk();
 }
 document.getElementById('readaloud').onclick=()=>{const item=allItems.find(x=>x.id===currentId);if(item)readAloud(item)};

@@ -165,6 +165,15 @@ class PublisherTests(unittest.TestCase):
             self.assertEqual(item["cover"]["origin"], "source")
             self.assertEqual((output / item["cover"]["path"]).read_bytes(), b"source-owned-cover-fixture")
 
+    def test_manual_archive_reader_contract(self):
+        html = Path(__file__).with_name("index.html").read_text()
+        self.assertIn('id="readerarchive"', html)
+        self.assertIn("manualArchive(id)", html)
+        self.assertIn("markDone(id,'manual')", html)
+        self.assertIn("'focu:content-consumption:v1'", html)
+        self.assertIn("view==='archive'?'Restore':'Archive'", html)
+        self.assertIn("markUnread(item.id)", html)
+
     def test_origin_policy_article_first_with_podcast_only_after_opt_in(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

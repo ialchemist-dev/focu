@@ -10,7 +10,7 @@ const source = html.split('<script>\n')[1].split('</script>')[0];
 class FakeElement {
   constructor(name = 'div') {
     this.name = name; this.textContent = ''; this.children = [];
-    this.hidden = false; this.events = {};
+    this.hidden = false; this.events = {}; this.attributes = {};
     this.classList = { toggle() {} };
     this.src = ''; this.currentTime = 0; this.duration = 100;
     this.paused = true; this.seeking = false;
@@ -22,6 +22,7 @@ class FakeElement {
   getBoundingClientRect() { return { top:10,height:200,bottom:210 }; }
   remove() {}
   removeAttribute() {}
+  setAttribute(name,value) { this.attributes[name] = value; }
   pause() { this.paused = true; }
   play() { this.paused = false; return Promise.resolve(); }
 }
@@ -110,6 +111,49 @@ function article(id){
   player.events.ended();
   assert.equal(e.run("isDone('mp3-story')"),true,'completed MP3 should archive');
 }
+
+// Manually archived from a list card: a separate action, not a tap to read.
+{
+  const e=makeEnvironment();
+  e.run('render(['+article('card-story')+'],"")');
+  const card=e.get('grid').children[0];
+  assert.equal(card.name,'div');
+  assert.equal(card.children[0].name,'button','separate reader action');
+  const button=card.children[1].children[0];
+  assert.equal(button.textContent,'Archive');
+  button.onclick();
+  assert.equal(e.run("isDone('card-story')"),true);
+  assert.equal(JSON.parse(e.storage['focu:content-consumption:v1'])['card-story'].via,'manual');
+  assert.equal(e.get('grid').children.length,1,'Inbox now empty');
+  e.run("render(allItems,'')");
+  assert.equal(e.get('grid').children.length,1,'re-render does not resurrect the card');
+  assert.equal(makeEnvironment(e.storage).run("isDone('card-story')"),true,'reload retains archived state');
+  e.run("setView('archive')");
+  const restore=e.get('grid').children[0].children[1].children[0];
+  assert.equal(restore.textContent,'Restore');
+  restore.onclick();
+  assert.equal(e.run("isDone('card-story')"),false);
+  assert.equal(e.get('grid').children.length,1,'Archive empties after restore');
+  e.run("setView('inbox')");
+  assert.equal(e.get('grid').children[0].children[1].children[0].textContent,'Archive');
+}
+{
+  const e=makeEnvironment();
+  e.run('render(['+article('reader-story')+'],"")');
+  e.run("openItem('reader-story')");
+  assert.equal(e.get('readerarchive').hidden,false);
+  e.get('readerarchive').onclick();
+  assert.equal(e.run("isDone('reader-story')"),true);
+  assert.equal(JSON.parse(e.storage['focu:content-consumption:v1'])['reader-story'].via,'manual');
+  assert.equal(e.get('reader').hidden,true,'manual archive closes reader');
+  e.run("setView('archive')");
+  e.run("openItem('reader-story')");
+  assert.equal(e.get('readerarchive').hidden,true,'archived reader does not show Archive');
+  e.get('restore').onclick();
+  assert.equal(e.run("isDone('reader-story')"),false,'reader Restore works');
+  assert.equal(e.get('readerarchive').hidden,false);
+}
+// An automatic completion must remain independent of the manual action.
 {
   // The stored policy never invents an MP3 or displays a phantom Listen control.
   const e=makeEnvironment();
