@@ -12,6 +12,21 @@ The pipeline is cron-shaped: one run per day, unattended.
 re-fetches only items newer than the watermark (usually zero), so a
 retry never duplicates an episode.
 
+## Existing Muse production schedule (separate from this example)
+
+The owner's actual job runs at **06:14 America/Denver** on the Muse VM.
+The 07:14 crontab above is an illustrative legacy example, not verified
+production configuration. This PR does not change its schedule.
+
+For new source-driven daily episodes, the checked-out run-daily.sh pipeline
+reads the authoritative references/briefing-style.md and writes mandatory
+per-item coverage QC before TTS. If the actual Muse job instead generates
+directly through Open Notebook, use the versioned briefing-units generation
+and QC-gated delivery commands in docs/MUSE_SECRETARY_BRIEFING_HANDOFF.md.
+
+Inspect the actual running job command and logs before claiming that the
+06:14 production job is wired to this new style.
+
 ## What the scheduler must guarantee
 
 - One run per calendar day. If a run fails mid-pipeline, the next run
