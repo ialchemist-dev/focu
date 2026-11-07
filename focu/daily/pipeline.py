@@ -73,6 +73,12 @@ def ingest(store, cfg, date, input_units=None, collector=None):
         by_name = {s["name"]: s for s in sources}
         by_id = {s["source_id"]: s for s in sources}
         for item in imported:
+            # The registered-source collector must not be spoofed into
+            # importing user research. The independent daily editorial layer
+            # may summarize completed on-demand articles by content ID.
+            if item.get("origin") == "user_initiated" or item.get("podcast_mode") in ("single", "none"):
+                raise FewError("User-initiated research cannot enter registered-source daily compilation",
+                               "invalid_daily_origin", 4)
             source = by_id.get(item.get("source_id")) or by_name.get(item.get("source"))
             if not source:
                 raise FewError("unit source must match an enabled configured source")
