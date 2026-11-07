@@ -1,7 +1,7 @@
 # Focu — Origin-aware podcast policy and audience calibration
 
 Date: 2026-11-05. Draft PR #23: feat/podcast-origin-audience-policy.
-Built independently from main. Do not merge or rebase onto Draft PR #22.
+Originally built independently from main; integrated with PR #22 after owner approval on 2026-11-07.
 
 ## Owner-approved behavior
 
@@ -10,8 +10,11 @@ Built independently from main. Do not merge or rebase onto Draft PR #22.
   podcast_mode=daily_compilation and NO personal MP3.
 - User-initiated research: article by default, podcast_mode=none. The owner
   can explicitly opt into a standalone audio recording per item.
-- User content cannot be included in a registered-source daily compilation.
-  Violation is an error, not a silent skip.
+- Updated owner decision (2026-11-07): the unified Daily Briefing may
+  summarize finished on-demand research alongside registered-source news.
+  This does not grant per-item MP3 consent; standalone audio remains opt-in.
+  The registered-source collector still rejects user-initiated records,
+  and the editorial compilation references the original canonical IDs.
 - Podcast is another format on the same content_id, never a duplicate card.
 - One shared Inbox/Archive consumption state remains unchanged.
 
@@ -106,10 +109,11 @@ The day's compiled episode is a separate delivery with:
 - podcast_mode: daily_compilation
 - date/published_at
 - a single podcast.mp3
-- covered_content_ids listing all corresponding source content IDs
+- covered_content_ids listing all corresponding registered-source and completed
+  on-demand article content IDs; each covered article must be readable
 
 The publisher verifies unique content IDs, at most one compilation per day,
-complete source article coverage, no on-demand linkage and no stray MP3 for
+complete coverage references (registered source or completed on-demand article), and no stray MP3 for
 any item with podcast_mode=none. The reader presents a small link from the
 source article to its day's briefing. No new reader view is introduced.
 
