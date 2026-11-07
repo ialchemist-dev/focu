@@ -212,6 +212,77 @@ class IntegrationTests(unittest.TestCase):
         self.assertFalse(out["candidates"])
         self.assertEqual(comparison_report(self.store.data_dir, self.day)["provider_stats"], {})
 
+    def test_daily_pipeline_shadow_preserves_baseline_order(self):
+        from focu.daily.pipeline import run_pipeline
+        from focu import decision_gate
+        imported = self.root / "daily-input.json"
+        imported.write_text(json.dumps([
+            {"source": "Example", "native_item_id": "1", "url": "https://example.org/one",
+             "title": "PAPER-A", "body": "Summary of common old findings."},
+            {"source": "Example", "native_item_id": "2", "url": "https://example.org/two",
+             "title": "PAPER-B", "body": "Novel evidence and stronger independent experiment."},
+        ]))
+        true_evaluate = decision_gate.evaluate_pending
+        def mocked(store, date, **kwargs):
+            return true_evaluate(store, date, **kwargs, evaluate_fn=self.fake)
+        with patch.dict("os.environ", {"OPENAI_API_KEY": "test"}), patch(
+                "focu.decision_gate.evaluate_pending", side_effect=mocked):
+            result = run_pipeline(self.store, self.cfg, self.day, "text_only", imported,
+                gate_options={"mode": "shadow", "provider": "openai-decisions",
+                              "compare": (), "limit": 5})
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(result["gate"]["evaluated"], 2)
+        ep = self.store.episodes(result["run_id"])[0]
+        selected = self.store.units(ep["episode_id"])[0]
+        self.assertEqual(selected["title"], "PAPER-B")  # longer body wins baseline
+        self.assertEqual(selected["gate_priority"], "normal")
+        self.assertEqual(result["gate"]["mode"], "shadow")
+
+    def test_daily_pipeline_active_prioritizes_candidate(self):
+        from focu.daily.pipeline import run_pipeline
+        from focu import decision_gate
+        imported = self.root / "daily-input.json"
+        imported.write_text(json.dumps([
+            {"source": "Example", "native_item_id": "1", "url": "https://example.org/one",
+             "title": "PAPER-A", "body": "Summary of common old findings."},
+            {"source": "Example", "native_item_id": "2", "url": "https://example.org/two",
+             "title": "PAPER-B", "body": "Novel evidence and stronger independent experiment."},
+        ]))
+        def favor_a(provider, text):
+            values = ratings(0.2)
+            if "PAPER-A" in text:
+                values["new_evidence"] = 0.95
+                values["goal_relevance"] = 0.9
+            return {"provider": provider, "model": "fake", "signals": values,
+                    "elapsed_ms": 1, "usage": {}, "signal_kind": "model_probability"}
+        true_evaluate = decision_gate.evaluate_pending
+        def mocked(store, date, **kwargs):
+            return true_evaluate(store, date, **kwargs, evaluate_fn=favor_a)
+        with patch.dict("os.environ", {"TYPESAFE_API_KEY": "test"}), patch(
+                "focu.decision_gate.evaluate_pending", side_effect=mocked):
+            result = run_pipeline(self.store, self.cfg, self.day, "text_only", imported,
+                gate_options={"mode": "active", "provider": "jev", "compare": (), "limit": 5})
+        self.assertEqual(result["status"], "completed")
+        ep = self.store.episodes(result["run_id"])[0]
+        selected = self.store.units(ep["episode_id"])[0]
+        self.assertEqual(selected["title"], "PAPER-A")
+        self.assertEqual(selected["gate_priority"], "promote")
+        self.assertEqual(self.store.db.execute("SELECT count(*) FROM contents").fetchone()[0], 2)
+
+    def test_transient_errors_are_not_cached(self):
+        calls = []
+        def broken(provider, text):
+            calls.append(1)
+            raise GateError("temporary rate limit")
+        with patch.dict("os.environ", {"TYPESAFE_API_KEY": "test"}):
+            a = evaluate_pending(self.store, self.day, mode="shadow",
+                                 provider="jev", evaluate_fn=broken)
+            b = evaluate_pending(self.store, self.day, mode="shadow",
+                                 provider="jev", evaluate_fn=broken)
+        self.assertEqual(a["errors"], 2)
+        self.assertEqual(b["errors"], 2)
+        self.assertEqual(len(calls), 4)
+
 
 if __name__ == "__main__":
     unittest.main()
