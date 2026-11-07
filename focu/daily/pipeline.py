@@ -14,6 +14,7 @@ from .config import enabled_sources
 from .errors import FewError
 from focu.media_integrity import inspect_mp3, MediaIntegrityError
 from focu.briefing import read_style, render_script, validate_script, BriefingQCError
+from focu.audience import load_profile, detect_domain, mismatch_report
 from .store import now_utc
 
 
@@ -72,6 +73,12 @@ def ingest(store, cfg, date, input_units=None, collector=None):
         by_name = {s["name"]: s for s in sources}
         by_id = {s["source_id"]: s for s in sources}
         for item in imported:
+            # The registered-source collector must not be spoofed into
+            # importing user research. The independent daily editorial layer
+            # may summarize completed on-demand articles by content ID.
+            if item.get("origin") == "user_initiated" or item.get("podcast_mode") in ("single", "none"):
+                raise FewError("User-initiated research cannot enter registered-source daily compilation",
+                               "invalid_daily_origin", 4)
             source = by_id.get(item.get("source_id")) or by_name.get(item.get("source"))
             if not source:
                 raise FewError("unit source must match an enabled configured source")
@@ -144,12 +151,19 @@ def compose(store, cfg, run, channel=None):
                            "briefing_qc_failed", 4)
         if not all(p.startswith(style["speaker_label"]) for p in script.strip().split("\n\n")):
             raise FewError("invalid single-speaker turn labels", "invalid_script", 4)
+        # Diagnostic only: the owner's profile is independent of briefing
+        # style, and can flag beginner exposition without weakening coverage QC.
+        profile = load_profile()
+        domain = detect_domain(" ".join(u.get("title", "") + " " + u.get("body", "")
+                                        for u in units))
+        audience_qc = mismatch_report(script, domain, profile)
         script_path = ep_dir / f"{ep['channel_id']}-script.txt"
         script_digest = hashlib.sha256(script.encode()).hexdigest()
         qc["script_sha256"] = script_digest
         atomic_write(script_path, script)
         write_json(ep_dir / f"{ep['channel_id']}-units.json", units)
         write_json(ep_dir / f"{ep['channel_id']}-briefing-qc.json", qc)
+        write_json(ep_dir / f"{ep['channel_id']}-audience-qc.json", audience_qc)
         with store.db:
             store.db.execute("UPDATE episodes SET status='script_ready',script=?,script_hash=? WHERE episode_id=?",
                              (script, script_digest, ep["episode_id"]))

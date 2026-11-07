@@ -154,4 +154,25 @@ function article(id){
   assert.equal(e.get('readerarchive').hidden,false);
 }
 // An automatic completion must remain independent of the manual action.
+{
+  // The stored policy never invents an MP3 or displays a phantom Listen control.
+  const e=makeEnvironment();
+  e.run("render([{id:'idea',title:'Idea report',summary:'',date:'',source:'Your research',podcast_mode:'single',cover_url:'',audio_url:'',blocks:[{type:'paragraph',text:'Peer-level evidence'}],reading_minutes:1}],'')");
+  e.run("openItem('idea')");
+  assert.equal(e.get('listen').hidden,true,'podcast_mode alone does not show MP3 player');
+  assert.equal(e.get('readaloud').hidden,false,'device speech remains a separate action');
+  assert.equal(e.get('coveredby').hidden,true);
+}
+{
+  const e=makeEnvironment();
+  e.run("render([{id:'source-1',title:'Source report',summary:'',date:'2026-11-05',source:'Source A',podcast_mode:'daily_compilation',audio_url:'',blocks:[{type:'paragraph',text:'A report'}],reading_minutes:1},{id:'daily-1',title:'Daily briefing',summary:'',date:'2026-11-05',source:'Focu',podcast_mode:'daily_compilation',audio_url:'assets/audio/daily.mp3',covered_content_ids:['source-1'],blocks:[],reading_minutes:1}],'')");
+  e.run("openItem('source-1')");
+  assert.equal(e.get('listen').hidden,true);
+  assert.equal(e.get('coveredby').hidden,false,'linked source shows daily briefing');
+  assert.match(e.get('coveredby').textContent,/2026-11-05/);
+  e.get('coveredby').onclick();
+  assert.equal(e.run('currentId'),'daily-1');
+  assert.equal(e.get('listen').hidden,false,'compiled episode has real audio');
+  assert.equal(e.get('readaloud').hidden,true);
+}
 console.log('Focu reader behavior: article, local read-aloud, persistence and audio end passed');

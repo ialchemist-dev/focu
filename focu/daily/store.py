@@ -58,6 +58,14 @@ class Store:
             self.db.executescript("BEGIN IMMEDIATE;\n" + sql + "\nCOMMIT;")
         elif version != 1:
             raise FewError(f"unsupported database schema {version}")
+        # Persist the policy when a registered-source content row is first
+        # created. Existing rows are migrated without changing their identity.
+        columns = {row[1] for row in self.db.execute("PRAGMA table_info(contents)")}
+        if "podcast_mode" not in columns:
+            with self.db:
+                self.db.execute("""ALTER TABLE contents ADD COLUMN podcast_mode TEXT
+                    NOT NULL DEFAULT 'daily_compilation'
+                    CHECK(podcast_mode IN ('daily_compilation','single','none'))""")
 
     def close(self):
         self.db.close()
@@ -88,7 +96,10 @@ class Store:
             for item in result.items:
                 content_id, url, provisional = content_identity(item, source["source_id"])
                 revision_id, body_hash, title, body, kind, published_at = revision_fields(content_id, item)
-                inserted += self.db.execute("INSERT OR IGNORE INTO contents VALUES (?,?,?,?,NULL)",
+                inserted += self.db.execute("""INSERT OR IGNORE INTO contents
+                    (content_id, canonical_url, provisional, first_seen_at,
+                     latest_revision_id, podcast_mode)
+                    VALUES (?,?,?,?,NULL,'daily_compilation')""",
                     (content_id, url, int(provisional), timestamp)).rowcount
                 self.db.execute("INSERT OR IGNORE INTO content_revisions VALUES (?,?,?,?,?,?,?,?)",
                     (revision_id, content_id, body_hash, title, body, kind, published_at, timestamp))
@@ -147,7 +158,7 @@ class Store:
         with self.db:
             self.db.execute("UPDATE candidates SET state='expired' WHERE state='pending' AND expires_at < ?",
                             (now_utc(),))
-            rows = self.db.execute("""SELECT c.content_id,c.canonical_url,r.*,s.source_id,s.name,
+            rows = self.db.execute("""SELECT c.content_id,c.canonical_url,c.podcast_mode,r.*,s.source_id,s.name,
                      sub.channel_id,sub.settings_json
                 FROM candidates k JOIN contents c USING(content_id)
                 JOIN content_revisions r ON r.revision_id=c.latest_revision_id

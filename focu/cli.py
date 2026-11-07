@@ -36,12 +36,24 @@ def main(argv: list[str] | None = None) -> int:
     request_cmd.add_argument("--url", help="User-submitted source link; stored but not fetched")
     request_cmd.add_argument("--note", default="")
     request_cmd.add_argument("--force-new", action="store_true")
+    request_cmd.add_argument("--podcast", action="store_true", help="Owner explicitly requested audio")
     request_export = sub.add_parser("request-export", help="Export private research queue states for static UI")
     request_export.add_argument("--output", required=True)
     sub.add_parser("requests", help="List on-demand research task statuses")
     capture = sub.add_parser("capture", help="Capture a one-time research question")
     capture.add_argument("question")
     capture.add_argument("--id", dest="intent_id")
+    capture.add_argument("--podcast", action="store_true")
+    req_audio = sub.add_parser("request-podcast", help="Record owner's request for a standalone podcast")
+    req_audio.add_argument("intent_id")
+    req_audio.add_argument("--deliveries", default="data/deliveries")
+    standalone = sub.add_parser("podcast-for", help="QC-gated single-item podcast generation")
+    standalone.add_argument("intent_id")
+    standalone.add_argument("--deliveries", default="data/deliveries")
+    standalone.add_argument("--domain", default=None)
+    standalone.add_argument("--timeout", type=int, default=900)
+    audience = sub.add_parser("audience-prompt", help="Read owner audience rules for article-writing agents")
+    audience.add_argument("--domain", default=None)
     listing = sub.add_parser("list", help="List research intents")
     listing.add_argument("--status", choices=["queued", "researching", "completed", "failed"])
     show = sub.add_parser("show", help="Show an intent")
@@ -149,6 +161,19 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.command == "podcast":
             return open_notebook.main(args.podcast_args)
+        if args.command == "audience-prompt":
+            from focu.audience import calibration, writing_guidance
+            _json({"calibration": calibration(args.domain), "writing_prompt": writing_guidance(args.domain)})
+            return 0
+        if args.command == "request-podcast":
+            from focu.single_podcast import record_podcast_request
+            _json(record_podcast_request(args.db, args.intent_id, args.deliveries))
+            return 0
+        if args.command == "podcast-for":
+            from focu.single_podcast import generate_for_intent
+            _json(generate_for_intent(args.db, args.intent_id, args.deliveries,
+                                      domain=args.domain, timeout=args.timeout))
+            return 0
         if args.command == "tts":
             return tts.main(args.tts_args)
         if args.command == "report":
@@ -182,7 +207,7 @@ def main(argv: list[str] | None = None) -> int:
             from focu.research_requests import capture_request, list_requests, export_requests
             if args.command == "request":
                 result = capture_request(args.db, args.question, url=args.url,
-                                         note=args.note, force_new=args.force_new)
+                                         note=args.note, force_new=args.force_new, podcast=args.podcast)
             elif args.command == "requests":
                 result = list_requests(args.db)
             else:
@@ -221,7 +246,7 @@ def main(argv: list[str] | None = None) -> int:
             EvidenceStore(args.db)
             _json({"status": "initialized", "db_path": args.db})
         elif args.command == "capture":
-            _json(store.capture(args.question, intent_id=args.intent_id))
+            _json(store.capture(args.question, intent_id=args.intent_id, podcast=args.podcast))
         elif args.command == "list":
             _json(store.list(args.status))
         elif args.command == "show":
