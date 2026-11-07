@@ -233,7 +233,7 @@ class PublisherTests(unittest.TestCase):
                 self.assertNotIn("audio", by_id["source-"+str(n)]["formats"])
                 self.assertEqual(by_id["source-"+str(n)]["podcast_mode"], "daily_compilation")
 
-    def test_compilation_rejects_user_research_or_missing_item(self):
+    def test_compilation_can_cover_user_research_without_authorizing_standalone_audio(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             user = root / "deliveries" / "idea-20261105"
@@ -250,8 +250,12 @@ class PublisherTests(unittest.TestCase):
                 "content_id": "daily-1", "origin": "daily_compilation",
                 "covered_content_ids": ["int_"+"a"*32]
             }))
-            with self.assertRaisesRegex(ValueError, "cannot include on-demand research"):
-                build(root / "deliveries", root / "rejected", Path(__file__).with_name("index.html"), 15)
+            build(root / "deliveries", root / "accepted", Path(__file__).with_name("index.html"), 15)
+            bundled = json.loads((root / "accepted/assets/episodes.json").read_text())
+            by_id = {item["content_id"]: item for item in bundled["items"]}
+            self.assertEqual(by_id["daily-1"]["covered_content_ids"], ["int_"+"a"*32])
+            self.assertEqual(by_id["int_"+"a"*32]["podcast_mode"], "none")
+            self.assertNotIn("audio", by_id["int_"+"a"*32]["formats"])
             (daily / "content.json").write_text(json.dumps({
                 "content_id": "daily-1", "origin": "daily_compilation",
                 "covered_content_ids": ["missing-source"]
