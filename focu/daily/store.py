@@ -138,7 +138,7 @@ class Store:
                 report_json=excluded.report_json, updated_at=excluded.updated_at""",
                 (run_id, stage, status, json.dumps(report), now_utc()))
 
-    def select(self, run, cfg):
+    def select(self, run, cfg, gate_priorities=None):
         """Freeze selections once; later compose/TTS retries reuse these rows."""
         existing = self.db.execute("SELECT 1 FROM stage_runs WHERE run_id=? AND stage='select' AND status='success'",
                                    (run["run_id"],)).fetchone()
@@ -166,9 +166,17 @@ class Store:
                 settings = json.loads(row.pop("settings_json"))
                 age = max(0, (now - datetime.fromisoformat(row["published_at"] or row["fetched_at"])).total_seconds() / 86400)
                 row["score"] = settings.get("priority", 1) / (1 + age)
+                # Active gate only reorders revision-matched candidates; it never
+                # deletes, suppresses or claims coverage for a source.
+                signal = (gate_priorities or {}).get(row["content_id"], {})
+                row["gate_priority"] = (signal.get("priority", "normal")
+                                        if signal.get("revision_id") == row["revision_id"]
+                                        else "normal")
+                row["gate_rank"] = {"promote": 1, "normal": 0, "defer": -1}.get(
+                    row["gate_priority"], 0)
                 row["cap"] = settings.get("max_items_per_day", 5)
                 candidates.append(row)
-            candidates.sort(key=lambda r: (-r["score"], -(len(r["body"])),
+            candidates.sort(key=lambda r: (-r["gate_rank"], -r["score"], -(len(r["body"])),
                                             channel_order[r["channel_id"]], r["content_id"]))
             claimed, source_counts = set(), {}
             channels = {ch["id"]: ch for ch in cfg["channels"]}
@@ -190,7 +198,8 @@ class Store:
                 unit = {"id": cid, "content_id": cid, "revision_id": row["revision_id"],
                         "source_id": sid, "source": row["name"], "channel": ch,
                         "title": row["title"], "body": row["body"], "url": row["canonical_url"],
-                        "published_at": row["published_at"], "kind": row["kind"], "score": row["score"]}
+                        "published_at": row["published_at"], "kind": row["kind"], "score": row["score"],
+                        "gate_priority": row["gate_priority"]}
                 grouped.setdefault(ch, []).append(unit)
             for ch, units in grouped.items():
                 episode_id = "ep_" + uuid.uuid4().hex
