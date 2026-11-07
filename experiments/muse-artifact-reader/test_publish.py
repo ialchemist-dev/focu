@@ -165,6 +165,104 @@ class PublisherTests(unittest.TestCase):
             self.assertEqual(item["cover"]["origin"], "source")
             self.assertEqual((output / item["cover"]["path"]).read_bytes(), b"source-owned-cover-fixture")
 
+    def test_manual_archive_reader_contract(self):
+        html = Path(__file__).with_name("index.html").read_text()
+        self.assertIn('id="readerarchive"', html)
+        self.assertIn("manualArchive(id)", html)
+        self.assertIn("markDone(id,'manual')", html)
+        self.assertIn("'focu:content-consumption:v1'", html)
+        self.assertIn("view==='archive'?'Restore':'Archive'", html)
+        self.assertIn("markUnread(item.id)", html)
+
+    def test_origin_policy_article_first_with_podcast_only_after_opt_in(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            folder = root / "deliveries" / "idea-20261105"
+            folder.mkdir(parents=True)
+            intent = "int_" + "a"*32
+            (folder / "article.md").write_text("# Research article\n\n## Mechanism\nA measured improvement.")
+            metadata = {"content_id": intent, "origin": "user_initiated",
+                        "title": "Research article", "podcast_mode": "none"}
+            (folder / "content.json").write_text(json.dumps(metadata))
+            output = root / "article-only"
+            build(root / "deliveries", output, Path(__file__).with_name("index.html"), 15)
+            item = json.loads((output / "assets/episodes.json").read_text())["items"][0]
+            self.assertEqual(item["podcast_mode"], "none")
+            self.assertNotIn("audio", item["formats"])
+            self.assertEqual(item["content_id"], intent)
+            (folder / "podcast.mp3").write_bytes(b"synthetic-mp3-fixture")
+            with self.assertRaisesRegex(ValueError, "stray MP3"):
+                build(root / "deliveries", root / "rejected", Path(__file__).with_name("index.html"), 15)
+            metadata["podcast_mode"] = "single"
+            (folder / "content.json").write_text(json.dumps(metadata))
+            build(root / "deliveries", root / "podcast", Path(__file__).with_name("index.html"), 15)
+            updated = json.loads((root / "podcast/assets/episodes.json").read_text())["items"][0]
+            self.assertEqual(updated["content_id"], intent)
+            self.assertEqual(updated["podcast_mode"], "single")
+            self.assertIn("audio", updated["formats"])
+            self.assertEqual(len(json.loads((root / "podcast/assets/episodes.json").read_text())["episodes"]), 1)
+
+    def test_daily_source_articles_and_one_compilation_link(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            for index in range(3):
+                folder = root / "deliveries" / ("source-" + str(index) + "-20261105")
+                folder.mkdir(parents=True)
+                (folder / "article.md").write_text("# Source " + str(index) + "\n\nFactual source report.")
+                (folder / "content.json").write_text(json.dumps({
+                    "content_id": "source-"+str(index), "origin": "registered_source",
+                    "podcast_mode": "daily_compilation"
+                }))
+            compilation = root / "deliveries" / "daily-briefing-20261105"
+            compilation.mkdir(parents=True)
+            (compilation / "podcast.mp3").write_bytes(b"synthetic-single-daily-briefing")
+            (compilation / "content.json").write_text(json.dumps({
+                "content_id": "daily-2026-11-05", "origin": "daily_compilation",
+                "podcast_mode": "daily_compilation", "published_at": "2026-11-05",
+                "covered_content_ids": ["source-0", "source-1", "source-2"]
+            }))
+            output = root / "bundle"
+            build(root / "deliveries", output, Path(__file__).with_name("index.html"), 15)
+            data = json.loads((output / "assets/episodes.json").read_text())
+            self.assertEqual(len(data["items"]), 4)
+            self.assertEqual(len(data["episodes"]), 1)
+            by_id = {item["content_id"]: item for item in data["items"]}
+            self.assertEqual(by_id["daily-2026-11-05"]["covered_content_ids"],
+                             ["source-0", "source-1", "source-2"])
+            for n in range(3):
+                self.assertNotIn("audio", by_id["source-"+str(n)]["formats"])
+                self.assertEqual(by_id["source-"+str(n)]["podcast_mode"], "daily_compilation")
+
+    def test_compilation_can_cover_user_research_without_authorizing_standalone_audio(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            user = root / "deliveries" / "idea-20261105"
+            user.mkdir(parents=True)
+            (user / "article.md").write_text("# User research\n\nA grounded article.")
+            (user / "content.json").write_text(json.dumps({
+                "content_id": "int_"+"a"*32, "origin": "user_initiated",
+                "podcast_mode": "none"
+            }))
+            daily = root / "deliveries" / "daily-20261105"
+            daily.mkdir()
+            (daily / "podcast.mp3").write_bytes(b"daily-fixture")
+            (daily / "content.json").write_text(json.dumps({
+                "content_id": "daily-1", "origin": "daily_compilation",
+                "covered_content_ids": ["int_"+"a"*32]
+            }))
+            build(root / "deliveries", root / "accepted", Path(__file__).with_name("index.html"), 15)
+            bundled = json.loads((root / "accepted/assets/episodes.json").read_text())
+            by_id = {item["content_id"]: item for item in bundled["items"]}
+            self.assertEqual(by_id["daily-1"]["covered_content_ids"], ["int_"+"a"*32])
+            self.assertEqual(by_id["int_"+"a"*32]["podcast_mode"], "none")
+            self.assertNotIn("audio", by_id["int_"+"a"*32]["formats"])
+            (daily / "content.json").write_text(json.dumps({
+                "content_id": "daily-1", "origin": "daily_compilation",
+                "covered_content_ids": ["missing-source"]
+            }))
+            with self.assertRaisesRegex(ValueError, "references missing"):
+                build(root / "deliveries", root / "rejected-again", Path(__file__).with_name("index.html"), 15)
+
     def test_reader_automatic_completion_contract(self):
         html = Path(__file__).with_name("index.html").read_text()
         self.assertIn("focu:content-consumption:v1", html)
@@ -227,6 +325,27 @@ class PublisherTests(unittest.TestCase):
             self.assertEqual(item["summary"], response["summary"])
             self.assertTrue(item["article_blocks"])
             self.assertEqual((folder / "research.md").read_text().splitlines()[0], "# What is new?")
+
+    def test_editorial_prompt_calibrates_expert_vs_novice_without_changing_facts(self):
+        import io
+        research = "# Evidence\n\nPublished results ([ref](https://example.org/a))."
+        article = ("# Research Analysis\n\n" + "This evidence requires evaluation of its mechanism. " * 8 +
+                   "\n\n## Sources\n- [ref](https://example.org/a)\n")
+        response = {"choices": [{"message": {"content": json.dumps({
+            "title": "Research Analysis", "summary": "The study reports a result needing verification.",
+            "article_markdown": article
+        })}}]}
+        prompts = []
+        for domain in ("machine_learning", "sociology"):
+            with patch("urllib.request.urlopen",
+                       return_value=io.BytesIO(json.dumps(response).encode())) as mocked:
+                compose_article_with_openai(research, api_key="fixture-only",
+                                            audience_domain=domain)
+                payload = json.loads(mocked.call_args.args[0].data)
+                prompts.append(payload["messages"][0]["content"])
+        self.assertIn("Assume technical fluency", prompts[0])
+        self.assertIn("Build foundational context", prompts[1])
+        self.assertNotEqual(prompts[0], prompts[1])
 
     def test_editorial_provider_rejects_fabricated_citations(self):
         import io

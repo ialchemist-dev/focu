@@ -14,16 +14,70 @@ sources.yaml → ingest → digest → compose → synthesize → episode.mp3 + 
 
 ## The contract
 
-1. **User-defined sources only.** The pipeline never pulls from anything
-   outside `sources.yaml`. No recommendations, no trending, no filler.
+1. **User-authorized inputs only.** Scheduled collection follows registered sources; one-time research follows explicit user ideas or links. No recommendations, trending feeds, or unsolicited subscriptions.
 2. **Follow people, not platforms.** Each source is a person, author, or
    editorial voice — not an algorithmic feed.
 3. **Daily, unattended.** Ingest runs on a schedule (cron). The agent
    needs no prompting once sources are defined.
-4. **Podcast + script.** Every episode ships as audio *and* its full
-   script. The script is the durable artifact; audio is the interface.
+4. **Research first.** Articles are durable. Optional generated audio includes its transcript and evidence-linked script; audio is not required for an article.
 5. **Content only.** Episodes never explain how they were made, what the
    selection logic is, or the philosophy behind the pipeline.
+
+## Personal secretary briefings — owner-editable voice
+
+The daily report is a **private secretary briefing addressed to one person**,
+not a podcast show. All voice, wording, length and prohibited framing rules
+live in [references/briefing-style.md](references/briefing-style.md).
+
+**On natural-language style feedback** ("too formal", "shorter", "stop giving
+the why-line"), edit **only** that file, append a dated Changelog entry with
+the feedback, commit, and have the next *new* episode read it. Do not add
+a parallel persona in a provider prompt or Python constant.
+
+- Daily scripts run through `focu.daily.pipeline.compose` and mandatory
+  pre-TTS coverage/figure QC.
+- Muse/Open Notebook must use `focu podcast generate --briefing-units ...`
+  and QC-gated `focu deliver --briefing-units ...` for a secretary briefing.
+  Scripts dropping any source item or numeric facts must fail, not publish.
+- Read [Muse 06:14 job handoff](docs/MUSE_SECRETARY_BRIEFING_HANDOFF.md).
+  The actual VM cron has to be inspected; a GitHub commit is not a deployment.
+
+## Podcast decisions and audience calibration — required
+
+Load [the origin-specific policy and Muse handoff](docs/PODCAST_ORIGIN_AUDIENCE_POLICY.md)
+and [the owner-authorized audience profile](references/audience-profile.md)
+before writing a Focu article or generating its audio.
+
+When the owner says **"research this"** or shares a URL:
+- Capture a one-time intent with focu request. The default podcast_mode is
+  none. Do not generate audio without a direct podcast request.
+- If the owner requests research *and* a podcast in one sentence, use
+  focu request --podcast when capturing it.
+- If the owner later says **"make this one a podcast"**, resolve the
+  canonical content/intent ID, then call focu request-podcast <intent-id>.
+  Never guess the target item when more than one candidate exists.
+- After the evidence-backed article exists, use focu podcast-for <intent-id>
+  with the established Open Notebook profiles and real delivery folder.
+  The command checks every section heading and figure; two QC failures
+  stop without attaching audio. Never silently override or reduce the gate.
+
+For a subject outside the owner's expert fields, the same profile requires
+additional basic orientation. Use focu audience-prompt --domain <domain>
+to obtain the authoritative constraints for a host-agent-written article.
+No per-provider copy of this profile and no background inferred skill edits.
+
+Registered-source articles get no individual podcast. Daily compilation
+may summarize completed, independently published user-initiated research
+alongside registered-source updates, linked with covered_content_ids.
+This does NOT authorize a standalone MP3 for the on-demand article:
+its own mode remains none until explicitly requested, or single afterward.
+The registered-source *collector* must refuse injected user-initiated
+records; editorial inclusion happens by linking published content IDs.
+Device Read aloud is a separate, low-cost feature and is not a podcast MP3.
+
+A static Muse Artifact only learns about a newly attached MP3 after the
+host republishes an immutable snapshot. The existing article and podcast
+remain one Content Item with the same Inbox/Archive state.
 
 ## Muse on-demand research: spoken idea or URL
 
@@ -81,9 +135,8 @@ warning and skip, never fail the run. Output: `data/units/YYYY-MM-DD.json`.
 **digest** (`scripts/digest.py`): dedupe by URL/id, drop empties, rank by
 recency, group by channel. Output: `data/digested/YYYY-MM-DD.json`.
 
-**compose** (`scripts/compose.py`): one single-host script per channel,
-using the prompt template in `references/prompts.md`. Script conventions
-in `references/script-conventions.md`. Output:
+**compose** (`scripts/compose.py`): a single-person secretary script per channel,
+reading `references/briefing-style.md` and producing a QC receipt. Output:
 `data/episodes/YYYY-MM-DD/<channel>-script.txt`.
 
 **synthesize** (`scripts/synthesize.sh`): text-to-speech via the
@@ -94,8 +147,7 @@ configured backend (see `references/tts-backends.md`). Output:
 
 - Read `references/architecture.md` before changing the pipeline.
 - Source schema changes go in `references/source-schema.md` first.
-- Prompt improvements go in `references/prompts.md` — the pipeline
-  reads prompts from there, not from code.
+- Secretary briefing voice changes go **only** in `references/briefing-style.md` with a dated feedback changelog; digest/ingest prompts remain in `references/prompts.md`.
 - Never commit `data/` or `sources.yaml` (personal). Commit
   `examples/` instead.
 - Keep every stage independently runnable and its output inspectable.

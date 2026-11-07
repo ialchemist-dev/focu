@@ -92,6 +92,73 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(self.store.persist_fetch(self.src, second), 0)
         self.assertEqual(self.count("contents"), 3)
 
+    def test_daily_script_uses_editable_secretary_style_and_produces_qc(self):
+        from focu.briefing import read_style
+        file = self.units_file([self.item(1, title="Private source update",
+                                          body="The source reported 948 observations and 20 exceptions.")])
+        result = run_pipeline(self.store, self.cfg, self.today, "text_only", file)
+        self.assertEqual(result["status"], "completed")
+        ep = self.store.episodes(result["run_id"])[0]
+        files = self.store.data_dir / "episodes" / self.today
+        script = (files / "research-script.txt").read_text()
+        qc = json.loads((files / "research-briefing-qc.json").read_text())
+        manifest = json.loads(ep["artifact_manifest"])
+        self.assertIn(read_style()["opening"], script)
+        self.assertNotIn("Today's updates", script)
+        self.assertIn("948", script)
+        self.assertIn("20", script)
+        self.assertTrue(qc["passed"])
+        self.assertEqual(qc["item_count"], 1)
+        self.assertEqual(manifest["briefing_style_sha256"], qc["style_sha256"])
+        self.assertEqual(manifest["composer"], "secretary_briefing_v1")
+
+    def test_daily_compose_rejects_silent_item_omission(self):
+        file = self.units_file([self.item(1, title="Observed 948 results",
+                                          body="The source counted 948 findings.")])
+        ingest(self.store, self.cfg, self.today, file)
+        run = self.store.ensure_run(self.today, self.cfg, "text_only")
+        digest(self.store, self.cfg, run)
+        ep = self.store.episodes(run["run_id"])[0]
+        with self.store.db:
+            self.store.db.execute("UPDATE episodes SET script=? WHERE episode_id=?",
+                                  ("Host: Welcome back. A summary without the source item.",
+                                   ep["episode_id"]))
+        with self.assertRaises(FewError) as caught:
+            compose(self.store, self.cfg, run)
+        self.assertEqual(caught.exception.code, "briefing_qc_failed")
+        self.assertFalse((self.store.data_dir / "episodes" / self.today /
+                          "research-script.txt").exists())
+
+    def test_daily_source_podcast_mode_persisted(self):
+        self.store.persist_fetch(self.src, FetchResult(items=[self.item(111)]))
+        row = self.store.db.execute("SELECT podcast_mode FROM contents").fetchone()
+        self.assertEqual(row[0], "daily_compilation")
+
+    def test_existing_source_database_is_upgraded_in_place(self):
+        import sqlite3
+        folder = self.root / 'legacy'
+        folder.mkdir()
+        legacy_sql = (Path(__file__).resolve().parents[1] /
+                      'focu/daily/migrations/001_initial.sql').read_text()
+        with sqlite3.connect(folder / 'few.sqlite3') as conn:
+            conn.executescript(legacy_sql)
+            conn.execute("""INSERT INTO contents
+                (content_id, canonical_url, provisional, first_seen_at, latest_revision_id)
+                VALUES ('src-old','https://example.org/old',0,'2026-01-01',NULL)""")
+        old = Store(folder)
+        try:
+            row = old.db.execute("SELECT content_id,podcast_mode FROM contents").fetchone()
+            self.assertEqual(row['content_id'], 'src-old')
+            self.assertEqual(row['podcast_mode'], 'daily_compilation')
+        finally:
+            old.close()
+
+    def test_daily_import_refuses_user_research(self):
+        submitted = self.units_file([self.item(1, origin="user_initiated", podcast_mode="none")])
+        with self.assertRaisesRegex(FewError, "cannot enter registered-source daily compilation"):
+            ingest(self.store, self.cfg, self.today, submitted)
+        self.assertEqual(self.count("contents"), 0)
+
     def test_all_items_persist_but_daily_cap_keeps_backlog(self):
         file = self.units_file([self.item(i) for i in range(8)])
         first = run_pipeline(self.store, self.cfg, self.today, "text_only", file)

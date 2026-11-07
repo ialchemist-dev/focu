@@ -6,9 +6,21 @@ import urllib.parse
 from pathlib import Path
 from focu.delivery import DeliveryArchive
 from focu.open_notebook import OpenNotebookClient
+from focu.briefing import DEFAULT_STYLE, read_style, validate_script
+
+def transcript_script(value):
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict) and isinstance(value.get("segments"), list):
+        return "\n\n".join(str(x.get("text", "")) for x in value["segments"] if isinstance(x, dict))
+    if isinstance(value, list):
+        return "\n\n".join(str(x.get("text", "")) for x in value if isinstance(x, dict))
+    return ""
+
 
 def deliver(evidence_id: str, episode_id: str, output_dir: str | Path, db_path: str | Path,
-            client: OpenNotebookClient | None = None, *, download_audio: bool = True) -> dict:
+            client: OpenNotebookClient | None = None, *, download_audio: bool = True,
+            briefing_units=None, briefing_style=DEFAULT_STYLE) -> dict:
     client = client or OpenNotebookClient()
     archive = DeliveryArchive(db_path)
     # Fail closed on unlinked evidence and unfinished episodes.
@@ -18,8 +30,17 @@ def deliver(evidence_id: str, episode_id: str, output_dir: str | Path, db_path: 
         raise ValueError("Episode ID mismatch")
     if episode.get("job_status") != "completed":
         raise ValueError("Podcast not completed; delivery is not ready")
+    qc = None
+    if briefing_units is not None:
+        qc = validate_script(transcript_script(episode.get("transcript")),
+                             briefing_units, read_style(briefing_style))
+        if not qc["passed"]:
+            raise ValueError("Generated briefing transcript failed item/figure QC: " +
+                             json.dumps(qc["issues"], ensure_ascii=False))
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
+    if qc:
+        (out / "briefing-qc.json").write_text(json.dumps(qc, indent=2), encoding="utf-8")
     report_path = out / "research.md"
     report_path.write_text(archive.get(report["id"])["content"], encoding="utf-8")
     artifacts = archive.sync_podcast(evidence_id, episode)
@@ -36,10 +57,12 @@ def deliver(evidence_id: str, episode_id: str, output_dir: str | Path, db_path: 
         client.download(episode_id, audio_path)
     return {"status": "delivered", "evidence_id": evidence_id, "episode_id": episode_id,
             "report": str(report_path), "transcript": str(transcript_path) if transcript_path else None,
-            "audio": str(audio_path) if audio_path else None, "artifacts": [a["id"] for a in artifacts]}
+            "audio": str(audio_path) if audio_path else None, "artifacts": [a["id"] for a in artifacts],
+            "briefing_qc": qc}
 
 def wait_and_deliver(evidence_id, job_id, output_dir, db_path, client=None, *,
-                     interval=10, timeout=900):
+                     interval=10, timeout=900, briefing_units=None,
+                     briefing_style=DEFAULT_STYLE):
     client = client or OpenNotebookClient()
     deadline = time.monotonic() + timeout
     while True:
@@ -56,7 +79,9 @@ def wait_and_deliver(evidence_id, job_id, output_dir, db_path, client=None, *,
             candidates.append(status.get("episode_id"))
             for candidate in candidates:
                 if candidate:
-                    return deliver(evidence_id, str(candidate), output_dir, db_path, client)
+                    return deliver(evidence_id, str(candidate), output_dir, db_path, client,
+                                   briefing_units=briefing_units,
+                                   briefing_style=briefing_style)
             raise RuntimeError("Job completed but episode ID was not returned. Use 'focu deliver --episode-id' after listing episodes.")
         if time.monotonic() >= deadline:
             raise TimeoutError("Podcast job still running; use 'focu podcast job' and resume delivery later")

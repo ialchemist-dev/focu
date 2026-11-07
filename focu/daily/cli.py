@@ -96,8 +96,11 @@ def execute(args):
     if args.command == "run" and args.dry_run:
         if mode == "audio":
             tts_argv(cfg)
+        from focu.briefing import read_style
+        style = read_style()
         return {"schema_version": 1, "status": "validated", "date": date, "mode": mode,
-                "config_hash": cfg["config_hash"], "composer": "deterministic_skeleton"}
+                "config_hash": cfg["config_hash"], "composer": "secretary_briefing_v1",
+                "style_version": style["version"], "style_sha256": style["style_sha256"]}
     if not (path / "few.sqlite3").exists() and ((path / "state.json").exists() or
                                                (path / "episodes").exists() or (path / "units").exists()):
         raise FewError("legacy v0.1 data detected; use import-legacy into a separate --data-dir first. "

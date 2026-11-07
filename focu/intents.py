@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 STATUSES = {"queued", "researching", "completed", "failed"}
+PODCAST_MODES = {"none", "single", "daily_compilation"}
 
 
 def utcnow() -> str:
@@ -23,8 +24,14 @@ class IntentStore:
                 id TEXT PRIMARY KEY, question TEXT NOT NULL,
                 kind TEXT NOT NULL, status TEXT NOT NULL,
                 created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
-                deliver_after TEXT, evidence_pack_id TEXT, error TEXT
+                deliver_after TEXT, evidence_pack_id TEXT, error TEXT,
+                podcast_mode TEXT NOT NULL DEFAULT 'none', podcast_requested_at TEXT
             )""")
+            columns = {row[1] for row in db.execute("PRAGMA table_info(intents)")}
+            if "podcast_mode" not in columns:
+                db.execute("ALTER TABLE intents ADD COLUMN podcast_mode TEXT NOT NULL DEFAULT 'none'")
+            if "podcast_requested_at" not in columns:
+                db.execute("ALTER TABLE intents ADD COLUMN podcast_requested_at TEXT")
 
     def _connect(self) -> sqlite3.Connection:
         db = sqlite3.connect(self.db_path, timeout=30)
@@ -32,7 +39,8 @@ class IntentStore:
         return db
 
     def capture(self, question: str, *, kind: str = "one_time_research",
-                deliver_after: str | None = None, intent_id: str | None = None) -> dict:
+                deliver_after: str | None = None, intent_id: str | None = None,
+                podcast: bool = False) -> dict:
         question = question.strip()
         if not question:
             raise ValueError("Question must not be empty")
@@ -42,11 +50,19 @@ class IntentStore:
         if not (len(intent_id) == 36 and intent_id.startswith("int_") and all(c in "0123456789abcdef" for c in intent_id[4:])):
             raise ValueError("Invalid intent id")
         now = utcnow()
+        if podcast and kind != "one_time_research":
+            raise ValueError("Standalone podcast is only for user-initiated intents")
         with self._connect() as db:
             db.execute("""INSERT OR IGNORE INTO intents
-                (id, question, kind, status, created_at, updated_at, deliver_after)
-                VALUES (?, ?, ?, 'queued', ?, ?, ?)""",
-                (intent_id, question, kind, now, now, deliver_after))
+                (id, question, kind, status, created_at, updated_at, deliver_after,
+                 podcast_mode, podcast_requested_at)
+                VALUES (?, ?, ?, 'queued', ?, ?, ?, ?, ?)""",
+                (intent_id, question, kind, now, now, deliver_after,
+                 "single" if podcast else "none", now if podcast else None))
+            if podcast:
+                db.execute("""UPDATE intents SET podcast_mode='single',
+                    podcast_requested_at=COALESCE(podcast_requested_at, ?)
+                    WHERE id=? AND kind='one_time_research'""", (now, intent_id))
         return self.get(intent_id)
 
     def get(self, intent_id: str) -> dict | None:
@@ -63,6 +79,20 @@ class IntentStore:
             else:
                 rows = db.execute("SELECT * FROM intents ORDER BY created_at, id").fetchall()
         return [{"schema_version": "0.2", **dict(row)} for row in rows]
+
+    def request_podcast(self, intent_id: str) -> dict:
+        """Idempotently persist an owner's explicit podcast request."""
+        now = utcnow()
+        with self._connect() as db:
+            row = db.execute("SELECT kind FROM intents WHERE id=?", (intent_id,)).fetchone()
+            if not row:
+                raise ValueError("Unknown research intent")
+            if row["kind"] != "one_time_research":
+                raise ValueError("Daily-source items cannot request standalone audio")
+            db.execute("""UPDATE intents SET podcast_mode='single',
+                       podcast_requested_at=COALESCE(podcast_requested_at, ?)
+                       WHERE id=?""", (now, intent_id))
+        return self.get(intent_id)
 
     @staticmethod
     def _has_evidence_table(db: sqlite3.Connection) -> bool:
@@ -97,11 +127,12 @@ def main() -> None:
     capture = sub.add_parser("capture")
     capture.add_argument("question")
     capture.add_argument("--id", dest="intent_id")
+    capture.add_argument("--podcast", action="store_true")
     listing = sub.add_parser("list")
     listing.add_argument("--status", choices=sorted(STATUSES))
     args = parser.parse_args()
     store = IntentStore(args.db)
-    result = (store.capture(args.question, intent_id=args.intent_id)
+    result = (store.capture(args.question, intent_id=args.intent_id, podcast=args.podcast)
               if args.command == "capture" else store.list(args.status))
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
