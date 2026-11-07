@@ -274,8 +274,8 @@ def build(deliveries, output, template, limit, *, fetch_source_covers=False, gen
             if origin == "source" and source_url:
                 item["cover"]["source_url"] = source_url
             manifest.append(item)
-        # New daily compilations must be one per date and reference exactly the
-        # published registered-source articles; no unsolicited per-item audio.
+        # Daily compilations link readable registered-source and user-requested
+        # articles. Coverage never authorizes per-item MP3 generation.
         compilations = {}
         for item in manifest:
             if item["origin"] != "daily_compilation":
@@ -301,10 +301,14 @@ def build(deliveries, output, template, limit, *, fetch_source_covers=False, gen
                 other = next((x for x in manifest if x["content_id"] == ref), None)
                 if not other:
                     raise ValueError("Daily compilation references missing content: " + ref)
-                if other["origin"] != "registered_source" or other["podcast_mode"] != "daily_compilation":
-                    raise ValueError("Daily compilation cannot include on-demand research")
+                allowed_source = (other["origin"] == "registered_source" and
+                                  other["podcast_mode"] == "daily_compilation")
+                allowed_research = (other["origin"] == "user_initiated" and
+                                    other["podcast_mode"] in ("none", "single"))
+                if not (allowed_source or allowed_research):
+                    raise ValueError("Daily briefing coverage must reference a readable source or on-demand article")
                 if "article" not in other["formats"]:
-                    raise ValueError("Every registered-source item must have an individual readable article")
+                    raise ValueError("Every covered item must have an individual readable article")
         pending = []
         if requests is not None:
             request_path = Path(requests)
