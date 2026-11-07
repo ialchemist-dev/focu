@@ -6,6 +6,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from .config import load_config
+from focu.decision_gate import PROVIDERS, evaluate_pending, gate_priorities, GateError
 from .errors import FewError
 from .pipeline import compose, digest, finalize_episodes, ingest, run_lock, run_pipeline, tts_argv
 from .store import Store
@@ -24,6 +25,14 @@ def parser():
             p.add_argument("--text-only", action="store_true", help="explicitly finalize text instead of audio")
         if name in {"run", "ingest"}:
             p.add_argument("--input-units", help="JSON units from configured sources; bypasses network fetch")
+        if name in {"run", "digest"}:
+            p.add_argument("--gate-mode", choices=("off", "shadow", "active"), default="off",
+                           help="off preserves the current selection unchanged")
+            p.add_argument("--gate-provider", choices=PROVIDERS, default="off")
+            p.add_argument("--gate-compare", default="", help="comma-separated comparison providers")
+            p.add_argument("--gate-wiki", help="path to llm-wiki checkout")
+            p.add_argument("--gate-goals-file", help="explicit interests and questions")
+            p.add_argument("--gate-limit", type=int, default=20)
         if name == "run":
             p.add_argument("--dry-run", action="store_true", help="validate configuration without creating state")
         if name in {"compose", "synthesize"}:
@@ -67,6 +76,14 @@ def execute(args):
                 return {"schema_version": 1, **import_legacy(store, cfg, source, args.register_coverage)}
             finally:
                 store.close()
+    gate_opts = None
+    if args.command in {"run", "digest"}:
+        if (args.gate_mode == "off") != (args.gate_provider == "off"):
+            raise FewError("gate-mode and gate-provider must both be off or both enabled")
+        gate_opts = {"mode": args.gate_mode, "provider": args.gate_provider,
+                     "compare": tuple(p.strip() for p in args.gate_compare.split(",") if p.strip()),
+                     "wiki_dir": args.gate_wiki, "goals_file": args.gate_goals_file,
+                     "limit": args.gate_limit}
     mode = "text_only" if args.text_only else cfg["output_mode"]
     try:
         date = args.date or datetime.now(ZoneInfo(cfg["timezone"])).date().isoformat()
@@ -94,12 +111,23 @@ def execute(args):
             if args.command == "ingest":
                 report = {"status": "collected", "fetch": ingest(store, cfg, date, args.input_units)}
             elif args.command == "run":
-                report = run_pipeline(store, cfg, date, mode, args.input_units)
+                report = run_pipeline(store, cfg, date, mode, args.input_units,
+                                      gate_options=gate_opts)
             else:
                 run = store.ensure_run(date, cfg, mode)
                 if args.command == "digest":
                     store.sync_sources(cfg)
-                    report = {"status": "selected", "run_id": run["run_id"], **digest(store, cfg, run)}
+                    gate_report = None
+                    priorities = None
+                    already_selected = store.db.execute(
+                        "SELECT 1 FROM stage_runs WHERE run_id=? AND stage='select' AND status='success'",
+                        (run["run_id"],)).fetchone()
+                    if not already_selected and gate_opts["mode"] != "off":
+                        gate_report = evaluate_pending(store, date, **gate_opts)
+                        if gate_opts["mode"] == "active":
+                            priorities = gate_priorities(store.data_dir, date)
+                    report = {"status": "selected", "run_id": run["run_id"],
+                              "gate": gate_report, **digest(store, cfg, run, priorities)}
                 elif args.command == "compose":
                     if not store.db.execute("SELECT 1 FROM stage_runs WHERE run_id=? AND stage='select' AND status='success'",
                                             (run["run_id"],)).fetchone():
@@ -121,10 +149,12 @@ def main(argv=None):
     try:
         report = execute(args)
         exit_code = 4 if report["status"] == "failed" else 0
-    except FewError as ex:
-        report = {"schema_version": 1, "status": "error", "errors": [{"code": ex.code, "message": str(ex),
-                   "retryable": ex.exit_code in {3, 4, 5}}]}
-        exit_code = ex.exit_code
+    except (FewError, GateError) as ex:
+        report = {"schema_version": 1, "status": "error", "errors": [{
+            "code": ex.code if isinstance(ex, FewError) else "gate_error",
+            "message": str(ex), "retryable": ex.exit_code in {3, 4, 5} if isinstance(ex, FewError) else False
+        }]}
+        exit_code = ex.exit_code if isinstance(ex, FewError) else 4
     except Exception as ex:
         report = {"schema_version": 1, "status": "error", "errors": [{"code": "runtime_error", "message": str(ex), "retryable": True}]}
         exit_code = 3

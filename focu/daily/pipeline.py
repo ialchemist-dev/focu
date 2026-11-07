@@ -113,8 +113,8 @@ def ingest(store, cfg, date, input_units=None, collector=None):
     return report
 
 
-def digest(store, cfg, run):
-    store.select(run, cfg)
+def digest(store, cfg, run, gate_priorities=None):
+    store.select(run, cfg, gate_priorities=gate_priorities)
     grouped = {e["channel_id"]: store.units(e["episode_id"]) for e in store.episodes(run["run_id"])}
     path = store.data_dir / "digested" / f"{run['episode_date']}.json"
     write_json(path, grouped)
@@ -278,7 +278,7 @@ def finalize_episodes(store, cfg, run, channel=None):
     return outcomes
 
 
-def run_pipeline(store, cfg, date, mode, input_units=None):
+def run_pipeline(store, cfg, date, mode, input_units=None, gate_options=None):
     run = store.ensure_run(date, cfg, mode)
     if run["status"] == "completed":
         return {"status": "reused", "run_id": run["run_id"], "episodes": store.episodes(run["run_id"])}
@@ -303,7 +303,19 @@ def run_pipeline(store, cfg, date, mode, input_units=None):
             if not ready_backlog:
                 raise FewError("all configured sources are unavailable and no ready backlog is available",
                                "sources_unavailable", 3)
-    digest_report = digest(store, cfg, run)
+    gate_report = None
+    gate_priorities = None
+    if not selected and gate_options and gate_options["mode"] != "off":
+        from focu.decision_gate import evaluate_pending, gate_priorities as load_gate_priorities
+        gate_report = evaluate_pending(store, date, **gate_options)
+        store.stage(run["run_id"], "gate", "success", {
+            "mode": gate_report["mode"], "provider": gate_report["provider"],
+            "evaluated": gate_report["evaluated"], "errors": gate_report["errors"],
+            "output": gate_report["output"],
+        })
+        if gate_options["mode"] == "active":
+            gate_priorities = load_gate_priorities(store.data_dir, date)
+    digest_report = digest(store, cfg, run, gate_priorities=gate_priorities)
     compose_report = compose(store, cfg, run)
     store.stage(run["run_id"], "compose", "success", compose_report)
     outcomes = finalize_episodes(store, cfg, run)
@@ -314,6 +326,7 @@ def run_pipeline(store, cfg, date, mode, input_units=None):
                          ("failed" if failed else "completed", now_utc(), run["run_id"]))
     degraded = fetch_report and any(s["status"] not in {"success", "empty"} for s in fetch_report["sources"])
     return {"status": "failed" if failed else "degraded" if degraded else "completed",
-            "run_id": run["run_id"], "fetch": fetch_report, "selection": digest_report,
+            "run_id": run["run_id"], "fetch": fetch_report, "gate": gate_report,
+            "selection": digest_report,
             "compose": compose_report, "episodes": outcomes,
             "warnings": ([] if outcomes else ["no eligible items fit this episode; check pending/enrichment counts with status"])}

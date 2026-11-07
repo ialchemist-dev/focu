@@ -15,6 +15,7 @@ daily = ["feedparser>=6.0", "pyyaml>=6.0", "yt-dlp>=2025.1.1", "youtube-transcri
 
 [project.scripts]
 focu = "focu.cli:main"
+focu-gate = "focu.gate_cli:main"
 
 [tool.setuptools.packages.find]
 include = ["focu*"]
