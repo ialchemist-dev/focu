@@ -66,11 +66,14 @@ additional basic orientation. Use focu audience-prompt --domain <domain>
 to obtain the authoritative constraints for a host-agent-written article.
 No per-provider copy of this profile and no background inferred skill edits.
 
-Daily source articles get no individual podcast. Their audio is a single
-daily compilation linked with covered_content_ids. The daily generator
-must refuse any user-initiated content, even if its URL also resembles a
-registered source. Device Read aloud is a separate, low-cost feature and is
-not a newly generated podcast MP3.
+Registered-source articles get no individual podcast. Daily compilation
+may summarize completed, independently published user-initiated research
+alongside registered-source updates, linked with covered_content_ids.
+This does NOT authorize a standalone MP3 for the on-demand article:
+its own mode remains none until explicitly requested, or single afterward.
+The registered-source *collector* must refuse injected user-initiated
+records; editorial inclusion happens by linking published content IDs.
+Device Read aloud is a separate, low-cost feature and is not a podcast MP3.
 
 A static Muse Artifact only learns about a newly attached MP3 after the
 host republishes an immutable snapshot. The existing article and podcast
