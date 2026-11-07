@@ -283,6 +283,36 @@ class IntegrationTests(unittest.TestCase):
         self.assertEqual(b["errors"], 2)
         self.assertEqual(len(calls), 4)
 
+    def test_postmerge_daily_gate_off_no_credentials_and_both_qc_receipts(self):
+        # The integrated secretary + audience + source policy must continue
+        # operating with no Decision API credentials and zero provider calls.
+        from focu.daily.pipeline import run_pipeline
+        import os
+        batch = self.root / "offline-input-units.json"
+        batch.write_text(json.dumps([
+            {"native_item_id": "1", "source": "Example", "url": "https://example.org/one",
+             "title": "PAPER-A", "body": "Summary of common old findings."},
+            {"native_item_id": "2", "source": "Example", "url": "https://example.org/two",
+             "title": "PAPER-B", "body": "Novel evidence and stronger independent experiment."},
+        ]))
+        without_keys = {k: v for k, v in os.environ.items()
+                        if k not in {"OPENAI_API_KEY", "TYPESAFE_API_KEY"}}
+        with patch.dict("os.environ", without_keys, clear=True), patch(
+                "focu.decision_gate.request_judgments",
+                side_effect=AssertionError("Gate OFF called external provider")):
+            result = run_pipeline(
+                self.store, self.cfg, self.day, "text_only", batch,
+                gate_options={"mode": "off", "provider": "off", "compare": (), "limit": 2})
+        self.assertEqual(result["status"], "completed")
+        self.assertIsNone(result["gate"])
+        ep_dir = self.store.data_dir / "episodes" / self.day
+        self.assertTrue((ep_dir / "a-briefing-qc.json").is_file())
+        self.assertTrue((ep_dir / "a-audience-qc.json").is_file())
+        self.assertTrue(json.loads((ep_dir / "a-briefing-qc.json").read_text())["passed"])
+        self.assertEqual(self.store.db.execute(
+            "SELECT podcast_mode FROM contents LIMIT 1").fetchone()[0],
+            "daily_compilation")
+
 
 if __name__ == "__main__":
     unittest.main()
