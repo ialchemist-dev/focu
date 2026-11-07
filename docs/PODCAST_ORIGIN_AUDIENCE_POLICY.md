@@ -108,7 +108,8 @@ The day's compiled episode is a separate delivery with:
 - origin: daily_compilation
 - podcast_mode: daily_compilation
 - date/published_at
-- a single podcast.mp3
+- a single podcast.mp3 only after script/audio QC passes; otherwise an
+  article-only compilation is valid and remains readable
 - covered_content_ids listing all corresponding registered-source and completed
   on-demand article content IDs; each covered article must be readable
 

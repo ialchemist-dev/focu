@@ -135,8 +135,10 @@ def build(deliveries, output, template, limit, *, fetch_source_covers=False, gen
             if not isinstance(covered, list) or not all(isinstance(x, str) and x for x in covered):
                 raise ValueError("covered_content_ids must be a list of content IDs")
             if covered and (content_origin != "daily_compilation"
-                            or not audio or mode != "daily_compilation"):
+                            or mode != "daily_compilation"):
                 raise ValueError("Only a compiled daily briefing may cover individual items")
+            # The text report must remain publishable when audio/script QC
+            # blocks a bad MP3. No audio format or Listen is invented.
             if covered:
                 item["covered_content_ids"] = covered
             # Markdown is the canonical reading format; never evaluate untrusted HTML
@@ -282,6 +284,8 @@ def build(deliveries, output, template, limit, *, fetch_source_covers=False, gen
                 continue
             if not item.get("covered_content_ids"):
                 raise ValueError("Daily compilation must list covered_content_ids")
+            if "article" not in item["formats"] and "audio" not in item["formats"]:
+                raise ValueError("Daily compilation requires a real article or QC-approved audio")
             day = item.get("published_at") or item.get("date")
             if not day:
                 raise ValueError("Daily compilation is missing its publication date")

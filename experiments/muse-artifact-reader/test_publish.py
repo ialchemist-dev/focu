@@ -202,6 +202,43 @@ class PublisherTests(unittest.TestCase):
             self.assertIn("audio", updated["formats"])
             self.assertEqual(len(json.loads((root / "podcast/assets/episodes.json").read_text())["episodes"]), 1)
 
+    def test_daily_briefing_article_only_when_audio_fails_qc(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            src = root / "deliveries" / "registered-20261107"
+            src.mkdir(parents=True)
+            (src / "article.md").write_text("# Original source\n\nSource result.", encoding="utf-8")
+            (src / "content.json").write_text(json.dumps({
+                "content_id": "source-1", "origin": "registered_source",
+                "podcast_mode": "daily_compilation"
+            }))
+            research = root / "deliveries" / "research-20261107"
+            research.mkdir()
+            (research / "article.md").write_text("# New investigation\n\nIndependent evidence.", encoding="utf-8")
+            (research / "content.json").write_text(json.dumps({
+                "content_id": "int_" + "b"*32, "origin": "user_initiated",
+                "podcast_mode": "none"
+            }))
+            brief = root / "deliveries" / "daily-20261107"
+            brief.mkdir()
+            (brief / "article.md").write_text("# Daily Briefing\n\nThe source and new research.", encoding="utf-8")
+            (brief / "content.json").write_text(json.dumps({
+                "content_id": "daily-2026-11-07",
+                "origin": "daily_compilation", "podcast_mode": "daily_compilation",
+                "published_at": "2026-11-07",
+                "covered_content_ids": ["source-1", "int_" + "b"*32]
+            }))
+            build(root / "deliveries", root / "bundle", Path(__file__).with_name("index.html"), 15)
+            data = json.loads((root / "bundle/assets/episodes.json").read_text())
+            by_id = {item["content_id"]: item for item in data["items"]}
+            self.assertEqual(len(by_id), 3)
+            self.assertEqual(by_id["daily-2026-11-07"]["covered_content_ids"],
+                             ["source-1", "int_"+"b"*32])
+            self.assertIn("article", by_id["daily-2026-11-07"]["formats"])
+            self.assertNotIn("audio", by_id["daily-2026-11-07"]["formats"])
+            self.assertNotIn("audio", by_id["int_"+"b"*32]["formats"])
+            self.assertEqual(len(data["episodes"]), 0)
+
     def test_daily_source_articles_and_one_compilation_link(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
