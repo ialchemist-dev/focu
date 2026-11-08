@@ -7,16 +7,11 @@ from pathlib import Path
 from focu.delivery import DeliveryArchive
 from focu.open_notebook import OpenNotebookClient
 from focu.briefing import DEFAULT_STYLE, read_style, validate_script
+from focu.transcript import transcript_text
 
 def transcript_script(value):
-    if isinstance(value, str):
-        return value
-    if isinstance(value, dict) and isinstance(value.get("segments"), list):
-        return "\n\n".join(str(x.get("text", "")) for x in value["segments"] if isinstance(x, dict))
-    if isinstance(value, list):
-        return "\n\n".join(str(x.get("text", "")) for x in value if isinstance(x, dict))
-    return ""
-
+    """Compatibility entry point for shared real-provider transcript decoding."""
+    return transcript_text(value)
 
 def deliver(evidence_id: str, episode_id: str, output_dir: str | Path, db_path: str | Path,
             client: OpenNotebookClient | None = None, *, download_audio: bool = True,
