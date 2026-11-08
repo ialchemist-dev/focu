@@ -75,6 +75,48 @@ class DeliveryTests(unittest.TestCase):
         self.assertTrue(result["briefing_qc"]["passed"])
         self.assertTrue((self.output / "briefing-qc.json").exists())
 
+    def test_real_nested_dialogue_provider_shape_passes_strict_daily_qc(self):
+        from focu.briefing import read_style, render_script
+        from focu.podcast_delivery import transcript_script
+        units = [{"id": "new1", "title": "The 948 event result",
+                  "body": "The source measured 948 events and 20 failures.",
+                  "source": "Example Company"}]
+        script = render_script(units, read_style())
+        payload = {"transcript": [{"speaker": "Narrator", "dialogue": script}]}
+        self.assertEqual(transcript_script(payload), script)
+        self.assertNotIn("Narrator", transcript_script(payload))
+        class ActualShapeClient(FakeClient):
+            def request(self, method, path):
+                episode = super().request(method, path)
+                episode["transcript"] = payload
+                return episode
+        result = deliver("ev_one", "episode:123", self.output, self.db,
+                         ActualShapeClient(), briefing_units=units, download_audio=False)
+        self.assertTrue(result["briefing_qc"]["passed"])
+        self.assertTrue((self.output / "briefing-qc.json").exists())
+
+    def test_real_nested_dialogue_provider_shape_fails_on_dropped_headlines(self):
+        from focu.podcast_delivery import transcript_script
+        units = [{"id": "new1", "title": "The 948 event result",
+                  "body": "The source measured 948 events and 20 failures.",
+                  "source": "Example Company"}]
+        payload = {"transcript": [
+            {"speaker": "Professor Sarah Kim",
+             "dialogue": "Welcome to our show. We cover interesting advances today."}
+        ]}
+        self.assertIn("Welcome to our show", transcript_script(payload))
+        class InvalidShapeClient(FakeClient):
+            def request(self, method, path):
+                episode = super().request(method, path)
+                episode["transcript"] = payload
+                return episode
+        client = InvalidShapeClient()
+        with self.assertRaisesRegex(ValueError, "briefing transcript failed item/figure QC"):
+            deliver("ev_one", "episode:123", self.output, self.db,
+                    client, briefing_units=units)
+        self.assertEqual(client.downloads, 0)
+        self.assertFalse((self.output / "podcast.mp3").exists())
+
     def test_failed_job(self):
         with self.assertRaises(RuntimeError):
             wait_and_deliver("ev_one", "job:1", self.output, self.db, FakeClient("failed"))

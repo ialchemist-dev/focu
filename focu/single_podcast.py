@@ -16,6 +16,7 @@ import urllib.parse
 from focu.audience import calibration, writing_guidance, mismatch_report, detect_domain
 from focu.intents import IntentStore
 from focu.open_notebook import OpenNotebookClient
+from focu.transcript import transcript_text as _transcript_text
 
 NUMBER = re.compile(r"(?<![A-Za-z0-9])(?:[$€£]\s*)?\d[\d,]*(?:\.\d+)?\s*(?:%|[kKmMbB]|million|billion|thousand)?(?![A-Za-z0-9])")
 HEAD = re.compile(r"^(#{1,4})\s+(.+?)\s*$", re.M)
@@ -98,30 +99,6 @@ def article_sections(article):
     if len({u["heading"].casefold() for u in units}) != len(units):
         raise ValueError("Article has duplicate section headings; clarify before generation")
     return units
-
-
-def _transcript_text(value):
-    """Flatten an episode transcript payload to plain text.
-
-    Open Notebook's real shape is {"transcript": [{"speaker": ..., "dialogue":
-    ...}]}: a mapping whose "transcript" value is a list of dialogue segments.
-    Earlier fixtures used {"segments": [{"text": ...}]}; accept both, plus
-    plain strings, so QC always audits the words the provider actually made.
-    """
-    if isinstance(value, str):
-        return value
-    if isinstance(value, dict):
-        if isinstance(value.get("segments"), list):
-            return "\n".join(_transcript_text(x) for x in value["segments"])
-        for key in ("text", "transcript", "script", "dialogue"):
-            if key in value:
-                text = _transcript_text(value[key])
-                if text:
-                    return text
-        return ""
-    if isinstance(value, list):
-        return "\n".join(_transcript_text(x) for x in value)
-    return ""
 
 
 def check_fidelity(article, transcript, domain=None):
