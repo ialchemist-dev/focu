@@ -16,11 +16,24 @@ class FakeElement {
     this.paused = true; this.seeking = false;
     this.played = { length:1,start:()=>0,end:()=>0 };
   }
-  append(...nodes) { this.children.push(...nodes); }
-  replaceChildren(...nodes) { this.children = [...nodes]; }
+  append(...nodes) {
+    for (const n of nodes) if (n && typeof n === 'object') n.parent = this;
+    this.children.push(...nodes);
+  }
+  replaceChildren(...nodes) {
+    for (const n of this.children) if (n && n.parent === this) n.parent = null;
+    this.children = [];
+    this.append(...nodes);
+  }
   addEventListener(name, callback) { this.events[name] = callback; }
   getBoundingClientRect() { return { top:10,height:200,bottom:210 }; }
-  remove() {}
+  remove() {
+    this.hidden = true;
+    if (this.parent) {
+      this.parent.children = this.parent.children.filter(x => x !== this);
+      this.parent = null;
+    }
+  }
   removeAttribute() {}
   setAttribute(name,value) { this.attributes[name] = value; }
   pause() { this.paused = true; }
@@ -112,6 +125,10 @@ function article(id){
   assert.equal(e.run("isDone('mp3-story')"),true,'completed MP3 should archive');
 }
 
+// Touch screens should not inherit sticky hover-red article titles after tapping.
+assert.match(html, /@media\s*\(hover:hover\)\s*and\s*\(pointer:fine\)/);
+assert.match(html, /\.feedcard\[hidden\]\{display:none!important\}/);
+
 // Manually archived from a list card: a separate action, not a tap to read.
 {
   const e=makeEnvironment();
@@ -121,7 +138,12 @@ function article(id){
   assert.equal(card.children[0].name,'button','separate reader action');
   const button=card.children[1].children[0];
   assert.equal(button.textContent,'Archive');
-  button.onclick();
+  let prevented=false,stopped=false;
+  button.onclick({preventDefault(){prevented=true},stopPropagation(){stopped=true}});
+  assert.equal(prevented,true,'tap should not bubble into the story opener');
+  assert.equal(stopped,true,'archive tap should not activate the reader');
+  assert.equal(card.hidden,true,'card must hide synchronously on tap');
+  assert.equal(e.get('grid').children.includes(card),false,'tapped card removed before full list reconciliation');
   assert.equal(e.run("isDone('card-story')"),true);
   assert.equal(JSON.parse(e.storage['focu:content-consumption:v1'])['card-story'].via,'manual');
   assert.equal(e.get('grid').children.length,1,'Inbox now empty');
@@ -131,7 +153,10 @@ function article(id){
   e.run("setView('archive')");
   const restore=e.get('grid').children[0].children[1].children[0];
   assert.equal(restore.textContent,'Restore');
+  const archivedCard=e.get('grid').children[0];
   restore.onclick();
+  assert.equal(archivedCard.hidden,true,'restored card hides immediately in Archive');
+  assert.equal(e.get('grid').children.includes(archivedCard),false,'restored card is removed synchronously');
   assert.equal(e.run("isDone('card-story')"),false);
   assert.equal(e.get('grid').children.length,1,'Archive empties after restore');
   e.run("setView('inbox')");
