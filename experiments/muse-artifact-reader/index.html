@@ -30,7 +30,8 @@ main{max-width:760px;margin:0 auto;padding:25px 22px 70px}
 .card-controls{display:flex;justify-content:flex-end;flex-shrink:0}
 .reader-archive{margin-left:auto}
 @media(max-width:480px){.feedcard{flex-wrap:wrap}.card-controls{width:100%;justify-content:flex-end}}
-.feedcard:hover .feedtitle{color:#b44e43}
+@media (hover:hover) and (pointer:fine){.feedcard:hover .feedtitle{color:#b44e43}}
+.feedcard[hidden]{display:none!important}
 .cardbody{flex:1;min-width:0}
 .cardmeta,.byline{font-size:12px;color:#968e85;letter-spacing:.02em}
 .feedtitle{font-size:20px;font-weight:690;letter-spacing:-.03em;line-height:1.35;margin:7px 0}
@@ -166,7 +167,16 @@ function render(items,note){
  const controls=el('div',undefined,'card-controls');
  const action=el('button',view==='archive'?'Restore':'Archive','card-action');action.type='button';
  action.setAttribute('aria-label',(view==='archive'?'Restore ':'Archive ')+item.title);
- action.onclick=()=>{if(view==='archive')markUnread(item.id);else manualArchive(item.id)};
+ action.onclick=event=>{
+   if(event){event.preventDefault();event.stopPropagation()}
+   // Hide the tapped card before storage / full-feed reconciliation. Some
+   // embedded iOS WebViews retain the tapped/hover visual until a repaint.
+   // The source-of-truth remains the existing per-content consumption store.
+   card.hidden=true;
+   card.remove();
+   if(view==='archive')markUnread(item.id);
+   else manualArchive(item.id);
+ };
  controls.append(action);card.append(controls);grid.append(card);
  }
 }
