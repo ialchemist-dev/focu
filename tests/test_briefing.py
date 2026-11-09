@@ -91,12 +91,12 @@ class BriefingTests(unittest.TestCase):
         units_with_figures = [{
             "id": "figure-briefing", "origin": "registered_source",
             "source": "Anthropic Official", "title": "Memory experiment results",
-            "body": "Figure 1 shows accuracy increasing from 31% to 42% "
-                    "(see Table 2). The evaluation included 57 facts."
+            "body": "Figures 1/2 show accuracy increasing from 31% to 42% "
+                    "(see Tables 2 and 3). The evaluation included 57 facts."
         }]
         script = render_script(units_with_figures, style)
-        self.assertNotIn("Figure 1", script)
-        self.assertNotIn("Table 2", script)
+        self.assertNotIn("Figures 1/2", script)
+        self.assertNotIn("Tables 2 and 3", script)
         self.assertIn("31%", script)
         self.assertIn("42%", script)
         self.assertIn("57", script)
