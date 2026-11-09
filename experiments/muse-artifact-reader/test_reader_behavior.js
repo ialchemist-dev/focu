@@ -301,4 +301,47 @@ assert.match(html, /\.feedcard\[hidden\]\{display:none!important\}/);
   assert.equal(audio.paused,true,'custom Play/Pause button controls the HTMLAudioElement');
 }
 
+
+// Financial Markdown tables stay semantic and horizontally scrollable on iOS.
+{
+  assert.match(html, /\.table-scroll\{[^}]*overflow-x:auto/);
+  assert.match(html, /aria-label','Scrollable article data table'/);
+  const e=makeEnvironment();
+  const blocks=[
+    {
+      type:'table',
+      headers:['Item (Q3 2026)','Figure','Notes / comparatives'],
+      align:['left','right','left'],
+      rows:[
+        ['Revenue','**$116k** ($116 thousand)','vs $55k Q3 2025 (+110%; Seeking Alpha calculates +140%)'],
+        ['Net loss attributable','**−$20.8M**','vs −$19.527M in the income statement']
+      ]
+    },
+    {type:'paragraph',text:'Figures must remain precisely attributed.'}
+  ];
+  e.run('renderArticle('+JSON.stringify(blocks)+',"")');
+  const wrapper=e.get('articlebody').children[0];
+  assert.equal(wrapper.name,'div');
+  assert.equal(wrapper.className,'table-scroll');
+  assert.equal(wrapper.attributes.role,'region');
+  assert.equal(wrapper.attributes['aria-label'],'Scrollable article data table');
+  const table=wrapper.children[0];
+  assert.equal(table.name,'table');
+  const head=table.children[0].children[0];
+  assert.equal(head.children[1].name,'th');
+  assert.equal(head.children[1].attributes.scope,'col');
+  assert.equal(head.children[1].attributes['data-align'],'right');
+  const rows=table.children[1].children;
+  assert.equal(rows.length,2);
+  assert.equal(rows[0].children[1].children[0].textContent,'$116k');
+  assert.equal(rows[0].children[1].children[1].textContent,' ($116 thousand)');
+  assert.equal(rows[1].children[1].children[0].textContent,'−$20.8M');
+  assert.match(rows[1].children[2].children[0].textContent,/−\$19\.527M/);
+  e.run('render([{id:"financial",origin:"user_initiated",source:"Your research",title:"Finance",date:"2026-11-09",blocks:'+JSON.stringify(blocks)+'}],"")');
+  const spoken=e.run('readableText(allItems[0])');
+  assert.match(spoken,/Item \(Q3 2026\): Revenue; Figure: \$116k/);
+  assert.match(spoken,/Notes \/ comparatives: vs \$55k/);
+  assert.match(spoken,/Net loss attributable; Figure: −\$20.8M/);
+}
+
 console.log('Focu reader behavior: article, local read-aloud, persistence and audio end passed');
