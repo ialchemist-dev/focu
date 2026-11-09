@@ -86,6 +86,39 @@ class BriefingTests(unittest.TestCase):
         self.assertTrue(any(x["issue"] == "missing_key_figures" and "5,034" in x["values"]
                             for x in report["issues"]))
 
+    def test_visual_citations_are_not_spoken_but_scientific_numbers_remain(self):
+        style = read_style()
+        units_with_figures = [{
+            "id": "figure-briefing", "origin": "registered_source",
+            "source": "Anthropic Official", "title": "Memory experiment results",
+            "body": "Figure 1 shows accuracy increasing from 31% to 42% "
+                    "(see Table 2). The evaluation included 57 facts."
+        }]
+        script = render_script(units_with_figures, style)
+        self.assertNotIn("Figure 1", script)
+        self.assertNotIn("Table 2", script)
+        self.assertIn("31%", script)
+        self.assertIn("42%", script)
+        self.assertIn("57", script)
+        self.assertEqual(key_figures(units_with_figures[0]), ["31%", "42%", "57"])
+        self.assertTrue(validate_script(script, units_with_figures, style)["passed"])
+
+    def test_dangling_visuals_fail_strict_qc_even_with_otherwise_complete_script(self):
+        style = read_style()
+        script = render_script(units(), style) + "\\nHost: See Figure 2 and Table 3.\\n"
+        qc = validate_script(script, units(), style)
+        self.assertFalse(qc["passed"])
+        self.assertTrue(any(x["issue"] == "dangling_visual_reference" for x in qc["issues"]))
+
+    def test_ambiguous_visual_context_requires_manual_rewriting(self):
+        style = read_style()
+        ambiguous = [{
+            "id": "ambiguous-figure", "source": "Anthropic Official",
+            "title": "Findings", "body": "The difference depends on Figure 2's color scale."
+        }]
+        with self.assertRaisesRegex(BriefingQCError, "editorial rewriting"):
+            render_script(ambiguous, style)
+
     def test_qc_rejects_show_packaging_and_unattributed_claim(self):
         style = read_style()
         script = render_script(units(), style)
