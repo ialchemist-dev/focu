@@ -110,7 +110,8 @@ const feed=document.getElementById('feed'),reader=document.getElementById('reade
 const player=document.getElementById('player'),playerbar=document.getElementById('playerbar'),readend=document.getElementById('readend');
 const params=new URLSearchParams(location.search);
 const STORE_KEY='focu:content-consumption:v1';
-let view='inbox',allItems=[],allRequests=[],storageOK=true,currentId=null,readMs=0,maxDepth=0,bottomSeen=false,contentAvailable=false;
+let view='briefing',allItems=[],allRequests=[],storageOK=true,currentId=null,readMs=0,maxDepth=0,bottomSeen=false,contentAvailable=false;
+const feedPositions={briefing:0,research:0,archive:0},articlePositions={},articleTrail=[];
 let tickAt=Date.now(),lastNote='',playingId=null,lastAudioPosition=null,listenedSeconds=0;
 let speechId=null,speechSegments=[],speechIndex=0,speechRunning=false,speechPaused=false,failedAudioId=null,speechEpoch=0;
 function canNarrate(){return !!(typeof speechSynthesis!=='undefined'&&typeof SpeechSynthesisUtterance!=='undefined')}
@@ -140,34 +141,71 @@ function normalize(data){
  return {id,title:x.title||'Untitled',summary:x.summary||'',date:x.published_at||x.date||'',source:typeof x.source==='string'?x.source:(x.source?.kind||'Focu'),cover_url:x.cover?.path||x.cover_url||'',cover_origin:x.cover?.origin||'',audio_url:x.formats?.audio?.path||x.audio_url||'',audio_duration:Number(x.formats?.audio?.duration_seconds)||null,podcast_mode:x.podcast_mode||null,origin:x.origin||null,covered_content_ids:Array.isArray(x.covered_content_ids)?x.covered_content_ids:[],article_url:x.formats?.article?.path||'',blocks:Array.isArray(x.article_blocks)?x.article_blocks:[],reading_minutes:Number(x.reading_minutes)||0};
  });
 }
-function setView(which){if(speechRunning)stopNarration();view=which;currentId=null;reader.hidden=true;feed.hidden=false;document.getElementById('inbox').classList.toggle('active',which==='inbox');document.getElementById('archive').classList.toggle('active',which==='archive');document.getElementById('researchtab').classList.toggle('active',which==='research');document.getElementById('feedheading').textContent=which==='archive'?'Your Archive':which==='research'?'Research requests':'Latest stories';render(allItems,lastNote);window.scrollTo(0,0)}
-document.getElementById('inbox').onclick=()=>setView('inbox');
+function setView(which){
+ if(which==='inbox')which='briefing'; // legacy navigation alias
+ if(!['briefing','research','archive'].includes(which))return;
+ if(currentId)articlePositions[currentId]=scrollY;
+ else feedPositions[view]=scrollY;
+ view=which;currentId=null;articleTrail.length=0;reader.hidden=true;feed.hidden=false;
+ // Switching tabs does not stop Podcast playback or device read-aloud.
+ document.getElementById('briefingtab').classList.toggle('active',which==='briefing');
+ document.getElementById('archive').classList.toggle('active',which==='archive');
+ document.getElementById('researchtab').classList.toggle('active',which==='research');
+ const labels={briefing:'Daily Briefing',research:'Research',archive:'Your Archive'};
+ document.getElementById('feedheading').textContent=labels[which];
+ render(allItems,lastNote);
+ window.scrollTo(0,feedPositions[which]||0);
+}
+document.getElementById('briefingtab').onclick=()=>setView('briefing');
 document.getElementById('archive').onclick=()=>setView('archive');
 document.getElementById('researchtab').onclick=()=>setView('research');
+function itemKind(item){
+ if(item.origin==='daily_compilation'||(item.covered_content_ids||[]).length)return 'briefing';
+ if(item.origin==='user_initiated'||item.source==='Your research'||item.podcast_mode==='single')return 'research';
+ return 'source';
+}
+function newestFirst(a,b){return String(b.date||'').localeCompare(String(a.date||''))}
+function appendResearchQueue(){
+ if(!allRequests.length)return;
+ grid.append(el('h2','Requests in progress','sectiontitle'));
+ for(const request of allRequests){
+  const card=el('div',undefined,'feedcard'),body=el('div',undefined,'cardbody');
+  const labels={queued:'Queued',researching:'Researching',completed:'Research completed · Awaiting publication',failed:'Research failed'};
+  body.append(el('div',labels[request.status]||'Unknown','cardmeta'));
+  body.append(el('h2',request.title||'Untitled research','feedtitle'));
+  if(request.status==='failed'&&request.error)body.append(el('p',request.error,'feedsummary'));
+  card.append(body);grid.append(card);
+ }
+}
 function compilationFor(id){
  return allItems.find(item=>Array.isArray(item.covered_content_ids)&&item.covered_content_ids.includes(id))||null;
 }
 function render(items,note){
  allItems=items;lastNote=note;grid.replaceChildren();
- if(view==='research'){
-   status.textContent=allRequests.length+' research requests · Snapshot at last publication';
-   const info=el('p','Updates appear when Muse publishes a new snapshot.','feedsummary');
-   grid.append(info);
-   if(!allRequests.length){grid.append(el('p','No outstanding research. Completed reports appear in Inbox.','empty'));return}
-   for(const request of allRequests){
-     const card=el('div',undefined,'feedcard'),body=el('div',undefined,'cardbody');
-     const labels={queued:'Queued',researching:'Researching',completed:'Research completed · Awaiting publication',failed:'Research failed'};
-     body.append(el('div',labels[request.status]||'Unknown','cardmeta'));
-     body.append(el('h2',request.title||'Untitled research','feedtitle'));
-     if(request.status==='failed'&&request.error)body.append(el('p',request.error,'feedsummary'));
-     card.append(body);grid.append(card);
-   }
+ let visible=[];
+ if(view==='archive'){
+   visible=items.filter(x=>isDone(x.id)).sort(newestFirst);
+ }else if(view==='research'){
+   visible=items.filter(x=>!isDone(x.id)&&itemKind(x)==='research').sort(newestFirst);
+ }else{
+   const briefs=items.filter(x=>!isDone(x.id)&&itemKind(x)==='briefing').sort(newestFirst);
+   // Uncompiled registered-source articles remain reachable without mixing
+   // commissioned research reports into the Daily Briefing stream.
+   const uncovered=items.filter(x=>!isDone(x.id)&&itemKind(x)==='source'&&!compilationFor(x.id)).sort(newestFirst);
+   visible=[...briefs,...uncovered];
+ }
+ status.textContent=visible.length+' '+(view==='archive'?'archived items':view==='research'?'research reports':'briefings and uncovered sources')+
+   (note?' · '+note:'')+(!storageOK?' · Reading state cannot be saved':'');
+ if(!visible.length&&!(view==='research'&&allRequests.length)){
+   grid.append(el('p',view==='archive'?'Nothing archived yet.':view==='research'?'No research reports yet.':'You are all caught up.','empty'));
    return;
  }
- const visible=items.filter(x=>isDone(x.id)===(view==='archive'));
- status.textContent=visible.length+' '+(view==='archive'?'saved stories':'new stories')+(note?' · '+note:'')+(!storageOK?' · Reading state cannot be saved':'');
- if(!visible.length){grid.append(el('p',view==='archive'?'Nothing here yet. Finished stories will appear here.':'You are all caught up.','empty'));return}
+ let sourceHeadingShown=false;
  for(const item of visible){
+  if(view==='briefing'&&itemKind(item)==='source'&&!sourceHeadingShown){
+    grid.append(el('h2','Source updates not yet in a briefing','sectiontitle'));
+    sourceHeadingShown=true;
+  }
  const card=el('div',undefined,'feedcard');
  const open=el('button',undefined,'feed-open');open.type='button';open.setAttribute('aria-label','Read '+item.title);open.onclick=()=>openItem(item.id);
  const body=el('div',undefined,'cardbody');
@@ -196,6 +234,7 @@ function render(items,note){
  };
  controls.append(action);card.append(controls);grid.append(card);
  }
+ if(view==='research')appendResearchQueue();
 }
 function inline(parent,raw){
  const text=String(raw||'');const pattern=/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)|\*\*([^*]+)\*\*/g;
