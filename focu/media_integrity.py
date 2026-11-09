@@ -76,6 +76,37 @@ def inspect_mp3(path: str | Path, *, timeout_seconds: int = 120) -> dict:
 
 
 
+
+def transcode_ios_cbr(source: str | Path, target: str | Path) -> dict:
+    """Create an isolated 128 kb/s mono CBR MP3 for embedded iOS players.
+
+    Experimental compatibility option, *not* proof that WKWebView will emit
+    audible output. Preserve the source MP3 and validate complete decoded
+    duration on both sides before committing a published artifact.
+    """
+    source, target = Path(source), Path(target)
+    if source.resolve() == target.resolve() or target.is_symlink():
+        raise MediaIntegrityError("CBR output must be a distinct regular file")
+    original = inspect_mp3(source)
+    try:
+        subprocess.run(
+            ["ffmpeg", "-hide_banner", "-v", "error", "-xerror", "-y",
+             "-i", str(source), "-map", "0:a:0", "-vn",
+             "-c:a", "libmp3lame", "-b:a", "128k",
+             "-ar", "44100", "-ac", "1", "-write_xing", "0",
+             "-id3v2_version", "3", str(target)],
+            capture_output=True, text=True, check=True, timeout=600)
+        converted = inspect_mp3(target)
+        if abs(converted["decoded_duration_seconds"] -
+               original["decoded_duration_seconds"]) > max(
+                   1.5, original["decoded_duration_seconds"] * 0.01):
+            raise MediaIntegrityError("CBR transform changed decoded duration")
+        return {"source_audit": original, "published_audit": converted,
+                "profile": "mp3_cbr_128k_mono_44100"}
+    except (subprocess.SubprocessError, OSError) as exc:
+        raise MediaIntegrityError("iOS CBR transform failed: " +
+                                  type(exc).__name__) from exc
+
 def main(argv=None) -> int:
     """Audit existing private delivery MP3 files before publishing to Muse."""
     import argparse
