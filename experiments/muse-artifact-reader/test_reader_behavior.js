@@ -63,7 +63,7 @@ function makeEnvironment(saved = {}) {
   };
   const ctx = {
     console,URL,URLSearchParams,Date,document,
-    window:{addEventListener(){},scrollTo(){}},
+    window:{addEventListener(){},scrollTo(x,y){ctx.scrollY=y||0}},
     innerHeight:650,scrollY:0,location:{search:''},
     localStorage:{
       getItem(k){return storage[k] || null},
@@ -80,7 +80,7 @@ function makeEnvironment(saved = {}) {
 }
 function article(id){
   return "{id:'"+id+"',title:'A grounded research story',summary:'Short context',source:'Your research',"+
-    "date:'2026-11-04',cover_url:'',audio_url:'',"+
+    "date:'2026-11-04',origin:'daily_compilation',cover_url:'',audio_url:'',"+
     "blocks:[{type:'heading',level:1,text:'A grounded research story'},"+
     "{type:'paragraph',text:'The source provides evidence about the tradeoff.'}],reading_minutes:1}";
 }
@@ -200,4 +200,80 @@ assert.match(html, /\.feedcard\[hidden\]\{display:none!important\}/);
   assert.equal(e.get('listen').hidden,false,'compiled episode has real audio');
   assert.equal(e.get('readaloud').hidden,true);
 }
+
+// Daily Briefing contains compiled reports; completed on-demand articles live
+// under Research. Source articles remain linked from the compilation.
+{
+  const e=makeEnvironment();
+  e.run("render(["+
+    "{id:'daily-8',origin:'daily_compilation',title:'Earlier briefing',date:'2026-11-08',source:'Focu',blocks:[{type:'paragraph',text:'Earlier'}],covered_content_ids:[]},"+
+    "{id:'source-1',origin:'registered_source',title:'Original experiment',date:'2026-11-09',source:'Anthropic',blocks:[{type:'paragraph',text:'Evidence'}]},"+
+    "{id:'daily-9',origin:'daily_compilation',title:'Latest briefing',date:'2026-11-09',source:'Focu',audio_url:'media/briefing.mp3',blocks:[{type:'paragraph',text:'Daily report'}],covered_content_ids:['source-1','research-1']},"+
+    "{id:'research-1',origin:'user_initiated',title:'New METR research',date:'2026-11-09',source:'Your research',blocks:[{type:'paragraph',text:'Evidence-backed analysis'}]},"+
+    "{id:'research-2',origin:'user_initiated',title:'Earlier research',date:'2026-11-06',source:'Your research',blocks:[{type:'paragraph',text:'Prior analysis'}]}"+
+  "],'')");
+  assert.equal(e.run('view'),'briefing');
+  assert.equal(e.get('grid').children.length,2,'daily home lists compilations, not covered sources or research');
+  assert.match(e.get('grid').children[0].children[0].children[0].children[1].textContent,/Latest briefing/);
+  e.run("openItem('daily-9')");
+  assert.equal(e.get('coveredsection').hidden,false);
+  assert.equal(e.get('coveredarticles').children.length,2,'daily briefing links all covered original articles');
+  e.get('coveredarticles').children[0].onclick();
+  assert.equal(e.run('currentId'),'source-1');
+  assert.equal(e.get('coveredby').hidden,false);
+  e.get('back').onclick();
+  assert.equal(e.run('currentId'),'daily-9','Back from source returns to briefing');
+  e.get('listen').onclick();
+  assert.equal(e.get('playerbar').hidden,false,'briefing playback controls active');
+  assert.equal(e.run('playingId'),'daily-9');
+  e.run("setView('research')");
+  assert.equal(e.get('playerbar').hidden,false,'tab switching must not interrupt playback');
+  assert.equal(e.get('player').paused,false);
+  assert.equal(e.get('grid').children.length,2,'research lists published commissioned research only');
+  assert.match(e.get('grid').children[0].children[0].children[0].children[1].textContent,/New METR research/);
+  e.run("openItem('research-1')");
+  e.run('scrollY=280');
+  e.run("setView('briefing')");
+  e.run("setView('research')");
+  e.run("openItem('research-1')");
+  assert.equal(e.run('scrollY'),280,'per-article reading position is restored after tab switch');
+  e.get('readerarchive').onclick();
+  e.run("setView('archive')");
+  assert.equal(e.get('grid').children.length,1,'archived research stays reachable in Archive');
+  e.get('grid').children[0].children[1].children[0].onclick();
+  e.run("setView('research')");
+  assert.equal(e.get('grid').children.length,2,'Restore returns research to its own category');
+}
+// The Research tab also displays pending requests without replacing finished reports.
+{
+  const e=makeEnvironment();
+  e.run("allRequests=[{intent_id:'int_123',title:'Queued investigation',status:'queued'}]");
+  e.run("render([{id:'research-complete',title:'Finished research',origin:'user_initiated',source:'Your research',date:'2026-11-09',blocks:[{type:'paragraph',text:'Research'}]}],'')");
+  e.run("setView('research')");
+  assert.equal(e.get('grid').children.length,3,'report plus queue heading and queued request');
+}
+// Muse-safe player must be above the host bottom chrome; finger hit targets are
+// touch-sized instead of relying on the iOS native tiny audio seek thumb.
+{
+  assert.match(html, /--muse-chrome-clearance:68px/);
+  assert.match(html, /env\(safe-area-inset-bottom,0px\)/);
+  assert.match(html, /#seekbar\{[^}]*height:44px/);
+  const e=makeEnvironment();
+  e.run("render([{id:'mp3',origin:'daily_compilation',title:'Audio briefing',date:'2026-11-09',audio_url:'assets/brief.mp3',blocks:[{type:'paragraph',text:'Brief'}]}],'')");
+  e.run("openItem('mp3')");
+  e.get('listen').onclick();
+  const audio=e.get('player');
+  audio.duration=240;
+  audio.events.loadedmetadata();
+  const slider=e.get('seekbar');
+  assert.equal(slider.disabled,false);
+  slider.value='500';
+  slider.events.input();
+  assert.equal(audio.currentTime,120,'touch scrubbing reaches the requested half-way position');
+  assert.equal(e.get('elapsed').textContent,'2:00');
+  assert.equal(e.get('remaining').textContent,'−2:00');
+  e.get('playpause').onclick();
+  assert.equal(audio.paused,true,'custom Play/Pause button controls the HTMLAudioElement');
+}
+
 console.log('Focu reader behavior: article, local read-aloud, persistence and audio end passed');
