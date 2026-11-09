@@ -30,6 +30,73 @@ class PublisherTests(unittest.TestCase):
             with self.assertRaises(FileExistsError):
                 build(deliveries, output, template, 15)
 
+    def test_gfm_financial_table_preserves_figure_columns_and_exact_values(self):
+        markdown = (
+            "# Quarterly financial results\n\n"
+            "| Item (Q3 2026) | Figure | Notes / comparatives |\n"
+            "|:---|---:|:---|\n"
+            "| Revenue | **$116k** ($116 thousand) | vs $55k Q3 2025 (+110% per table; Seeking Alpha calculates +140%) |\n"
+            "| Net income (consolidated) | **+$11.66M** | vs −$15.79M Q3 2025; 9M: −$76.09M |\n"
+            "| Net loss attributable | **−$20.8M** | −$19.527M in income statement; see discrepancy note |\n"
+            "| Geography | N/A | Utah \| Nevada comparison |\n\n"
+            "The report includes an important reconciliation note."
+        )
+        blocks = blocks_from_markdown(markdown)
+        tables = [block for block in blocks if block["type"] == "table"]
+        self.assertEqual(len(tables), 1)
+        table = tables[0]
+        self.assertEqual(table["headers"], ["Item (Q3 2026)", "Figure", "Notes / comparatives"])
+        self.assertEqual(table["align"], ["left", "right", "left"])
+        self.assertEqual(len(table["rows"]), 4)
+        self.assertEqual(table["rows"][0][1], "**$116k** ($116 thousand)")
+        self.assertIn("+140%", table["rows"][0][2])
+        self.assertEqual(table["rows"][1][1], "**+$11.66M**")
+        self.assertEqual(table["rows"][2][1], "**−$20.8M**")
+        self.assertEqual(table["rows"][3][2], "Utah | Nevada comparison")
+        self.assertTrue(any(b["type"] == "paragraph" and "reconciliation" in b["text"] for b in blocks))
+
+    def test_table_is_published_as_structured_blocks_without_rewriting_source(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            folder = root / "deliveries" / "financial-20261109"
+            folder.mkdir(parents=True)
+            markdown = (
+                "# Financial original\n\n"
+                "| Metric | Amount | Comparison |\n"
+                "| --- | ---: | --- |\n"
+                "| Revenue | **$116k** | Q3 2025: $55k |\n"
+                "| Loss | **−$20.8M** | Consolidated reconciliation |\n"
+            )
+            (folder / "article.md").write_text(markdown, encoding="utf-8")
+            (folder / "content.json").write_text(json.dumps({
+                "content_id": "financial-2026-11-09",
+                "origin": "user_initiated", "podcast_mode": "none"
+            }), encoding="utf-8")
+            bundle = root / "bundle"
+            build(root / "deliveries", bundle, Path(__file__).with_name("index.html"), 15)
+            data = json.loads((bundle / "assets/episodes.json").read_text())
+            item = data["items"][0]
+            tables = [x for x in item["article_blocks"] if x["type"] == "table"]
+            self.assertEqual(len(tables), 1)
+            self.assertEqual(tables[0]["rows"][1], ["Loss", "**−$20.8M**", "Consolidated reconciliation"])
+            staged_md = bundle / item["formats"]["article"]["path"]
+            self.assertEqual(staged_md.read_text(encoding="utf-8"), markdown)
+            self.assertEqual(sha256(staged_md), sha256(folder / "article.md"))
+            self.assertNotIn("audio", item["formats"])
+
+    def test_markdown_lookalike_and_code_fences_are_not_recast_as_tables(self):
+        markdown = (
+            "A sentence with | pipes is not a table.\n\n"
+            "```markdown\n"
+            "| Item | Amount |\n| --- | --- |\n| Example | $42 |\n"
+            "```\n\n"
+            "| Not really | table |\n"
+            "| Arbitrary text | not delimiter |\n"
+        )
+        blocks = blocks_from_markdown(markdown)
+        self.assertFalse(any(x["type"] == "table" for x in blocks))
+        self.assertTrue(any(x["type"] == "code" for x in blocks))
+
     def test_dates_and_chronological_limit(self):
         self.assertEqual(episode_date("frontier-20261102"), "2026-11-02")
         self.assertEqual(episode_date("voice-input_20261018"), "2026-10-18")
