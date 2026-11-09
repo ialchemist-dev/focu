@@ -270,6 +270,40 @@ class PublisherTests(unittest.TestCase):
                 self.assertNotIn("audio", by_id["source-"+str(n)]["formats"])
                 self.assertEqual(by_id["source-"+str(n)]["podcast_mode"], "daily_compilation")
 
+    def test_compilation_with_mp3_carries_audio_url_for_listen_button(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            src = root / "deliveries" / "source-20261108"
+            src.mkdir(parents=True)
+            (src / "article.md").write_text("# Source item\n\nFactual source report.")
+            (src / "content.json").write_text(json.dumps({
+                "content_id": "source-1", "origin": "registered_source",
+                "podcast_mode": "daily_compilation"
+            }))
+            brief = root / "deliveries" / "daily-20261108"
+            brief.mkdir()
+            (brief / "article.md").write_text("# Daily Briefing\n\nCompiled briefing.")
+            (brief / "podcast.mp3").write_bytes(b"compilation-audio-fixture")
+            (brief / "content.json").write_text(json.dumps({
+                "content_id": "daily-2026-11-08", "origin": "daily_compilation",
+                "podcast_mode": "daily_compilation", "published_at": "2026-11-08",
+                "covered_content_ids": ["source-1"]
+            }))
+            output = root / "bundle"
+            build(root / "deliveries", output, Path(__file__).with_name("index.html"), 15)
+            data = json.loads((output / "assets/episodes.json").read_text())
+            by_id = {item["content_id"]: item for item in data["items"]}
+            compilation = by_id["daily-2026-11-08"]
+            self.assertIn("audio_url", compilation)
+            self.assertEqual(compilation["formats"]["audio"]["path"],
+                             compilation["audio_url"])
+            self.assertEqual(compilation["formats"]["audio"]["mime_type"], "audio/mpeg")
+            self.assertEqual((output / compilation["audio_url"]).read_bytes(),
+                             b"compilation-audio-fixture")
+            self.assertEqual([x["content_id"] for x in data["episodes"]],
+                             ["daily-2026-11-08"])
+            self.assertNotIn("audio", by_id["source-1"]["formats"])
+
     def test_compilation_can_cover_user_research_without_authorizing_standalone_audio(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
