@@ -17,7 +17,8 @@ ORDER = {"registered_source": 0, "requested_research": 1, "interest_follow_up": 
 
 # Figure and table numbers are *visual locators*, not measured quantities.
 # These figures are absent from a text-only briefing or spoken script.
-VISUAL_LABEL = r"(?:fig(?:ure)?s?\.?|tables?|charts?|diagrams?|panels?|screenshots?|images?)\s+(?:S?\d+[A-Za-z]?)"
+VISUAL_LABEL = (r"(?:fig(?:ure)?s?\.?|tables?|charts?|diagrams?|panels?|screenshots?|images?)\s+"
+                r"(?:S?\d+[A-Za-z]?)(?:(?:\s*[,/&–-]\s*|\s+(?:and|to)\s+)S?\d+[A-Za-z]?)*")
 VISUAL_REF = re.compile(r"\b" + VISUAL_LABEL + r"\b", re.I)
 
 
