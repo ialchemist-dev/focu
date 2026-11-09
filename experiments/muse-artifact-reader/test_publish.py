@@ -534,6 +534,63 @@ class PublisherTests(unittest.TestCase):
                       Path(__file__).with_name("index.html"), 15, verify_audio=True)
             self.assertFalse((root / "rejected-bundle").exists())
 
+    @unittest.skipUnless(shutil.which("ffmpeg") and shutil.which("ffprobe"),
+                         "requires local audio tools")
+    def test_ios_compat_publisher_cbr_is_opt_in_and_preserves_delivery(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            delivery = root / "deliveries" / "daily-20261109"
+            delivery.mkdir(parents=True)
+            (delivery / "article.md").write_text(
+                "# Daily Briefing\\n\\nOriginal research numbers retained.")
+            (delivery / "content.json").write_text(json.dumps({
+                "content_id": "daily-2026-11-09",
+                "origin": "daily_compilation",
+                "podcast_mode": "daily_compilation",
+                "published_at": "2026-11-09",
+                "covered_content_ids": ["source-1"]
+            }))
+            source = root / "deliveries" / "source-20261109"
+            source.mkdir()
+            (source / "article.md").write_text("# Source\\n\\nEvidence.")
+            (source / "content.json").write_text(json.dumps({
+                "content_id": "source-1", "origin": "registered_source",
+                "podcast_mode": "daily_compilation"
+            }))
+            original_mp3 = delivery / "podcast.mp3"
+            subprocess.run([
+                "ffmpeg", "-hide_banner", "-v", "error", "-y",
+                "-f", "lavfi", "-i", "sine=frequency=440:duration=6",
+                "-c:a", "libmp3lame", "-q:a", "2", str(original_mp3)
+            ], check=True, capture_output=True, timeout=60)
+            original_hash = sha256(original_mp3)
+            with self.assertRaisesRegex(ValueError, "requires strict audio audit"):
+                build(root / "deliveries", root / "unsafe",
+                      Path(__file__).with_name("index.html"), 15,
+                      ios_compatible_audio=True, verify_audio=False)
+            out = root / "bundle-ios"
+            build(root / "deliveries", out,
+                  Path(__file__).with_name("index.html"), 15,
+                  ios_compatible_audio=True, verify_audio=True)
+            self.assertEqual(sha256(original_mp3), original_hash,
+                             "publisher must leave original deliveries unchanged")
+            report = json.loads((out / "build-report.json").read_text())
+            converted = report["audio_transforms"]["daily-20261109"]
+            self.assertEqual(converted["profile"], "mp3_cbr_128k_mono_44100")
+            self.assertEqual(converted["source_sha256"], original_hash)
+            self.assertNotEqual(converted["published_sha256"], original_hash)
+            self.assertAlmostEqual(converted["published_decoded_duration_seconds"],
+                                   converted["source_decoded_duration_seconds"], delta=1.5)
+            manifest = json.loads((out / "assets/episodes.json").read_text())
+            episode = next(x for x in manifest["items"]
+                           if x["content_id"] == "daily-2026-11-09")
+            staged = out / episode["formats"]["audio"]["path"]
+            self.assertEqual(sha256(staged), converted["published_sha256"])
+            self.assertEqual(sha256(staged),
+                             report["sha256"][episode["formats"]["audio"]["path"]])
+            self.assertNotIn("audio", next(x for x in manifest["items"]
+                                         if x["content_id"] == "source-1")["formats"])
+
     def test_legacy_html_article_is_safe_and_auto_readable(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
