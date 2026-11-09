@@ -64,6 +64,8 @@ body:has(#playerbar:not([hidden])) main{padding-bottom:calc(160px + var(--muse-c
 .playtop{display:flex;align-items:center;justify-content:space-between;gap:12px}
 #nowplaying{font-size:12px;color:#68615b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #closeaudio{border:0;background:none;color:#827d76;font-size:22px;min-width:44px;min-height:44px}
+#recoveraudio{border:0;background:transparent;color:#3e6e66;font-size:12px;min-height:44px;padding:6px 8px;margin-left:auto;white-space:nowrap}
+#recoveraudio:focus-visible{outline:3px solid #bd6258}
 #player{display:none}
 .playcontrols{display:flex;align-items:center;gap:10px;min-height:48px}
 #playpause{height:44px;width:44px;flex:none;border:0;border-radius:50%;background:#282522;color:white;font-size:20px}
@@ -101,7 +103,7 @@ body:has(#playerbar:not([hidden])) main{padding-bottom:calc(160px + var(--muse-c
 
 </section>
 </main>
-<div id="playerbar" hidden><div class="playinner"><div class="playtop"><span id="nowplaying"></span><button id="closeaudio" type="button" aria-label="Close player">×</button></div><div class="playcontrols"><button id="playpause" type="button" aria-label="Play or pause audio">▶</button><span id="elapsed" class="playtime">0:00</span><input id="seekbar" type="range" min="0" max="1000" value="0" step="1" aria-label="Seek audio position" disabled><span id="remaining" class="playtime">−0:00</span></div><audio id="player" preload="metadata"></audio></div></div>
+<div id="playerbar" hidden><div class="playinner"><div class="playtop"><span id="nowplaying"></span><button id="recoveraudio" type="button" title="If audio becomes silent while time advances, restart the media decoder from this position">↻ Recover audio</button><button id="closeaudio" type="button" aria-label="Close player">×</button></div><div class="playcontrols"><button id="playpause" type="button" aria-label="Play or pause audio">▶</button><span id="elapsed" class="playtime">0:00</span><input id="seekbar" type="range" min="0" max="1000" value="0" step="1" aria-label="Seek audio position" disabled><span id="remaining" class="playtime">−0:00</span></div><audio id="player" preload="metadata"></audio></div></div>
 <script id="embedded-episodes" type="application/json">{"episodes":[]}</script>
 <script>
 'use strict';
@@ -117,7 +119,7 @@ if(requestedClearance!==null&&/^\d{1,3}$/.test(requestedClearance)&&Number(reque
 const STORE_KEY='focu:content-consumption:v1';
 let view='briefing',allItems=[],allRequests=[],storageOK=true,currentId=null,readMs=0,maxDepth=0,bottomSeen=false,contentAvailable=false;
 const feedPositions={briefing:0,research:0,archive:0},articlePositions={},articleTrail=[];
-let tickAt=Date.now(),lastNote='',playingId=null,lastAudioPosition=null,listenedSeconds=0;
+let tickAt=Date.now(),lastNote='',playingId=null,lastAudioPosition=null,listenedSeconds=0,pendingRecoveryTime=null;
 let speechId=null,speechSegments=[],speechIndex=0,speechRunning=false,speechPaused=false,failedAudioId=null,speechEpoch=0;
 function canNarrate(){return !!(typeof speechSynthesis!=='undefined'&&typeof SpeechSynthesisUtterance!=='undefined')}
 function readStates(){try{const obj=JSON.parse(localStorage.getItem(STORE_KEY)||'{}');return obj&&typeof obj==='object'&&!Array.isArray(obj)?obj:{}}catch(e){storageOK=false;return {}}}
@@ -426,7 +428,24 @@ document.getElementById('listen').onclick=()=>{
  syncPlayerUI();
  player.play().then(syncPlayerUI).catch(()=>{document.getElementById('nowplaying').textContent='Tap Play to start audio';syncPlayerUI()});
 };
-document.getElementById('closeaudio').onclick=()=>{player.pause();playerbar.hidden=true;syncPlayerUI()};
+document.getElementById('recoveraudio').onclick=()=>{
+ // WebKit sometimes reports playing/currentTime even though audible output
+ // is silent. No Web Audio output inspection is reliable in a host WebView;
+ // recovery must therefore be a user-initiated decoder reset.
+ const item=allItems.find(x=>x.id===playingId);
+ const url=item?safeUrl(item.audio_url):null;
+ if(!url){document.getElementById('nowplaying').textContent='No audio source available to recover';return}
+ pendingRecoveryTime=Number.isFinite(player.currentTime)?Math.max(0,player.currentTime):0;
+ lastAudioPosition=null; // seeking/reloading is not evidence of listening
+ document.getElementById('nowplaying').textContent='Reconnecting audio near '+audioClock(pendingRecoveryTime)+'…';
+ player.pause();
+ player.removeAttribute('src');
+ player.load();
+ player.src=url;
+ player.load(); // loadedmetadata will seek and resume
+ syncPlayerUI();
+};
+document.getElementById('closeaudio').onclick=()=>{pendingRecoveryTime=null;player.pause();playerbar.hidden=true;syncPlayerUI()};
 player.addEventListener('seeking',()=>{lastAudioPosition=null});
 player.addEventListener('timeupdate',()=>{
  if(player.paused||player.seeking||!Number.isFinite(player.currentTime))return;
@@ -447,6 +466,18 @@ player.addEventListener('ended',()=>{
  else document.getElementById('nowplaying').textContent='Playback ended · Not enough listening time to archive';
 });
 player.addEventListener('loadedmetadata',()=>{
+ if(pendingRecoveryTime!==null){
+   const target=pendingRecoveryTime;
+   pendingRecoveryTime=null;
+   if(Number.isFinite(player.duration)&&player.duration>0){
+     player.currentTime=Math.min(target,Math.max(0,player.duration-0.25));
+   }
+   document.getElementById('nowplaying').textContent=
+       (allItems.find(x=>x.id===playingId)?.title||'Audio')+' · Restarted at '+audioClock(player.currentTime);
+   player.play().then(syncPlayerUI).catch(()=>{
+     document.getElementById('nowplaying').textContent='Tap Play to resume after audio recovery';
+   });
+ }
  syncPlayerUI();
  const item=allItems.find(x=>x.id===playingId);
  if(item&&item.audio_duration&&Number.isFinite(player.duration)&&
@@ -457,6 +488,7 @@ player.addEventListener('loadedmetadata',()=>{
 player.addEventListener('stalled',()=>{document.getElementById('nowplaying').textContent='Playback stalled · Waiting for audio data'});
 
 player.addEventListener('error',()=>{
+ pendingRecoveryTime=null;
  failedAudioId=playingId;
  document.getElementById('nowplaying').textContent='Podcast audio unavailable. You can still read the article.';
  if(currentId===playingId&&allItems.some(x=>x.id===currentId&&x.blocks.length)){
