@@ -12,6 +12,7 @@ from pathlib import Path
 from .collectors import FetchResult, collect
 from .config import enabled_sources
 from .errors import FewError
+from focu import tts as tts_adapter
 from focu.media_integrity import inspect_mp3, MediaIntegrityError
 from focu.briefing import read_style, render_script, validate_script, BriefingQCError
 from focu.audience import load_profile, detect_domain, mismatch_report
@@ -141,7 +142,20 @@ def compose(store, cfg, run, channel=None):
             continue
         units = store.units(ep["episode_id"])
         try:
-            script = ep["script"] or render_script(units, style)
+            script = ep["script"]
+            if not script:
+                # Host-authored script convention: a script the host placed
+                # at episodes/<date>/<channel>-script.txt before compose is
+                # adopted as the episode script and held to exactly the same
+                # coverage QC as a stored or rendered script. Compose itself
+                # writes that path only after QC passes, so a file found here
+                # on a later resume is either the frozen script or a host
+                # replacement, and validation below decides which is usable.
+                hosted = ep_dir / f"{ep['channel_id']}-script.txt"
+                if hosted.is_file() and hosted.stat().st_size:
+                    script = hosted.read_text(encoding="utf-8")
+                else:
+                    script = render_script(units, style)
             qc = validate_script(script, units, style)
         except (BriefingQCError, ValueError, KeyError) as exc:
             raise FewError("briefing composition failed: " + str(exc), "briefing_qc_failed", 4) from exc
@@ -199,6 +213,86 @@ def tts_argv(cfg):
     return value
 
 
+def builtin_audio_attempt(ep, ep_dir, script_path, voice):
+    """D1 script-first audio route (owner decision, 2026-11-08).
+
+    Runs script fidelity QC -> focu tts synthesis -> post-audio audit for one
+    compilation episode. Returns (record, audio_info); audio_info is None
+    unless every stage passed. Audio-stage problems never raise: each is
+    recorded with its stage name so the caller can still finalize the
+    episode as text_only and the run can succeed. The explicit tts_argv
+    route keeps its original fail-hard contract and does not come through
+    here.
+    """
+    channel = ep["channel_id"]
+    audio_path = ep_dir / f"{channel}.mp3"
+    receipt_path = ep_dir / f".{channel}-audio-receipt.json"
+    record = {"backend": "focu_tts", "status": "failed", "stage": "script_qc"}
+    # 1. Script-stage fidelity QC on the actual script text. The briefing
+    # style requires externally authored scripts to run the same validator
+    # before audio synthesis; the frozen script hash was already verified by
+    # the caller, so this verdict describes the exact text being voiced.
+    try:
+        style = read_style()
+        units = json.loads((ep_dir / f"{channel}-units.json").read_text(encoding="utf-8"))
+        script_text = script_path.read_text(encoding="utf-8")
+        qc = validate_script(script_text, units, style)
+    except (OSError, ValueError, BriefingQCError) as exc:
+        record["reason"] = "script QC could not run: " + str(exc)[:200]
+        return record, None
+    record["script_qc"] = {"passed": qc["passed"], "item_count": qc["item_count"],
+                           "covered_sections": qc["covered_sections"],
+                           "issues": qc["issues"], "style_version": qc["style_version"],
+                           "style_sha256": qc["style_sha256"]}
+    if not qc["passed"]:
+        record["reason"] = "script failed fidelity QC; no audio synthesized"
+        return record, None
+    # Receipt reuse mirrors the argv route: a crash between publishing audio
+    # and committing coverage resumes without a second provider request.
+    receipt = None
+    if receipt_path.exists():
+        try:
+            receipt = json.loads(receipt_path.read_text())
+        except (ValueError, OSError):
+            receipt = None
+    if (receipt and receipt.get("episode_id") == ep["episode_id"] and
+            receipt.get("script_hash") == ep["script_hash"] and audio_path.exists() and
+            receipt.get("audio_hash") == file_hash(audio_path)):
+        record.update(status="generated", stage="complete", reused=True)
+        return record, {"audio": str(audio_path), "audio_hash": receipt["audio_hash"],
+                        "duration_seconds": receipt["duration_seconds"]}
+    # 2. Unconfigured TTS is a recorded skip, never a failed run.
+    record["stage"] = "tts_config"
+    if not tts_adapter.status().get("configured"):
+        record.update(status="skipped",
+                      reason="focu tts is not configured on this host; episode stays text-only")
+        return record, None
+    # 3. Synthesis (long-form chunking lives in focu.tts), then 4. the
+    # post-audio audit on decoded audio, shared with the argv route.
+    fd, tmp = tempfile.mkstemp(dir=ep_dir, suffix=".mp3", prefix=".focu-tts-")
+    os.close(fd)
+    tmp_path = Path(tmp)
+    try:
+        record["stage"] = "tts_synthesis"
+        kwargs = {} if not voice or voice == "default" else {"voice": voice}
+        result = tts_adapter.synthesize_long(script_path, tmp_path, **kwargs)
+        record["stage"] = "audio_audit"
+        duration = audio_probe(tmp_path)
+    except (FewError, ValueError, RuntimeError, OSError,
+            subprocess.SubprocessError) as exc:
+        tmp_path.unlink(missing_ok=True)
+        record["reason"] = str(exc)[:300]
+        return record, None
+    receipt = {"episode_id": ep["episode_id"], "script_hash": ep["script_hash"],
+               "audio_hash": file_hash(tmp_path), "duration_seconds": duration,
+               "backend": "focu_tts", "chunks": result.get("chunks")}
+    write_json(receipt_path, receipt)
+    os.replace(tmp_path, audio_path)
+    record.update(status="generated", stage="complete")
+    return record, {"audio": str(audio_path), "audio_hash": receipt["audio_hash"],
+                    "duration_seconds": duration}
+
+
 def finalize_episodes(store, cfg, run, channel=None):
     ep_dir = store.data_dir / "episodes" / run["episode_date"]
     outcomes = []
@@ -227,7 +321,41 @@ def finalize_episodes(store, cfg, run, channel=None):
                         "script": str(script_path), "script_hash": ep["script_hash"],
                         "units": str(ep_dir / f"{ep['channel_id']}-units.json"),
                         "composer": "secretary_briefing_v1", "completed_at": now_utc()}
+            # The script-stage QC verdict travels with the episode, not only
+            # in the sidecar files: coverage, figures, style identity, and
+            # the audience calibration that was applied to this script.
+            manifest["script_qc"] = {"passed": qc["passed"], "item_count": qc["item_count"],
+                                     "covered_sections": qc["covered_sections"],
+                                     "issues": qc["issues"],
+                                     "style_version": qc["style_version"],
+                                     "style_sha256": qc["style_sha256"],
+                                     "script_sha256": qc.get("script_sha256") or ep["script_hash"]}
+            audience_path = ep_dir / f"{ep['channel_id']}-audience-qc.json"
+            if audience_path.is_file():
+                try:
+                    audience_qc = json.loads(audience_path.read_text(encoding="utf-8"))
+                    manifest["audience_qc"] = {key: audience_qc.get(key) for key in
+                                                ("domain", "level", "profile_version",
+                                                 "profile_sha256", "blocking",
+                                                 "requires_review", "matches")}
+                except (ValueError, OSError):
+                    pass
+            # Backend resolution for audio mode: an explicitly configured
+            # tts_argv command (including a host connector helper exposing
+            # the same input->MP3 contract) keeps the original fail-hard
+            # argv route. Without one, the built-in focu tts route is
+            # fail-soft: a skip or failure is recorded and the episode
+            # still finalizes as text_only.
+            audio_backend = None
             if run["output_mode"] == "audio":
+                try:
+                    tts_argv(cfg)
+                    audio_backend = "argv"
+                except FewError as ex:
+                    if ex.code != "missing_tts":
+                        raise
+                    audio_backend = "focu_tts"
+            if run["output_mode"] == "audio" and audio_backend == "argv":
                 argv = tts_argv(cfg)
                 if not shutil.which("ffmpeg") or not shutil.which("ffprobe"):
                     raise FewError("ffmpeg and ffprobe are required in audio mode", "missing_audio_tools", 4)
@@ -268,6 +396,17 @@ def finalize_episodes(store, cfg, run, channel=None):
                         tmp_path.unlink(missing_ok=True)
                 manifest.update(audio=str(audio_path), audio_hash=receipt["audio_hash"],
                                 duration_seconds=receipt["duration_seconds"])
+            elif run["output_mode"] == "audio":
+                record, audio_info = builtin_audio_attempt(
+                    ep, ep_dir, script_path, channels[ep["channel_id"]].get("voice"))
+                manifest["audio_attempt"] = record
+                if audio_info:
+                    manifest.update(audio=audio_info["audio"],
+                                    audio_hash=audio_info["audio_hash"],
+                                    duration_seconds=audio_info["duration_seconds"],
+                                    audio_backend="focu_tts")
+                else:
+                    manifest["mode"] = "text_only"
             write_json(ep_dir / f"{ep['channel_id']}-manifest.json", manifest)
             store.finalize(ep["episode_id"], manifest)
             outcomes.append({"episode_id": ep["episode_id"], "status": "finalized", "manifest": manifest})

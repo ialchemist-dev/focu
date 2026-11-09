@@ -95,7 +95,14 @@ def execute(args):
         raise FewError("unknown channel")
     if args.command == "run" and args.dry_run:
         if mode == "audio":
-            tts_argv(cfg)
+            try:
+                tts_argv(cfg)
+            except FewError as ex:
+                # No explicit argv backend is valid: the built-in focu tts
+                # route records a skip at finalize time when it is also
+                # unconfigured. A malformed explicit template still fails.
+                if ex.code != "missing_tts":
+                    raise
         from focu.briefing import read_style
         style = read_style()
         return {"schema_version": 1, "status": "validated", "date": date, "mode": mode,

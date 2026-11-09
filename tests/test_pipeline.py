@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -13,7 +14,8 @@ from focu.daily.collectors import FetchResult, rss_from_bytes
 from focu.daily.config import load_config
 from focu.daily.errors import FewError
 from focu.daily.identity import canonical_url, content_identity, source_url, stable_id
-from focu.daily.pipeline import compose, digest, finalize_episodes, ingest, run_lock, run_pipeline
+from focu.daily.pipeline import (builtin_audio_attempt, compose, digest,
+                                 finalize_episodes, ingest, run_lock, run_pipeline)
 from focu.daily.store import Store
 
 
@@ -238,6 +240,144 @@ class PipelineTests(unittest.TestCase):
             again = run_pipeline(self.store, cfg, self.today, "audio")
         self.assertEqual(again["run_id"], first["run_id"])
         self.assertEqual(self.count("episodes"), 1)
+        self.assertEqual(self.count("coverage"), 0)
+
+    def test_builtin_tts_unconfigured_records_skip_and_finalizes_text(self):
+        file = self.units_file([self.item()])
+        with patch("focu.tts.status", return_value={"provider": "openai", "configured": False,
+                                                    "credential_source": "missing"}):
+            result = run_pipeline(self.store, self.cfg, self.today, "audio", file)
+        self.assertEqual(result["status"], "completed")
+        ep = self.store.episodes(result["run_id"])[0]
+        self.assertEqual(ep["status"], "finalized")
+        self.assertEqual(self.count("coverage"), 1)
+        manifest = json.loads(ep["artifact_manifest"])
+        self.assertEqual(manifest["mode"], "text_only")
+        self.assertNotIn("audio", manifest)
+        attempt = manifest["audio_attempt"]
+        self.assertEqual(attempt["backend"], "focu_tts")
+        self.assertEqual(attempt["status"], "skipped")
+        self.assertEqual(attempt["stage"], "tts_config")
+        self.assertTrue(attempt["script_qc"]["passed"])
+        self.assertFalse((self.store.data_dir / "episodes" / self.today /
+                          "research.mp3").exists())
+        # The script-stage QC verdict and audience calibration are recorded
+        # in the manifest itself, not only in sidecar files.
+        self.assertTrue(manifest["script_qc"]["passed"])
+        self.assertEqual(manifest["script_qc"]["script_sha256"], manifest["script_hash"])
+        self.assertEqual(manifest["script_qc"]["style_version"], attempt["script_qc"]["style_version"])
+        from focu.audience import load_profile
+        self.assertEqual(manifest["audience_qc"]["profile_version"], load_profile()["version"])
+
+    def test_builtin_tts_synthesis_failure_records_stage_and_finalizes_text(self):
+        file = self.units_file([self.item()])
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-only"}), \
+                patch("focu.tts._request_speech", side_effect=RuntimeError("provider unavailable")):
+            result = run_pipeline(self.store, self.cfg, self.today, "audio", file)
+        self.assertEqual(result["status"], "completed")
+        ep = self.store.episodes(result["run_id"])[0]
+        self.assertEqual(ep["status"], "finalized")
+        self.assertEqual(self.count("coverage"), 1)
+        manifest = json.loads(ep["artifact_manifest"])
+        self.assertEqual(manifest["mode"], "text_only")
+        attempt = manifest["audio_attempt"]
+        self.assertEqual(attempt["status"], "failed")
+        self.assertEqual(attempt["stage"], "tts_synthesis")
+        self.assertIn("provider unavailable", attempt["reason"])
+        self.assertFalse((self.store.data_dir / "episodes" / self.today /
+                          "research.mp3").exists())
+
+    @unittest.skipUnless(shutil.which("ffmpeg") and shutil.which("ffprobe"), "requires audio tools")
+    def test_builtin_tts_success_attaches_audited_audio(self):
+        tone = self.root / "tone.mp3"
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i",
+                        "sine=frequency=440:duration=1", "-c:a", "libmp3lame",
+                        str(tone)], check=True, capture_output=True)
+        payload = tone.read_bytes()
+        file = self.units_file([self.item()])
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-only"}), \
+                patch("focu.tts._request_speech", return_value=payload) as speech:
+            result = run_pipeline(self.store, self.cfg, self.today, "audio", file)
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(speech.call_count, 1)
+        ep = self.store.episodes(result["run_id"])[0]
+        manifest = json.loads(ep["artifact_manifest"])
+        self.assertEqual(manifest["mode"], "audio")
+        self.assertEqual(manifest["audio_backend"], "focu_tts")
+        self.assertEqual(manifest["audio_attempt"]["status"], "generated")
+        self.assertTrue(Path(manifest["audio"]).is_file())
+        self.assertGreater(manifest["duration_seconds"], 0.5)
+        self.assertEqual(self.count("coverage"), 1)
+
+    @unittest.skipUnless(shutil.which("ffmpeg") and shutil.which("ffprobe"), "requires audio tools")
+    def test_builtin_tts_long_script_is_chunked_and_attached(self):
+        tone = self.root / "tone.mp3"
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i",
+                        "sine=frequency=440:duration=1", "-c:a", "libmp3lame",
+                        str(tone)], check=True, capture_output=True)
+        payload = tone.read_bytes()
+        body = "The source reported 948 observations and 20 exceptions. " * 120
+        file = self.units_file([self.item(body=body)])
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-only"}), \
+                patch("focu.tts._request_speech", return_value=payload) as speech:
+            result = run_pipeline(self.store, self.cfg, self.today, "audio", file)
+        self.assertEqual(result["status"], "completed")
+        self.assertGreaterEqual(speech.call_count, 2)
+        for call in speech.call_args_list:
+            self.assertLessEqual(len(call.kwargs["text"] if "text" in call.kwargs
+                                     else call.args[0]), 4000)
+        ep = self.store.episodes(result["run_id"])[0]
+        manifest = json.loads(ep["artifact_manifest"])
+        self.assertEqual(manifest["mode"], "audio")
+        self.assertGreater(manifest["duration_seconds"], 1.5)
+        receipt = json.loads((self.store.data_dir / "episodes" / self.today /
+                              ".research-audio-receipt.json").read_text())
+        self.assertEqual(receipt["backend"], "focu_tts")
+        self.assertGreaterEqual(receipt["chunks"], 2)
+
+    def test_audio_stage_script_qc_failure_synthesizes_nothing(self):
+        ep_dir = self.root / "episodes" / self.today
+        ep_dir.mkdir(parents=True)
+        units = [{"content_id": "cnt_1", "title": "Daily update",
+                  "body": "The source published a short update.", "source": "Test"}]
+        (ep_dir / "research-units.json").write_text(json.dumps(units))
+        script = ep_dir / "research-script.txt"
+        script.write_text("Host: A summary that never names the item.\n")
+        ep = {"episode_id": "ep_test", "channel_id": "research", "script_hash": "unused"}
+        with patch("focu.tts.status", return_value={"configured": True}), \
+                patch("focu.tts._request_speech") as speech:
+            record, info = builtin_audio_attempt(ep, ep_dir, script, None)
+        self.assertIsNone(info)
+        self.assertEqual(record["status"], "failed")
+        self.assertEqual(record["stage"], "script_qc")
+        self.assertFalse(record["script_qc"]["passed"])
+        speech.assert_not_called()
+        self.assertFalse((ep_dir / "research.mp3").exists())
+
+    def test_host_authored_script_file_is_adopted(self):
+        ep_dir = self.store.data_dir / "episodes" / self.today
+        ep_dir.mkdir(parents=True)
+        host_script = ("Host: Here's what came in.\n\n"
+                       "Host: Daily update. The source published a short update. "
+                       "This came from your registered source, Test. Source: Test.\n")
+        (ep_dir / "research-script.txt").write_text(host_script)
+        result = run_pipeline(self.store, self.cfg, self.today, "text_only",
+                              self.units_file([self.item()]))
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual((ep_dir / "research-script.txt").read_text(), host_script)
+        ep = self.store.episodes(result["run_id"])[0]
+        self.assertEqual(ep["script"], host_script)
+        self.assertEqual(self.count("coverage"), 1)
+
+    def test_host_authored_script_failing_qc_blocks_the_run(self):
+        ep_dir = self.store.data_dir / "episodes" / self.today
+        ep_dir.mkdir(parents=True)
+        (ep_dir / "research-script.txt").write_text(
+            "Host: A summary without the source item.\n")
+        with self.assertRaises(FewError) as caught:
+            run_pipeline(self.store, self.cfg, self.today, "text_only",
+                         self.units_file([self.item()]))
+        self.assertEqual(caught.exception.code, "briefing_qc_failed")
         self.assertEqual(self.count("coverage"), 0)
 
     @unittest.skipUnless(shutil.which("ffmpeg") and shutil.which("ffprobe"), "requires audio tools")
