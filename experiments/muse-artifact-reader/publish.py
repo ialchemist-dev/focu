@@ -14,6 +14,7 @@ from editorial import editorial, compose_article_with_openai, markdown_from_html
 from cover_art import typographic_svg, candidate_source_image, fetch_source_cover, generate_ai_cover
 from focu.media_integrity import inspect_mp3, MediaIntegrityError
 from focu.audience import load_profile, calibration, mismatch_report, detect_domain
+from focu.briefing import dangling_visual_refs
 
 def sha256(path):
     h = hashlib.sha256()
@@ -185,6 +186,14 @@ def build(deliveries, output, template, limit, *, fetch_source_covers=False, gen
                     metadata = {**generated, **metadata}
                 except (OSError, ValueError, RuntimeError, KeyError) as exc:
                     warnings.append(episode_id + ": editorial generation unavailable: " + type(exc).__name__)
+            # Article and spoken QC share the same missing-visual rule. A
+            # daily article never includes source figures unless the publisher
+            # deliberately embeds them; for this static reader, reject pointers.
+            if content_origin == "daily_compilation":
+                refs = dangling_visual_refs(markdown)
+                if refs:
+                    raise ValueError("Daily briefing contains dangling visual references: " +
+                                     ", ".join(refs))
             info = editorial(markdown, metadata)
             profile = calibration(metadata.get("audience_domain") or detect_domain(markdown))
             item["audience_profile_version"] = profile["profile_version"]
