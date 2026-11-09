@@ -37,6 +37,7 @@ class FakeElement {
   removeAttribute() {}
   setAttribute(name,value) { this.attributes[name] = value; }
   pause() { this.paused = true; }
+  load() { this.loadCount = (this.loadCount || 0) + 1; this.paused = true; }
   play() { this.paused = false; return Promise.resolve(); }
 }
 function makeEnvironment(saved = {}) {
@@ -244,6 +245,30 @@ assert.match(html, /\.feedcard\[hidden\]\{display:none!important\}/);
   e.run("setView('research')");
   assert.equal(e.get('grid').children.length,2,'Restore returns research to its own category');
 }
+// #34: an explicit decoder restart can rescue audible output when the iOS
+// webview's clock advances but sound has stopped. It does not fabricate time
+// listened or invent an automatic audible-output detector.
+{
+  assert.match(html, /id="recoveraudio"/);
+  const e=makeEnvironment();
+  e.run("render([{id:'long-audio',origin:'daily_compilation',title:'24 minute briefing',date:'2026-11-09',audio_url:'assets/long.mp3',blocks:[{type:'paragraph',text:'Long evidence-backed report'}]}],'')");
+  e.run("openItem('long-audio')");
+  e.get('listen').onclick();
+  const audio=e.get('player');
+  audio.duration=1442.077;
+  audio.currentTime=275;
+  e.get('recoveraudio').onclick();
+  assert.equal(audio.loadCount,2,'recovery resets WebKit media resource twice');
+  assert.equal(audio.src,'assets/long.mp3','recovery never changes canonical content');
+  assert.match(e.get('nowplaying').textContent,/Reconnecting audio/);
+  audio.currentTime=0; // reset by the new decoder
+  audio.events.loadedmetadata();
+  assert.equal(audio.currentTime,275,'seek returns to interrupted timestamp');
+  assert.equal(audio.paused,false,'recovered media resumes after metadata');
+  assert.equal(e.run('lastAudioPosition'),null,'seek does not count as listening');
+  assert.equal(e.run("isDone('long-audio')"),false,'recovery must not archive a partial listen');
+}
+
 // The Research tab also displays pending requests without replacing finished reports.
 {
   const e=makeEnvironment();
