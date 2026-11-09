@@ -12,7 +12,7 @@ import sys
 import tempfile
 from editorial import editorial, compose_article_with_openai, markdown_from_html
 from cover_art import typographic_svg, candidate_source_image, fetch_source_cover, generate_ai_cover
-from focu.media_integrity import inspect_mp3, MediaIntegrityError
+from focu.media_integrity import inspect_mp3, transcode_ios_cbr, MediaIntegrityError
 from focu.audience import load_profile, calibration, mismatch_report, detect_domain
 from focu.briefing import dangling_visual_refs
 
@@ -33,7 +33,9 @@ def episode_date(folder_name):
     except ValueError:
         return ""
 
-def build(deliveries, output, template, limit, *, fetch_source_covers=False, generate_ai_covers=False, generate_editorial=False, requests=None, verify_audio=False):
+def build(deliveries, output, template, limit, *, fetch_source_covers=False, generate_ai_covers=False, generate_editorial=False, requests=None, verify_audio=False, ios_compatible_audio=False):
+    if ios_compatible_audio and not verify_audio:
+        raise ValueError("iOS-compatible encoding requires strict audio audit")
     if not 1 <= limit <= 100:
         raise ValueError("limit must be between 1 and 100")
     if not deliveries.is_dir() or not template.is_file():
@@ -77,6 +79,7 @@ def build(deliveries, output, template, limit, *, fetch_source_covers=False, gen
         checksums = {}
         warnings = []
         audio_audit = {}
+        audio_transforms = {}
         for episode_id, title, audio, folder, published_date in episodes:
             safe_id = hashlib.sha256(episode_id.encode()).hexdigest()[:16]
             item = {"id": episode_id, "title": title, "date": published_date, "source": "Focu"}
@@ -88,12 +91,28 @@ def build(deliveries, output, template, limit, *, fetch_source_covers=False, gen
                         raise ValueError(f"Audio validation failed for {episode_id}: {exc}") from exc
                     audio_audit[episode_id] = audit
                 target = assets / "audio" / (safe_id + ".mp3")
-                shutil.copyfile(audio, target)
                 original_hash = sha256(audio)
-                if sha256(target) != original_hash:
-                    raise RuntimeError("audio checksum mismatch: " + episode_id)
+                if ios_compatible_audio:
+                    try:
+                        converted = transcode_ios_cbr(audio, target)
+                    except MediaIntegrityError as exc:
+                        raise ValueError(f"iOS CBR audio validation failed for {episode_id}: {exc}") from exc
+                    audio_audit[episode_id] = converted["published_audit"]
+                    audio_transforms[episode_id] = {
+                        "profile": converted["profile"],
+                        "source_sha256": original_hash,
+                        "published_sha256": sha256(target),
+                        "source_decoded_duration_seconds":
+                            converted["source_audit"]["decoded_duration_seconds"],
+                        "published_decoded_duration_seconds":
+                            converted["published_audit"]["decoded_duration_seconds"],
+                    }
+                else:
+                    shutil.copyfile(audio, target)
+                    if sha256(target) != original_hash:
+                        raise RuntimeError("audio checksum mismatch: " + episode_id)
                 item["audio_url"] = "assets/audio/" + target.name
-                checksums[item["audio_url"]] = original_hash
+                checksums[item["audio_url"]] = sha256(target)
             for ext in ("jpg", "jpeg", "png", "webp"):
                 cover = folder / ("cover." + ext)
                 if cover.is_file() and not cover.is_symlink() and cover.stat().st_size:
@@ -360,7 +379,7 @@ def build(deliveries, output, template, limit, *, fetch_source_covers=False, gen
         end = html.index("</script>", start)
         embedded = json.dumps(payload, ensure_ascii=False).replace("<", "\\u003c")
         (stage / "index.html").write_text(html[:start] + embedded + html[end:], encoding="utf-8")
-        (stage / "build-report.json").write_text(json.dumps({"item_count": len(manifest), "episode_count": sum(1 for x in manifest if x.get("audio_url")), "sha256": checksums, "audio_audit": audio_audit, "warnings": warnings, "mode": "immutable-muse-snapshot"}, indent=2) + "\n", encoding="utf-8")
+        (stage / "build-report.json").write_text(json.dumps({"item_count": len(manifest), "episode_count": sum(1 for x in manifest if x.get("audio_url")), "sha256": checksums, "audio_audit": audio_audit, "audio_transforms": audio_transforms, "warnings": warnings, "mode": "immutable-muse-snapshot"}, indent=2) + "\n", encoding="utf-8")
         if output.exists():
             raise FileExistsError("output exists; choose a new versioned directory: " + str(output))
         os.replace(stage, output)
@@ -376,13 +395,15 @@ if __name__ == "__main__":
     p.add_argument("--template", type=Path, default=Path(__file__).with_name("index.html"))
     p.add_argument("--limit", type=int, default=15)
     p.add_argument("--skip-audio-audit", action="store_true", help="Unsafe: bypass actual MP3 decode/duration check for test fixtures only")
+    p.add_argument("--ios-compatible-audio", action="store_true",
+                   help="For Muse iOS acceptance: transcode MP3 to audited 128k CBR while retaining original deliveries")
     p.add_argument("--requests", type=Path, help="Optional private focu request-export JSON snapshot")
     p.add_argument("--fetch-source-covers", action="store_true", help="Opt in to downloading public HTTPS source images")
     p.add_argument("--generate-ai-covers", action="store_true", help="Opt in to paid OpenAI image generation, using OPENAI_API_KEY")
     p.add_argument("--generate-editorial", action="store_true", help="Opt in to paid AI blog article writing, using OPENAI_API_KEY")
     a = p.parse_args()
     try:
-        count = build(a.deliveries, a.output, a.template, a.limit, fetch_source_covers=a.fetch_source_covers, generate_ai_covers=a.generate_ai_covers, generate_editorial=a.generate_editorial, requests=a.requests, verify_audio=not a.skip_audio_audit)
+        count = build(a.deliveries, a.output, a.template, a.limit, fetch_source_covers=a.fetch_source_covers, generate_ai_covers=a.generate_ai_covers, generate_editorial=a.generate_editorial, requests=a.requests, verify_audio=not a.skip_audio_audit, ios_compatible_audio=a.ios_compatible_audio)
         print(f"Built {count} content items at {a.output}")
     except (OSError, ValueError, RuntimeError) as exc:
         print(f"Publish failed: {exc}", file=sys.stderr)
