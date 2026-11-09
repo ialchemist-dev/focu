@@ -108,7 +108,12 @@ body:has(#playerbar:not([hidden])) main{padding-bottom:calc(160px + var(--muse-c
 const grid=document.getElementById('grid'),status=document.getElementById('status'),refresh=document.getElementById('refresh');
 const feed=document.getElementById('feed'),reader=document.getElementById('reader'),articleBody=document.getElementById('articlebody');
 const player=document.getElementById('player'),playerbar=document.getElementById('playerbar'),readend=document.getElementById('readend');
+const seekbar=document.getElementById('seekbar'),playpause=document.getElementById('playpause'),elapsed=document.getElementById('elapsed'),remaining=document.getElementById('remaining');
 const params=new URLSearchParams(location.search);
+const requestedClearance=params.get('player-clearance');
+if(requestedClearance!==null&&/^\d{1,3}$/.test(requestedClearance)&&Number(requestedClearance)<=160&&document.documentElement?.style){
+ document.documentElement.style.setProperty('--muse-chrome-clearance',requestedClearance+'px');
+}
 const STORE_KEY='focu:content-consumption:v1';
 let view='briefing',allItems=[],allRequests=[],storageOK=true,currentId=null,readMs=0,maxDepth=0,bottomSeen=false,contentAvailable=false;
 const feedPositions={briefing:0,research:0,archive:0},articlePositions={},articleTrail=[];
@@ -380,6 +385,37 @@ function readAloud(item){
  nextSpeechChunk();
 }
 document.getElementById('readaloud').onclick=()=>{const item=allItems.find(x=>x.id===currentId);if(item)readAloud(item)};
+function audioClock(seconds){
+ if(!Number.isFinite(seconds)||seconds<0)return '0:00';
+ const whole=Math.floor(seconds);
+ return Math.floor(whole/60)+':'+String(whole%60).padStart(2,'0');
+}
+function syncPlayerUI(){
+ const duration=Number.isFinite(player.duration)&&player.duration>0?player.duration:0;
+ const position=Number.isFinite(player.currentTime)?Math.max(0,player.currentTime):0;
+ elapsed.textContent=audioClock(position);
+ remaining.textContent='−'+audioClock(Math.max(0,duration-position));
+ seekbar.disabled=!duration;
+ if(duration)seekbar.value=String(Math.max(0,Math.min(1000,Math.round(position/duration*1000))));
+ playpause.textContent=player.paused?'▶':'Ⅱ';
+ playpause.setAttribute('aria-label',player.paused?'Play audio':'Pause audio');
+}
+playpause.onclick=()=>{
+ if(!playingId)return;
+ if(player.paused)player.play().then(syncPlayerUI).catch(()=>{document.getElementById('nowplaying').textContent='Tap Play to resume audio'});
+ else player.pause();
+ syncPlayerUI();
+};
+seekbar.addEventListener('input',()=>{
+ if(!playingId||!Number.isFinite(player.duration)||player.duration<=0)return;
+ player.currentTime=player.duration*Number(seekbar.value)/1000;
+ lastAudioPosition=null;
+ syncPlayerUI();
+});
+player.addEventListener('durationchange',syncPlayerUI);
+player.addEventListener('play',syncPlayerUI);
+player.addEventListener('pause',syncPlayerUI);
+player.addEventListener('seeked',syncPlayerUI);
 document.getElementById('listen').onclick=()=>{
  const item=allItems.find(x=>x.id===currentId);if(!item)return;
  const url=safeUrl(item.audio_url);
@@ -387,17 +423,20 @@ document.getElementById('listen').onclick=()=>{
  stopNarration();
  if(playingId!==item.id){player.src=url;playingId=item.id;listenedSeconds=0;lastAudioPosition=null}
  playerbar.hidden=false;document.getElementById('nowplaying').textContent=item.title;
- player.play().catch(()=>{document.getElementById('nowplaying').textContent='Tap the native play control to start audio'});
+ syncPlayerUI();
+ player.play().then(syncPlayerUI).catch(()=>{document.getElementById('nowplaying').textContent='Tap Play to start audio';syncPlayerUI()});
 };
-document.getElementById('closeaudio').onclick=()=>{player.pause();playerbar.hidden=true};
+document.getElementById('closeaudio').onclick=()=>{player.pause();playerbar.hidden=true;syncPlayerUI()};
 player.addEventListener('seeking',()=>{lastAudioPosition=null});
 player.addEventListener('timeupdate',()=>{
  if(player.paused||player.seeking||!Number.isFinite(player.currentTime))return;
  const current=player.currentTime;
  if(lastAudioPosition!==null){const diff=current-lastAudioPosition;if(diff>0&&diff<60)listenedSeconds+=diff}
  lastAudioPosition=current;
+ syncPlayerUI();
 });
 player.addEventListener('ended',()=>{
+ syncPlayerUI();
  const item=allItems.find(x=>x.id===playingId);
  if(item&&Number.isFinite(item.audio_duration)&&item.audio_duration>0&&
     player.currentTime<item.audio_duration*0.95){
@@ -408,6 +447,7 @@ player.addEventListener('ended',()=>{
  else document.getElementById('nowplaying').textContent='Playback ended · Not enough listening time to archive';
 });
 player.addEventListener('loadedmetadata',()=>{
+ syncPlayerUI();
  const item=allItems.find(x=>x.id===playingId);
  if(item&&item.audio_duration&&Number.isFinite(player.duration)&&
     Math.abs(player.duration-item.audio_duration)>Math.max(4,item.audio_duration*0.05)){
