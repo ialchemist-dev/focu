@@ -202,6 +202,34 @@ class PublisherTests(unittest.TestCase):
             self.assertIn("audio", updated["formats"])
             self.assertEqual(len(json.loads((root / "podcast/assets/episodes.json").read_text())["episodes"]), 1)
 
+    def test_daily_article_rejects_missing_visual_even_without_audio(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            source = root / "deliveries" / "official-source"
+            source.mkdir(parents=True)
+            (source / "article.md").write_text("# Source\\n\\nOriginal source may cite Figure 1.")
+            (source / "content.json").write_text(json.dumps({
+                "content_id": "source-figure", "origin": "registered_source",
+                "podcast_mode": "daily_compilation"
+            }))
+            daily = root / "deliveries" / "daily-20261109"
+            daily.mkdir()
+            article = daily / "article.md"
+            article.write_text("# Briefing\\n\\nSee Figure 2 for the experiment.")
+            (daily / "content.json").write_text(json.dumps({
+                "content_id": "daily-2026-11-09", "origin": "daily_compilation",
+                "podcast_mode": "daily_compilation", "published_at": "2026-11-09",
+                "covered_content_ids": ["source-figure"]
+            }))
+            with self.assertRaisesRegex(ValueError, "dangling visual references"):
+                build(root / "deliveries", root / "invalid", Path(__file__).with_name("index.html"), 15)
+            self.assertFalse((root / "invalid").exists())
+            # Referencing the visual's actual data in words is allowed, while
+            # source articles keep their original citations untouched.
+            article.write_text("# Briefing\\n\\nThe experiment reports 38% accuracy.")
+            build(root / "deliveries", root / "valid", Path(__file__).with_name("index.html"), 15)
+            self.assertIn("Figure 1", (source / "article.md").read_text())
+
     def test_daily_briefing_article_only_when_audio_fails_qc(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
