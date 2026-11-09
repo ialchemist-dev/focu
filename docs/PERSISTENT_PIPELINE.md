@@ -36,21 +36,57 @@ Import does not assume old output was delivered/listened to. `--register-coverag
 
 The daily composer is a deterministic skeleton; it is not the evidence-based Muse research/podcast workflow. For editorial-quality research/podcasts, keep using `ingest-evidence`, `report`, `podcast`, `deliver` and `reader publish` as described in READER_APP.md.
 
-Daily audio mode needs `ffmpeg`/`ffprobe` and an explicit argv template in sources.yaml. Example using Focu's configured TTS:
+Daily audio mode needs `ffmpeg`/`ffprobe`. A run that is not `--text-only`
+finalizes each compilation episode through script fidelity QC (already
+enforced at compose and re-verified at finalize), synthesis, and the
+decoded-audio audit. Which synthesis backend runs depends on configuration,
+in this order:
 
-```yaml
-tts_argv:
-  - /absolute/focu/.venv/bin/python
-  - -m
-  - focu.tts
-  - synthesize
-  - --input
-  - '{input}'
-  - --output
-  - '{output}'
-```
+1. **Explicit argv template** (`tts_argv` in sources.yaml, or `FOCU_TTS_CMD`;
+   older `THEFEW_TTS_CMD`/`THEVIEW_TTS_CMD` remain accepted). The template is
+   a command contract — input script file in, output MP3 out, optional
+   `{voice}` — and is never shell-eval'd. This is also how a host connector
+   helper is plugged in on hosts where the speech credential is not directly
+   reachable by the pipeline: the helper exposes the same contract and calls
+   the provider itself. This route keeps its original fail-hard contract:
+   a missing or failed backend retains the script and selection, registers
+   no coverage, and the run reports the failure so it can resume.
+   Example using Focu's configured TTS (long-form entry point, so daily
+   scripts over the provider's 4,000-character limit are chunked):
 
-`FOCU_TTS_CMD` is parsed into an argument list as a compatibility alternative; older `THEFEW_TTS_CMD`/`THEVIEW_TTS_CMD` remain accepted. No shell eval. Missing/failed TTS retains script and selection and does not register coverage. The simple TTS adapter's input limit still applies. Audio decoding checks do not prove narration completeness.
+   ```yaml
+   tts_argv:
+     - /absolute/focu/.venv/bin/python
+     - -m
+     - focu.tts
+     - synthesize-long
+     - --input
+     - '{input}'
+     - --output
+     - '{output}'
+   ```
+
+2. **Built-in `focu tts` adapter** (no argv template configured). Synthesis
+   runs when `focu tts status` reports a configured credential — a locally
+   configured `focu tts` credential (environment or the private config file
+   from `focu tts setup`); the pipeline never assumes where the key lives
+   beyond that status check. This route is fail-soft (owner decision
+   2026-11-08): an unconfigured backend is a recorded skip, and a synthesis
+   or audit failure is recorded with its stage name (`script_qc`,
+   `tts_config`, `tts_synthesis`, `audio_audit`) in the episode manifest's
+   `audio_attempt`; the episode still finalizes as `text_only` and the run
+   succeeds. Failed or absent audio never blocks the text pipeline and
+   never ships.
+
+The host workflow for the default route is: finish the briefing, author or
+generate the spoken script (a host-authored script placed at
+`episodes/<date>/<channel>-script.txt` before compose is adopted and held to
+the same coverage QC as the deterministic script), then run the daily
+pipeline in audio mode; the manifest records the script QC verdict
+(`script_qc`: coverage, issues, style version/SHA, script SHA), the audience
+calibration applied (`audience_qc`: domain, level, profile version/SHA), and
+the `audio_attempt` outcome. Audio decoding checks do not prove narration
+completeness; script-text QC is the fidelity gate.
 
 Feedback remains explicit via `python -m focu.feedback`; consuming/scrolling in the reader does not change preferences. Scheduled collection is owned by the host; reinstall does not create or resume scheduled jobs automatically.
 
