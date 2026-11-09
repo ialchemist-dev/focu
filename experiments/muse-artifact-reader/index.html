@@ -271,19 +271,26 @@ function updateReaderState(){
  document.getElementById('restore').hidden=!done;
  document.getElementById('readerarchive').hidden=done;
 }
-function openItem(id){
+function openItem(id,viaLink=false){
  const item=allItems.find(x=>x.id===id);if(!item)return;
+ if(currentId&&currentId!==id){
+   articlePositions[currentId]=scrollY;
+   if(viaLink)articleTrail.push(currentId);
+ }else if(!currentId){
+   feedPositions[view]=scrollY;
+ }
  if(speechRunning&&speechId!==id)stopNarration();
  currentId=id;readMs=0;maxDepth=0;bottomSeen=false;contentAvailable=item.blocks.length>0;tickAt=Date.now();
  feed.hidden=true;reader.hidden=false;
- document.getElementById('back').textContent='← Back to '+(view==='archive'?'Archive':'Inbox');
+ document.getElementById('back').textContent=articleTrail.length?'← Back to article':
+   '← Back to '+(view==='archive'?'Archive':view==='research'?'Research':'Daily Briefing');
  document.getElementById('readertitle').textContent=item.title;
  document.getElementById('readersummary').textContent=item.summary;
  document.getElementById('readerbyline').textContent=[item.source,item.date].filter(Boolean).join('  ·  ');
  const linked=compilationFor(item.id),coveredButton=document.getElementById('coveredby');
  coveredButton.hidden=!linked;
  if(linked){coveredButton.textContent='In the '+(linked.date||'daily')+' briefing';
- coveredButton.onclick=()=>openItem(linked.id)}
+ coveredButton.onclick=()=>openItem(linked.id,true)}
  document.getElementById('readtime').textContent=item.reading_minutes?item.reading_minutes+' min read':'';
  const cover=item.cover_origin==='offline_art'?null:safeUrl(item.cover_url),img=document.getElementById('readercover');img.hidden=!cover;
  if(cover){img.src=cover;img.onerror=()=>{img.hidden=true}}else img.removeAttribute('src');
@@ -292,9 +299,27 @@ function openItem(id){
  readaloud.hidden=(!!safeUrl(item.audio_url)&&failedAudioId!==item.id)||!item.blocks.length;
  listen.textContent='▶ Listen';readaloud.textContent='▶ Read aloud';
  const toolbar=document.getElementById('toolbar');toolbar.hidden=false;
- renderArticle(item.blocks,item.article_url);updateReaderState();window.scrollTo(0,0);
+ renderArticle(item.blocks,item.article_url);
+ const coveredSection=document.getElementById('coveredsection'),links=document.getElementById('coveredarticles');
+ links.replaceChildren();
+ if(itemKind(item)==='briefing'){
+   for(const contentId of item.covered_content_ids||[]){
+     const covered=allItems.find(x=>x.id===contentId);
+     if(!covered)continue;
+     const button=el('button',covered.title,'coveredlink');
+     button.type='button';
+     button.setAttribute('aria-label','Read covered article: '+covered.title);
+     button.onclick=()=>openItem(covered.id,true);
+     links.append(button);
+   }
+ }
+ coveredSection.hidden=!links.children.length;
+ updateReaderState();window.scrollTo(0,articlePositions[id]||0);
 }
-document.getElementById('back').onclick=()=>{stopNarration();setView(view)};
+document.getElementById('back').onclick=()=>{
+ if(articleTrail.length)openItem(articleTrail.pop(),false);
+ else{if(speechRunning)stopNarration();setView(view)}
+};
 document.getElementById('restore').onclick=()=>{if(currentId)markUnread(currentId)};
 document.getElementById('readerarchive').onclick=()=>manualArchive(currentId);
 function stopNarration(){
