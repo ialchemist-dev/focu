@@ -15,6 +15,21 @@ Originally built independently from main; integrated with PR #22 after owner app
   This does not grant per-item MP3 consent; standalone audio remains opt-in.
   The registered-source collector still rejects user-initiated records,
   and the editorial compilation references the original canonical IDs.
+- Updated owner decision (2026-11-08): daily compilation audio is now
+  produced BY DEFAULT through the D1(a) script-first route — a spoken
+  script authored from the finished briefing (the deterministic composer
+  script, or a host-authored script adopted from
+  `episodes/<date>/<channel>-script.txt`) passes the existing briefing
+  fidelity QC on its text, is synthesized by the configured speech
+  backend, and must pass the decoded-audio audit before the compilation
+  delivery carries the MP3. Script QC remains fail-closed: no compliant
+  script, no audio. Synthesis itself is fail-soft on the built-in
+  `focu tts` route: an unconfigured or failing backend is recorded in
+  the episode manifest (`audio_attempt`, with the stage name) and the
+  compilation still publishes as a readable article-only briefing.
+  Single-item and on-demand policy is unchanged: podcast_mode=none by
+  default, standalone audio only on explicit per-item owner request.
+  Voice selection stays runtime configuration; no voice is chosen here.
 - Podcast is another format on the same content_id, never a duplicate card.
 - One shared Inbox/Archive consumption state remains unchanged.
 
