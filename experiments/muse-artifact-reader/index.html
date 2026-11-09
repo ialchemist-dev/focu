@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#fbfaf8">
 <title>Focu · Reading Feed</title>
 <style>
@@ -56,21 +56,37 @@ main{max-width:760px;margin:0 auto;padding:25px 22px 70px}
 .readend{margin:36px 0 15px;border-top:1px solid #e9e5df;padding-top:21px;text-align:center;color:#958c82;font-size:13px}
 #readerstate{font-size:13px;color:#82786e;text-align:center;min-height:20px;margin:10px 0}.notice{font-size:12px;color:#8a7169;line-height:1.5}.listen:disabled{opacity:.55}
 #readerarchive[hidden],#restore[hidden]{display:none!important}
-#playerbar{position:fixed;z-index:8;bottom:0;left:0;right:0;background:#fff;border-top:1px solid #e5dfd8;box-shadow:0 -6px 24px #00000010;padding:9px 16px 12px}
+:root{--muse-chrome-clearance:68px}
+#playerbar{position:fixed;z-index:8;bottom:calc(var(--muse-chrome-clearance) + env(safe-area-inset-bottom,0px));left:0;right:0;background:#fff;border-top:1px solid #e5dfd8;box-shadow:0 -6px 24px #00000010;padding:9px 16px max(12px,env(safe-area-inset-bottom,0px));}
+@media(display-mode:standalone){:root{--muse-chrome-clearance:0px}}
+body:has(#playerbar:not([hidden])) main{padding-bottom:calc(160px + var(--muse-chrome-clearance) + env(safe-area-inset-bottom,0px))}
 .playinner{max-width:710px;margin:auto}
 .playtop{display:flex;align-items:center;justify-content:space-between;gap:12px}
 #nowplaying{font-size:12px;color:#68615b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-#closeaudio{border:0;background:none;color:#827d76;font-size:22px}
-#player{display:block;width:100%;height:43px}
+#closeaudio{border:0;background:none;color:#827d76;font-size:22px;min-width:44px;min-height:44px}
+#player{display:none}
+.playcontrols{display:flex;align-items:center;gap:10px;min-height:48px}
+#playpause{height:44px;width:44px;flex:none;border:0;border-radius:50%;background:#282522;color:white;font-size:20px}
+.playtime{color:#5e5851;font-size:12px;min-width:37px;font-variant-numeric:tabular-nums;text-align:center}
+#seekbar{flex:1;min-width:35px;max-width:100%;height:44px;margin:0;padding:0;border:0;background:transparent;appearance:none;-webkit-appearance:none;cursor:pointer;touch-action:pan-x}
+#seekbar::-webkit-slider-runnable-track{height:6px;border-radius:6px;background:#d6d1ca}
+#seekbar::-moz-range-track{height:6px;border-radius:6px;background:#d6d1ca}
+#seekbar::-webkit-slider-thumb{-webkit-appearance:none;width:24px;height:24px;margin-top:-9px;border:3px solid #fff;border-radius:50%;background:#3e6e66;box-shadow:0 1px 4px #0004}
+#seekbar::-moz-range-thumb{width:20px;height:20px;border:3px solid #fff;border-radius:50%;background:#3e6e66}
+#seekbar:disabled{opacity:.45;cursor:default}
+.coveredsection{margin:26px 0;padding-top:20px;border-top:1px solid #e9e5df}
+.coveredsection h2{font-size:17px;margin:0 0 10px}
+.coveredlink{display:block;width:100%;text-align:left;padding:12px 8px;border:0;border-bottom:1px solid #e9e5df;background:transparent;color:#985449;line-height:1.45}
+.coveredlink:focus-visible{outline:3px solid #bd6258}
 .error{color:#af443b!important}
 #articlebody .noarticle{text-align:center;color:#777;font-size:15px}
 @media(max-width:480px){.head{padding:10px 17px;min-height:64px}.brand{font-size:23px}.nav button{padding:8px 10px}main{padding:20px 18px 70px}.feedtitle{font-size:20px}.cover{width:92px;height:92px}.feedcard{gap:13px;padding:21px 0}#articlebody{font-size:16px;line-height:1.85}}
 </style>
 </head>
 <body>
-<header><div class="head"><div class="brand">focu<span class="dot">.</span></div><nav class="nav" aria-label="Library"><button id="inbox" class="active">Inbox</button><button id="archive">Archive</button><button id="researchtab">Research</button><button id="refresh" aria-label="Refresh" title="Refresh">↻</button></nav></div></header>
+<header><div class="head"><div class="brand">focu<span class="dot">.</span></div><nav class="nav" aria-label="Library"><button id="briefingtab" class="active">Daily Briefing</button><button id="researchtab">Research</button><button id="archive">Archive</button><button id="refresh" aria-label="Refresh" title="Refresh">↻</button></nav></div></header>
 <main>
-<section id="feed"><h1 class="sectiontitle" id="feedheading">For you to read</h1><div id="status" aria-live="polite">Loading…</div><div class="feed" id="grid"></div></section>
+<section id="feed"><h1 class="sectiontitle" id="feedheading">Daily Briefing</h1><div id="status" aria-live="polite">Loading…</div><div class="feed" id="grid"></div></section>
 <section id="reader" hidden>
 <button id="back" class="readerback">← Back to Inbox</button>
 <img id="readercover" class="readercover" hidden alt="">
@@ -79,12 +95,13 @@ main{max-width:760px;margin:0 auto;padding:25px 22px 70px}
 <p id="readersummary"></p>
 <div class="readeractions" id="toolbar"><button id="listen" class="listen" hidden>▶ Listen</button><button id="readaloud" class="listen" hidden>▶ Read aloud</button><span id="readtime" class="readtime"></span><button id="readerarchive" class="card-action reader-archive" type="button">Archive</button><button id="restore" class="card-action reader-archive" type="button" hidden>Restore</button></div>
 <div id="articlebody"></div>
+<div id="coveredsection" class="coveredsection" hidden><h2>Articles covered in this briefing</h2><div id="coveredarticles"></div></div>
 <div class="readend" id="readend">End of article</div>
 <div id="readerstate" aria-live="polite"></div>
 
 </section>
 </main>
-<div id="playerbar" hidden><div class="playinner"><div class="playtop"><span id="nowplaying"></span><button id="closeaudio" aria-label="Close player">×</button></div><audio id="player" controls preload="metadata"></audio></div></div>
+<div id="playerbar" hidden><div class="playinner"><div class="playtop"><span id="nowplaying"></span><button id="closeaudio" type="button" aria-label="Close player">×</button></div><div class="playcontrols"><button id="playpause" type="button" aria-label="Play or pause audio">▶</button><span id="elapsed" class="playtime">0:00</span><input id="seekbar" type="range" min="0" max="1000" value="0" step="1" aria-label="Seek audio position" disabled><span id="remaining" class="playtime">−0:00</span></div><audio id="player" preload="metadata"></audio></div></div>
 <script id="embedded-episodes" type="application/json">{"episodes":[]}</script>
 <script>
 'use strict';
