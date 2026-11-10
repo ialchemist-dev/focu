@@ -1,6 +1,6 @@
 # Focu personal secretary briefing style
 
-**Version:** 2026-11-09.2
+**Version:** 2026-11-10.1
 **Owner:** Jerry Yu
 **Purpose:** Source of truth for scripted daily briefings and Muse/Open Notebook generation prompts.
 **Edit policy:** Change this file, append a dated changelog entry, commit, and use the updated version for future (not frozen) episodes. No source registration or production state change is required.
@@ -10,7 +10,7 @@
 The YAML block below is read by `focu.briefing` and the daily composer. Keep the setting names stable; edit the values to change the next briefing.
 
 ```yaml
-version: "2026-11-09.2"
+version: "2026-11-10.1"
 language: en
 recipient: "Jerry"
 speaker_label: "Host: "
@@ -44,7 +44,7 @@ forbidden_phrases:
 ## Order and content requirements
 
 1. Report source updates worth the owner's attention, then results of explicit research requests, then follow-ups to existing interests. Preserve order inside each group.
-2. **Agenda opening.** Every daily briefing opens with an agenda, in both the written article and the spoken script, immediately after the opening line and before the first item section: state how many items there are, then list each item's **title** and its **source**. Factual listing only: no summaries, no analysis, no teasers. The item sections then follow in the same order as the agenda.
+2. **Agenda opening.** Every daily briefing opens with an agenda, in both the written article and the spoken script, immediately after the opening line and before the first item section: state how many items there are, then list each item's **title** and its **source**. Factual listing only: no summaries, no analysis, no teasers. The item sections then follow in the same order as the agenda. In the spoken script the agenda is a single `Host: ` paragraph beginning with the marker `Agenda:` (e.g. `Host: Agenda: Seven items today. From OpenAI Official: ...; From Anthropic Official: ...`); the coverage QC strips this paragraph before matching item sections and checks it lists every title and source.
 3. Each item: **headline**, exactly what happened or was found, **one brief why-selected line**, and **source attribution**. The why-line is selection provenance only, never analysis or implications.
 4. Never add interpretations, metaphors, causal bridges, extrapolations, claims or invented numbers. Do not connect unrelated items into a narrative.
 5. Keep every input report item. Preserve exact hard figures, units, qualifiers, names, and source meanings. Shortening prose is permissible only if item and key figure coverage is still complete and checked.
@@ -63,3 +63,4 @@ forbidden_phrases:
 
 - **2026-11-05 — v2026-11-05.1:** Initial secretary-briefing framing. Owner requested removal of podcast-show packaging, full coverage of every report item, preservation of hard numbers, a short source/interest/request selection line, and an editable style feedback loop following clean-slate script omissions.
 - **2026-11-09 — v2026-11-09.2:** Owner feedback: every daily briefing (written article and spoken script) now opens with an agenda: the number of items, then each item's title and source, before the first item section. Factual listing only, no summaries or teasers.
+- **2026-11-10 — v2026-11-10.1:** Coverage QC now recognizes the `Agenda:` paragraph (strips it before section matching and checks it lists every title and source). Fixes the 2026-11-10 run, whose script QC had forced the agenda out; no change to the agenda requirement itself.
