@@ -134,6 +134,36 @@ class BriefingTests(unittest.TestCase):
             with self.assertRaises(BriefingQCError):
                 read_style(p)
 
+    def _script_with_agenda(self, style, agenda):
+        script = render_script(units(), style)
+        opening = "Host: Here's what came in.\n\n"
+        self.assertTrue(script.startswith(opening))
+        return script.replace(opening, opening + agenda + "\n\n", 1)
+
+    def test_agenda_paragraph_passes_qc_when_complete(self):
+        style = read_style()
+        agenda = ("Host: Agenda: Four items today. From Research Source A: Daily update; "
+                  "from Research Source C: Daily update; "
+                  "from Technical paper B: Requested investigation results; "
+                  "from Research notes: Memory pressure follow-up.")
+        script = self._script_with_agenda(style, agenda)
+        report = validate_script(script, units(), style)
+        self.assertTrue(report["passed"], report["issues"])
+        self.assertEqual(report["covered_sections"], 4)
+
+    def test_agenda_missing_a_title_or_source_fails_qc(self):
+        style = read_style()
+        agenda = ("Host: Agenda: Three items today. From Research Source A: Daily update; "
+                  "from Research Source C: Daily update; "
+                  "from Research notes: Memory pressure follow-up.")
+        script = self._script_with_agenda(style, agenda)
+        report = validate_script(script, units(), style)
+        self.assertFalse(report["passed"])
+        agenda_issues = [x for x in report["issues"] if x["issue"] == "agenda_incomplete"]
+        self.assertEqual(len(agenda_issues), 1)
+        self.assertIn("Requested investigation results", agenda_issues[0]["missing_titles"])
+        self.assertIn("Technical paper B", agenda_issues[0]["missing_sources"])
+
 
 if __name__ == "__main__":
     unittest.main()
