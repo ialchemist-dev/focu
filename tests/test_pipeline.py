@@ -269,6 +269,26 @@ class PipelineTests(unittest.TestCase):
         from focu.audience import load_profile
         self.assertEqual(manifest["audience_qc"]["profile_version"], load_profile()["version"])
 
+    def test_refinalize_after_script_revision_keeps_single_coverage_row(self):
+        file = self.units_file([self.item()])
+        with patch("focu.tts.status", return_value={"provider": "openai", "configured": False,
+                                                    "credential_source": "missing"}):
+            result = run_pipeline(self.store, self.cfg, self.today, "audio", file)
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(self.count("coverage"), 1)
+        ep = self.store.episodes(result["run_id"])[0]
+        # A host script revision after finalization puts the episode back to
+        # script_ready while its coverage rows still stand; re-finalizing
+        # must not fail on the UNIQUE coverage constraint.
+        with self.store.db:
+            self.store.db.execute("UPDATE episodes SET status='script_ready' WHERE episode_id=?",
+                                  (ep["episode_id"],))
+        manifest = json.loads(ep["artifact_manifest"])
+        self.store.finalize(ep["episode_id"], manifest)
+        self.assertEqual(self.count("coverage"), 1)
+        ep = self.store.episodes(result["run_id"])[0]
+        self.assertEqual(ep["status"], "finalized")
+
     def test_builtin_tts_synthesis_failure_records_stage_and_finalizes_text(self):
         file = self.units_file([self.item()])
         with patch.dict(os.environ, {"OPENAI_API_KEY": "test-only"}), \
