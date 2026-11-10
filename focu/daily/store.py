@@ -236,7 +236,11 @@ class Store:
                 return
             if episode[0] != "script_ready":
                 raise FewError("episode must have a validated script before finalization")
-            self.db.execute("""INSERT INTO coverage SELECT content_id,episode_id,?
+            # OR IGNORE: re-finalizing the same episode (e.g. after a host script
+            # revision) must not fail on the coverage rows its first finalize
+            # already recorded. Digest never re-selects covered content, so no
+            # other episode can claim the same content_id.
+            self.db.execute("""INSERT OR IGNORE INTO coverage SELECT content_id,episode_id,?
                 FROM episode_items WHERE episode_id=?""", (now_utc(), episode_id))
             self.db.execute("UPDATE episodes SET status='finalized', artifact_manifest=?, last_error=NULL WHERE episode_id=?",
                             (json.dumps(manifest), episode_id))
