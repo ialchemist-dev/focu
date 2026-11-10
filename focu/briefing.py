@@ -107,11 +107,43 @@ def render_script(units, style):
     return "\n\n".join(parts) + "\n" if parts else ""
 
 
+def _agenda_paragraphs(script, style):
+    """Split out the Agenda: paragraph(s) required by the style (v2026-11-09.2).
+
+    Returns (agenda_text, script_without_agenda). The agenda lists every item
+    title up front, so its paragraphs must not feed the sequential headline
+    matching below: each title's first occurrence would otherwise land in the
+    agenda, slicing every item section to the agenda text and failing figure
+    and attribution checks for all but the last item.
+    """
+    label = style.get("speaker_label") or "Host: "
+    agenda, kept = [], []
+    for para in (script or "").split("\n\n"):
+        body = para.strip()
+        if body.startswith(label):
+            body = body[len(label):].strip()
+        if body.lower().startswith("agenda:"):
+            agenda.append(body)
+        else:
+            kept.append(para)
+    return "\n\n".join(agenda), "\n\n".join(kept)
+
+
 def validate_script(script, units, style):
     """Check every headline, per-item figures, attribution, order, and show phrases."""
     items = ordered_units(units)
     issues, sections, starts = [], [], []
-    text = script or ""
+    full_text = script or ""
+    agenda_text, text = _agenda_paragraphs(full_text, style)
+    if agenda_text:
+        missing_titles = [_plain(item["title"]) for item in items
+                          if _plain(item["title"]).casefold() not in agenda_text.casefold()]
+        missing_sources = sorted({item["source"] for item in items
+                                  if item["source"].casefold() not in agenda_text.casefold()})
+        if missing_titles or missing_sources:
+            issues.append({"issue": "agenda_incomplete",
+                           "missing_titles": missing_titles,
+                           "missing_sources": missing_sources})
     cursor = 0
     for item in items:
         title = _plain(item["title"])
@@ -144,11 +176,11 @@ def validate_script(script, units, style):
         sections.append({"id": item_id, "figures": key_figures(item),
                          "missing_figures": missing})
     for phrase in style["forbidden_phrases"]:
-        if phrase.casefold() in text.casefold():
+        if phrase.casefold() in full_text.casefold():
             issues.append({"issue": "forbidden_show_packaging", "phrase": phrase})
-    if re.search(r"^\s*(?:Co-host|Speaker\s*[12]|Guest):", text, re.M | re.I):
+    if re.search(r"^\s*(?:Co-host|Speaker\s*[12]|Guest):", full_text, re.M | re.I):
         issues.append({"issue": "multiple_speakers"})
-    minutes = round(len(text.split()) / style["words_per_minute"], 2)
+    minutes = round(len(full_text.split()) / style["words_per_minute"], 2)
     return {"passed": not issues, "style_version": style["version"],
             "style_sha256": style["style_sha256"], "item_count": len(items),
             "covered_sections": len(sections), "sections": sections,
