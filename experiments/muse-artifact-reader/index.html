@@ -6,13 +6,13 @@
 <meta name="theme-color" content="#fbfaf8">
 <title>Focu · Reading Feed</title>
 <style>
-:root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;color:#252422;background:#fbfaf8;font-synthesis:none}
+:root{--muse-header-clearance:68px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;color:#252422;background:#fbfaf8;font-synthesis:none}
 *{box-sizing:border-box}
 body{margin:0;min-height:100vh;background:#fbfaf8}
 button{font:inherit;cursor:pointer}
 button:focus-visible,a:focus-visible{outline:3px solid #bd6258;outline-offset:3px}
 header{position:sticky;top:0;z-index:5;background:#fbfaf8ed;backdrop-filter:blur(18px);border-bottom:1px solid #ebe8e2}
-.head{max-width:760px;margin:auto;min-height:70px;padding:12px 22px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.head{max-width:760px;margin:auto;min-height:70px;padding:calc(12px + var(--muse-header-clearance)) 22px 12px;display:flex;align-items:center;justify-content:space-between;gap:12px}
 .brand{font-size:24px;font-weight:800;letter-spacing:-1px}.brand .dot{color:#dd635b}
 .nav{display:flex;gap:5px;align-items:center}
 .nav button,.smallbutton{border:0;background:transparent;color:#77716b;padding:9px 12px;border-radius:12px;font-size:14px}
@@ -67,7 +67,7 @@ main{max-width:760px;margin:0 auto;padding:25px 22px 70px}
 #readerarchive[hidden],#restore[hidden]{display:none!important}
 :root{--muse-chrome-clearance:68px}
 #playerbar{position:fixed;z-index:8;bottom:calc(var(--muse-chrome-clearance) + env(safe-area-inset-bottom,0px));left:0;right:0;background:#fff;border-top:1px solid #e5dfd8;box-shadow:0 -6px 24px #00000010;padding:9px 16px max(12px,env(safe-area-inset-bottom,0px));}
-@media(display-mode:standalone){:root{--muse-chrome-clearance:0px}}
+@media(display-mode:standalone){:root{--muse-chrome-clearance:0px;--muse-header-clearance:0px}}
 body:has(#playerbar:not([hidden])) main{padding-bottom:calc(160px + var(--muse-chrome-clearance) + env(safe-area-inset-bottom,0px))}
 .playinner{max-width:710px;margin:auto}
 .playtop{display:flex;align-items:center;justify-content:space-between;gap:12px}
@@ -91,7 +91,7 @@ body:has(#playerbar:not([hidden])) main{padding-bottom:calc(160px + var(--muse-c
 .coveredlink:focus-visible{outline:3px solid #bd6258}
 .error{color:#af443b!important}
 #articlebody .noarticle{text-align:center;color:#777;font-size:15px}
-@media(max-width:480px){.head{padding:10px 17px;min-height:64px}.brand{font-size:23px}.nav button{padding:8px 10px}main{padding:20px 18px 70px}.feedtitle{font-size:20px}.cover{width:92px;height:92px}.feedcard{gap:13px;padding:21px 0}#articlebody{font-size:16px;line-height:1.85}}
+@media(max-width:480px){.head{padding:calc(10px + var(--muse-header-clearance)) 17px 10px;min-height:64px}.brand{font-size:23px}.nav button{padding:8px 10px}main{padding:20px 18px 70px}.feedtitle{font-size:20px}.cover{width:92px;height:92px}.feedcard{gap:13px;padding:21px 0}#articlebody{font-size:16px;line-height:1.85}}
 </style>
 </head>
 <body>
@@ -122,6 +122,10 @@ const player=document.getElementById('player'),playerbar=document.getElementById
 const seekbar=document.getElementById('seekbar'),playpause=document.getElementById('playpause'),elapsed=document.getElementById('elapsed'),remaining=document.getElementById('remaining');
 const params=new URLSearchParams(location.search);
 const requestedClearance=params.get('player-clearance');
+const requestedHeaderClearance=params.get('header-clearance');
+if(requestedHeaderClearance!==null&&/^\d{1,3}$/.test(requestedHeaderClearance)&&Number(requestedHeaderClearance)<=160&&document.documentElement?.style){
+ document.documentElement.style.setProperty('--muse-header-clearance',requestedHeaderClearance+'px');
+}
 if(requestedClearance!==null&&/^\d{1,3}$/.test(requestedClearance)&&Number(requestedClearance)<=160&&document.documentElement?.style){
  document.documentElement.style.setProperty('--muse-chrome-clearance',requestedClearance+'px');
 }
