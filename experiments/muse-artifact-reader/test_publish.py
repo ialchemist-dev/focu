@@ -532,6 +532,29 @@ class PublisherTests(unittest.TestCase):
         self.assertIn("bottomSeen&&readMs>=minMs", html)
         self.assertIn("Reading history cannot be saved", html)
 
+    def test_daily_briefing_article_with_boilerplate_is_rejected(self):
+        # Real text from the 2026-11-10 briefing article (Anthropic IPO
+        # item): the publisher must fail closed on prospectus boilerplate in
+        # a daily briefing article (style v2026-11-10.2).
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            deliveries = root / "deliveries"
+            folder = deliveries / "briefing-2026-11-10"
+            folder.mkdir(parents=True)
+            (folder / "content.json").write_text(json.dumps(
+                {"title": "Daily Briefing — November 10, 2026",
+                 "origin": "daily_compilation", "podcast_mode": "daily_compilation",
+                 "published_at": "2026-11-10", "covered_content_ids": ["x"]}))
+            (folder / "article.md").write_text(
+                "# Daily Briefing — November 10, 2026\n\n"
+                "Copies of the preliminary prospectus may be obtained from Goldman Sachs "
+                "& Co. LLC, Attention: Prospectus Department, 200 West Street, New York, "
+                "NY 10282, by telephone at (866) 471-2526, or by email at "
+                "prospectus-ny@ny.email.gs.com.\n")
+            with self.assertRaises(ValueError) as ctx:
+                build(deliveries, root / "bundle", Path(__file__).with_name("index.html"), 15)
+            self.assertIn("Boilerplate contamination", str(ctx.exception))
+
     def test_reject_empty_and_unsafe_output(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
