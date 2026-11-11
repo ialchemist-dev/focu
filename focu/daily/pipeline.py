@@ -14,7 +14,8 @@ from .config import enabled_sources
 from .errors import FewError
 from focu import tts as tts_adapter
 from focu.media_integrity import inspect_mp3, MediaIntegrityError
-from focu.briefing import read_style, render_script, validate_script, BriefingQCError
+from focu.briefing import (read_style, render_script, strip_boilerplate_paragraphs,
+                           validate_script, BriefingQCError)
 from focu.audience import load_profile, detect_domain, mismatch_report
 from .store import now_utc
 
@@ -86,7 +87,8 @@ def ingest(store, cfg, date, input_units=None, collector=None):
             if item.get("source_id") and item["source_id"] != source["source_id"]:
                 raise FewError("unit source_id disagrees with configured source")
             item["source_id"] = source["source_id"]
-    report = {"sources": [], "inserted": 0, "discovered": 0}
+    report = {"sources": [], "inserted": 0, "discovered": 0,
+              "boilerplate_paragraphs_stripped": 0}
     for source in sources:
         try:
             if imported is not None:
@@ -94,6 +96,15 @@ def ingest(store, cfg, date, input_units=None, collector=None):
                                      completeness="external", status="success")
             else:
                 result = collector(source, store.fetch_state(source["source_id"]))
+            # Press-release tail boilerplate (prospectus retrieval blocks,
+            # contact lines, legal disclaimers, About sections) is stripped
+            # here so it can never become briefing material (style
+            # v2026-11-10.2). Script/article QC still fails closed on any
+            # boilerplate that survives.
+            for item in result.items:
+                if isinstance(item, dict) and isinstance(item.get("body"), str):
+                    item["body"], dropped = strip_boilerplate_paragraphs(item["body"])
+                    report["boilerplate_paragraphs_stripped"] += dropped
         except Exception as ex:
             # Network/provider failures are isolated. Storage/configuration
             # errors below must propagate rather than advancing to selection.
