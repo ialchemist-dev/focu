@@ -217,7 +217,8 @@ def _concatenate(chunk_paths: list[Path], output: Path, work: Path,
     listing = work / "concat.txt"
     listing.write_text("".join(f"file '{path}'\n" for path in sequence), encoding="utf-8")
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "concat", "-safe", "0",
-                    "-i", str(listing), "-codec:a", "libmp3lame", "-q:a", "2",
+                    "-i", str(listing), "-codec:a", "libmp3lame", "-b:a", "128k",
+                     "-ar", "44100", "-ac", "1", "-write_xing", "0",
                     str(output)], check=True, capture_output=True, timeout=600)
 
 
