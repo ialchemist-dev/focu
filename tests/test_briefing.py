@@ -5,8 +5,9 @@ import unittest
 from pathlib import Path
 
 from focu.briefing import (
-    BriefingQCError, DEFAULT_STYLE, key_figures, make_prompt, ordered_units,
-    read_style, render_script, validate_script,
+    BriefingQCError, DEFAULT_STYLE, find_boilerplate, key_figures, make_prompt,
+    ordered_units, read_style, render_script, strip_boilerplate_paragraphs,
+    validate_script,
 )
 
 
@@ -163,6 +164,62 @@ class BriefingTests(unittest.TestCase):
         self.assertEqual(len(agenda_issues), 1)
         self.assertIn("Requested investigation results", agenda_issues[0]["missing_titles"])
         self.assertIn("Technical paper B", agenda_issues[0]["missing_sources"])
+
+
+class BoilerplateTests(unittest.TestCase):
+    # Verbatim from the 2026-11-10 Daily Briefing script (Anthropic IPO
+    # roadshow item): the press release's prospectus boilerplate that was
+    # read aloud to the owner. Real payload shape, kept as the regression
+    # fixture for the v2026-11-10.2 boilerplate ban.
+    REAL_BOILERPLATE = (
+        "The proposed offering will be made only by means of a prospectus, "
+        "with copies of the preliminary prospectus available from Goldman Sachs and Co. LLC "
+        "and Morgan Stanley and Co. LLC. Copies of the preliminary prospectus may be obtained "
+        "from Goldman Sachs and Co. LLC, Attention: Prospectus Department, 200 West Street, "
+        "New York, NY 10282, by telephone at (866) 471-2526, or by email at "
+        "prospectus-ny@ny.email.gs.com; or Morgan Stanley and Co. LLC, Attention: Prospectus "
+        "Department, 180 Varick Street, 2nd Floor, New York, NY 10014. A registration statement "
+        "relating to these securities has been filed with the U.S. Securities and Exchange "
+        "Commission but has not yet become effective. The announcement states these securities "
+        "may not be sold, nor may offers to buy be accepted, prior to the time the registration "
+        "statement becomes effective.")
+
+    def test_detector_flags_real_prospectus_boilerplate(self):
+        kinds = {hit["kind"] for hit in find_boilerplate(self.REAL_BOILERPLATE)}
+        self.assertEqual(kinds, {"email", "phone", "street_address", "state_zip",
+                                 "marker_phrase"})
+
+    def test_validate_script_fails_closed_on_real_boilerplate(self):
+        style = read_style()
+        items = [{"id": "ipo-1", "origin": "registered_source",
+                  "source": "Anthropic Official",
+                  "title": "Anthropic launches roadshow for proposed initial public offering",
+                  "body": "Anthropic launched the roadshow for its proposed initial public "
+                          "offering of 825,000,000 shares. " + self.REAL_BOILERPLATE}]
+        script = render_script(items, style)
+        report = validate_script(script, items, style)
+        self.assertFalse(report["passed"])
+        self.assertIn("boilerplate_contamination",
+                      {entry["issue"] for entry in report["issues"]})
+
+    def test_strip_removes_real_boilerplate_keeps_substance(self):
+        body = ("Anthropic launched the roadshow for its proposed initial public offering. "
+                "The proposed offering consists of 825,000,000 shares of Class A common stock.\n\n"
+                + self.REAL_BOILERPLATE +
+                "\n\nThe initial public offering price is expected to be between $70.00 and "
+                "$78.00 per share.")
+        cleaned, dropped = strip_boilerplate_paragraphs(body)
+        self.assertEqual(dropped, 1)
+        self.assertIn("825,000,000 shares", cleaned)
+        self.assertIn("$78.00 per share", cleaned)
+        for banned in ("200 West Street", "471-2526", "prospectus-ny@ny.email.gs.com",
+                       "180 Varick Street", "may be obtained from"):
+            self.assertNotIn(banned, cleaned)
+
+    def test_clean_offering_facts_have_no_boilerplate_hits(self):
+        self.assertEqual(find_boilerplate(
+            "The offering consists of 825,000,000 shares priced between $70.00 "
+            "and $78.00 per share."), [])
 
 
 if __name__ == "__main__":
