@@ -126,6 +126,14 @@ function article(id){
   assert.equal(e.run("isDone('mp3-story')"),true,'completed MP3 should archive');
 }
 
+// Muse iOS host chrome intercepts the top of the WebView; tabs must sit below it.
+// This static guard does NOT replace real-device coordinate-based touch acceptance.
+assert.match(html, /--muse-header-clearance:68px/);
+assert.match(html, /padding:calc\(12px \+ var\(--muse-header-clearance\)\)/);
+assert.match(html, /padding:calc\(10px \+ var\(--muse-header-clearance\)\)/);
+assert.match(html, /header-clearance/);
+assert.match(html, /display-mode:standalone[^}]*--muse-header-clearance:0px/);
+
 // Touch screens should not inherit sticky hover-red article titles after tapping.
 assert.match(html, /@media\s*\(hover:hover\)\s*and\s*\(pointer:fine\)/);
 assert.match(html, /\.feedcard\[hidden\]\{display:none!important\}/);
