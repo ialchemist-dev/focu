@@ -2,17 +2,17 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#fbfaf8">
 <title>Focu · Reading Feed</title>
 <style>
-:root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;color:#252422;background:#fbfaf8;font-synthesis:none}
+:root{--muse-header-clearance:68px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;color:#252422;background:#fbfaf8;font-synthesis:none}
 *{box-sizing:border-box}
 body{margin:0;min-height:100vh;background:#fbfaf8}
 button{font:inherit;cursor:pointer}
 button:focus-visible,a:focus-visible{outline:3px solid #bd6258;outline-offset:3px}
 header{position:sticky;top:0;z-index:5;background:#fbfaf8ed;backdrop-filter:blur(18px);border-bottom:1px solid #ebe8e2}
-.head{max-width:760px;margin:auto;min-height:70px;padding:12px 22px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.head{max-width:760px;margin:auto;min-height:70px;padding:calc(12px + var(--muse-header-clearance)) 22px 12px;display:flex;align-items:center;justify-content:space-between;gap:12px}
 .brand{font-size:24px;font-weight:800;letter-spacing:-1px}.brand .dot{color:#dd635b}
 .nav{display:flex;gap:5px;align-items:center}
 .nav button,.smallbutton{border:0;background:transparent;color:#77716b;padding:9px 12px;border-radius:12px;font-size:14px}
@@ -53,24 +53,51 @@ main{max-width:760px;margin:0 auto;padding:25px 22px 70px}
 #articlebody blockquote{border-left:3px solid #d9ada0;margin:15px 0 24px;padding:0 16px;color:#68615c}
 #articlebody a{color:#a94e45;text-decoration:underline;text-underline-offset:3px;overflow-wrap:anywhere}
 #articlebody pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f0ede8;padding:14px;border-radius:10px;font-size:13px;line-height:1.65}
+#articlebody .table-scroll{max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;margin:20px 0 28px;border:1px solid #e6e1d9;border-radius:10px;background:#fffdfb}
+#articlebody .article-table{width:100%;min-width:max-content;border-collapse:collapse;font-size:14px;line-height:1.55;letter-spacing:normal}
+#articlebody .article-table th,#articlebody .article-table td{padding:12px 14px;min-width:130px;max-width:330px;vertical-align:top;text-align:left;border-bottom:1px solid #e9e5de;border-right:1px solid #ece9e3;overflow-wrap:anywhere}
+#articlebody .article-table th{font-weight:700;background:#f4f1ec}
+#articlebody .article-table tr:last-child td{border-bottom:0}
+#articlebody .article-table th:last-child,#articlebody .article-table td:last-child{border-right:0}
+#articlebody .article-table [data-align=right]{text-align:right}
+#articlebody .article-table [data-align=center]{text-align:center}
+#articlebody .table-scroll:focus-visible{outline:3px solid #bd6258;outline-offset:3px}
 .readend{margin:36px 0 15px;border-top:1px solid #e9e5df;padding-top:21px;text-align:center;color:#958c82;font-size:13px}
 #readerstate{font-size:13px;color:#82786e;text-align:center;min-height:20px;margin:10px 0}.notice{font-size:12px;color:#8a7169;line-height:1.5}.listen:disabled{opacity:.55}
 #readerarchive[hidden],#restore[hidden]{display:none!important}
-#playerbar{position:fixed;z-index:8;bottom:0;left:0;right:0;background:#fff;border-top:1px solid #e5dfd8;box-shadow:0 -6px 24px #00000010;padding:9px 16px 12px}
+:root{--muse-chrome-clearance:68px}
+#playerbar{position:fixed;z-index:8;bottom:calc(var(--muse-chrome-clearance) + env(safe-area-inset-bottom,0px));left:0;right:0;background:#fff;border-top:1px solid #e5dfd8;box-shadow:0 -6px 24px #00000010;padding:9px 16px max(12px,env(safe-area-inset-bottom,0px));}
+@media(display-mode:standalone){:root{--muse-chrome-clearance:0px;--muse-header-clearance:0px}}
+body:has(#playerbar:not([hidden])) main{padding-bottom:calc(160px + var(--muse-chrome-clearance) + env(safe-area-inset-bottom,0px))}
 .playinner{max-width:710px;margin:auto}
 .playtop{display:flex;align-items:center;justify-content:space-between;gap:12px}
 #nowplaying{font-size:12px;color:#68615b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-#closeaudio{border:0;background:none;color:#827d76;font-size:22px}
-#player{display:block;width:100%;height:43px}
+#closeaudio{border:0;background:none;color:#827d76;font-size:22px;min-width:44px;min-height:44px}
+#recoveraudio{border:0;background:transparent;color:#3e6e66;font-size:12px;min-height:44px;padding:6px 8px;margin-left:auto;white-space:nowrap}
+#recoveraudio:focus-visible{outline:3px solid #bd6258}
+#player{display:none}
+.playcontrols{display:flex;align-items:center;gap:10px;min-height:48px}
+#playpause{height:44px;width:44px;flex:none;border:0;border-radius:50%;background:#282522;color:white;font-size:20px}
+.playtime{color:#5e5851;font-size:12px;min-width:37px;font-variant-numeric:tabular-nums;text-align:center}
+#seekbar{flex:1;min-width:35px;max-width:100%;height:44px;margin:0;padding:0;border:0;background:transparent;appearance:none;-webkit-appearance:none;cursor:pointer;touch-action:pan-x}
+#seekbar::-webkit-slider-runnable-track{height:6px;border-radius:6px;background:#d6d1ca}
+#seekbar::-moz-range-track{height:6px;border-radius:6px;background:#d6d1ca}
+#seekbar::-webkit-slider-thumb{-webkit-appearance:none;width:24px;height:24px;margin-top:-9px;border:3px solid #fff;border-radius:50%;background:#3e6e66;box-shadow:0 1px 4px #0004}
+#seekbar::-moz-range-thumb{width:20px;height:20px;border:3px solid #fff;border-radius:50%;background:#3e6e66}
+#seekbar:disabled{opacity:.45;cursor:default}
+.coveredsection{margin:26px 0;padding-top:20px;border-top:1px solid #e9e5df}
+.coveredsection h2{font-size:17px;margin:0 0 10px}
+.coveredlink{display:block;width:100%;text-align:left;padding:12px 8px;border:0;border-bottom:1px solid #e9e5df;background:transparent;color:#985449;line-height:1.45}
+.coveredlink:focus-visible{outline:3px solid #bd6258}
 .error{color:#af443b!important}
 #articlebody .noarticle{text-align:center;color:#777;font-size:15px}
-@media(max-width:480px){.head{padding:10px 17px;min-height:64px}.brand{font-size:23px}.nav button{padding:8px 10px}main{padding:20px 18px 70px}.feedtitle{font-size:20px}.cover{width:92px;height:92px}.feedcard{gap:13px;padding:21px 0}#articlebody{font-size:16px;line-height:1.85}}
+@media(max-width:480px){.head{padding:calc(10px + var(--muse-header-clearance)) 17px 10px;min-height:64px}.brand{font-size:23px}.nav button{padding:8px 10px}main{padding:20px 18px 70px}.feedtitle{font-size:20px}.cover{width:92px;height:92px}.feedcard{gap:13px;padding:21px 0}#articlebody{font-size:16px;line-height:1.85}}
 </style>
 </head>
 <body>
-<header><div class="head"><div class="brand">focu<span class="dot">.</span></div><nav class="nav" aria-label="Library"><button id="inbox" class="active">Inbox</button><button id="archive">Archive</button><button id="researchtab">Research</button><button id="refresh" aria-label="Refresh" title="Refresh">↻</button></nav></div></header>
+<header><div class="head"><div class="brand">focu<span class="dot">.</span></div><nav class="nav" aria-label="Library"><button id="briefingtab" class="active">Daily Briefing</button><button id="researchtab">Research</button><button id="archive">Archive</button><button id="refresh" aria-label="Refresh" title="Refresh">↻</button></nav></div></header>
 <main>
-<section id="feed"><h1 class="sectiontitle" id="feedheading">For you to read</h1><div id="status" aria-live="polite">Loading…</div><div class="feed" id="grid"></div></section>
+<section id="feed"><h1 class="sectiontitle" id="feedheading">Daily Briefing</h1><div id="status" aria-live="polite">Loading…</div><div class="feed" id="grid"></div></section>
 <section id="reader" hidden>
 <button id="back" class="readerback">← Back to Inbox</button>
 <img id="readercover" class="readercover" hidden alt="">
@@ -79,22 +106,33 @@ main{max-width:760px;margin:0 auto;padding:25px 22px 70px}
 <p id="readersummary"></p>
 <div class="readeractions" id="toolbar"><button id="listen" class="listen" hidden>▶ Listen</button><button id="readaloud" class="listen" hidden>▶ Read aloud</button><span id="readtime" class="readtime"></span><button id="readerarchive" class="card-action reader-archive" type="button">Archive</button><button id="restore" class="card-action reader-archive" type="button" hidden>Restore</button></div>
 <div id="articlebody"></div>
+<div id="coveredsection" class="coveredsection" hidden><h2>Articles covered in this briefing</h2><div id="coveredarticles"></div></div>
 <div class="readend" id="readend">End of article</div>
 <div id="readerstate" aria-live="polite"></div>
 
 </section>
 </main>
-<div id="playerbar" hidden><div class="playinner"><div class="playtop"><span id="nowplaying"></span><button id="closeaudio" aria-label="Close player">×</button></div><audio id="player" controls preload="metadata"></audio></div></div>
+<div id="playerbar" hidden><div class="playinner"><div class="playtop"><span id="nowplaying"></span><button id="recoveraudio" type="button" title="If audio becomes silent while time advances, restart the media decoder from this position">↻ Recover audio</button><button id="closeaudio" type="button" aria-label="Close player">×</button></div><div class="playcontrols"><button id="playpause" type="button" aria-label="Play or pause audio">▶</button><span id="elapsed" class="playtime">0:00</span><input id="seekbar" type="range" min="0" max="1000" value="0" step="1" aria-label="Seek audio position" disabled><span id="remaining" class="playtime">−0:00</span></div><audio id="player" preload="metadata"></audio></div></div>
 <script id="embedded-episodes" type="application/json">{"episodes":[]}</script>
 <script>
 'use strict';
 const grid=document.getElementById('grid'),status=document.getElementById('status'),refresh=document.getElementById('refresh');
 const feed=document.getElementById('feed'),reader=document.getElementById('reader'),articleBody=document.getElementById('articlebody');
 const player=document.getElementById('player'),playerbar=document.getElementById('playerbar'),readend=document.getElementById('readend');
+const seekbar=document.getElementById('seekbar'),playpause=document.getElementById('playpause'),elapsed=document.getElementById('elapsed'),remaining=document.getElementById('remaining');
 const params=new URLSearchParams(location.search);
+const requestedClearance=params.get('player-clearance');
+const requestedHeaderClearance=params.get('header-clearance');
+if(requestedHeaderClearance!==null&&/^\d{1,3}$/.test(requestedHeaderClearance)&&Number(requestedHeaderClearance)<=160&&document.documentElement?.style){
+ document.documentElement.style.setProperty('--muse-header-clearance',requestedHeaderClearance+'px');
+}
+if(requestedClearance!==null&&/^\d{1,3}$/.test(requestedClearance)&&Number(requestedClearance)<=160&&document.documentElement?.style){
+ document.documentElement.style.setProperty('--muse-chrome-clearance',requestedClearance+'px');
+}
 const STORE_KEY='focu:content-consumption:v1';
-let view='inbox',allItems=[],allRequests=[],storageOK=true,currentId=null,readMs=0,maxDepth=0,bottomSeen=false,contentAvailable=false;
-let tickAt=Date.now(),lastNote='',playingId=null,lastAudioPosition=null,listenedSeconds=0;
+let view='briefing',allItems=[],allRequests=[],storageOK=true,currentId=null,readMs=0,maxDepth=0,bottomSeen=false,contentAvailable=false;
+const feedPositions={briefing:0,research:0,archive:0},articlePositions={},articleTrail=[];
+let tickAt=Date.now(),lastNote='',playingId=null,lastAudioPosition=null,listenedSeconds=0,pendingRecoveryTime=null;
 let speechId=null,speechSegments=[],speechIndex=0,speechRunning=false,speechPaused=false,failedAudioId=null,speechEpoch=0;
 function canNarrate(){return !!(typeof speechSynthesis!=='undefined'&&typeof SpeechSynthesisUtterance!=='undefined')}
 function readStates(){try{const obj=JSON.parse(localStorage.getItem(STORE_KEY)||'{}');return obj&&typeof obj==='object'&&!Array.isArray(obj)?obj:{}}catch(e){storageOK=false;return {}}}
@@ -123,34 +161,71 @@ function normalize(data){
  return {id,title:x.title||'Untitled',summary:x.summary||'',date:x.published_at||x.date||'',source:typeof x.source==='string'?x.source:(x.source?.kind||'Focu'),cover_url:x.cover?.path||x.cover_url||'',cover_origin:x.cover?.origin||'',audio_url:x.formats?.audio?.path||x.audio_url||'',audio_duration:Number(x.formats?.audio?.duration_seconds)||null,podcast_mode:x.podcast_mode||null,origin:x.origin||null,covered_content_ids:Array.isArray(x.covered_content_ids)?x.covered_content_ids:[],article_url:x.formats?.article?.path||'',blocks:Array.isArray(x.article_blocks)?x.article_blocks:[],reading_minutes:Number(x.reading_minutes)||0};
  });
 }
-function setView(which){if(speechRunning)stopNarration();view=which;currentId=null;reader.hidden=true;feed.hidden=false;document.getElementById('inbox').classList.toggle('active',which==='inbox');document.getElementById('archive').classList.toggle('active',which==='archive');document.getElementById('researchtab').classList.toggle('active',which==='research');document.getElementById('feedheading').textContent=which==='archive'?'Your Archive':which==='research'?'Research requests':'Latest stories';render(allItems,lastNote);window.scrollTo(0,0)}
-document.getElementById('inbox').onclick=()=>setView('inbox');
+function setView(which){
+ if(which==='inbox')which='briefing'; // legacy navigation alias
+ if(!['briefing','research','archive'].includes(which))return;
+ if(currentId)articlePositions[currentId]=scrollY;
+ else feedPositions[view]=scrollY;
+ view=which;currentId=null;articleTrail.length=0;reader.hidden=true;feed.hidden=false;
+ // Switching tabs does not stop Podcast playback or device read-aloud.
+ document.getElementById('briefingtab').classList.toggle('active',which==='briefing');
+ document.getElementById('archive').classList.toggle('active',which==='archive');
+ document.getElementById('researchtab').classList.toggle('active',which==='research');
+ const labels={briefing:'Daily Briefing',research:'Research',archive:'Your Archive'};
+ document.getElementById('feedheading').textContent=labels[which];
+ render(allItems,lastNote);
+ window.scrollTo(0,feedPositions[which]||0);
+}
+document.getElementById('briefingtab').onclick=()=>setView('briefing');
 document.getElementById('archive').onclick=()=>setView('archive');
 document.getElementById('researchtab').onclick=()=>setView('research');
+function itemKind(item){
+ if(item.origin==='daily_compilation'||(item.covered_content_ids||[]).length)return 'briefing';
+ if(item.origin==='user_initiated'||item.source==='Your research'||item.podcast_mode==='single')return 'research';
+ return 'source';
+}
+function newestFirst(a,b){return String(b.date||'').localeCompare(String(a.date||''))}
+function appendResearchQueue(){
+ if(!allRequests.length)return;
+ grid.append(el('h2','Requests in progress','sectiontitle'));
+ for(const request of allRequests){
+  const card=el('div',undefined,'feedcard'),body=el('div',undefined,'cardbody');
+  const labels={queued:'Queued',researching:'Researching',completed:'Research completed · Awaiting publication',failed:'Research failed'};
+  body.append(el('div',labels[request.status]||'Unknown','cardmeta'));
+  body.append(el('h2',request.title||'Untitled research','feedtitle'));
+  if(request.status==='failed'&&request.error)body.append(el('p',request.error,'feedsummary'));
+  card.append(body);grid.append(card);
+ }
+}
 function compilationFor(id){
  return allItems.find(item=>Array.isArray(item.covered_content_ids)&&item.covered_content_ids.includes(id))||null;
 }
 function render(items,note){
  allItems=items;lastNote=note;grid.replaceChildren();
- if(view==='research'){
-   status.textContent=allRequests.length+' research requests · Snapshot at last publication';
-   const info=el('p','Updates appear when Muse publishes a new snapshot.','feedsummary');
-   grid.append(info);
-   if(!allRequests.length){grid.append(el('p','No outstanding research. Completed reports appear in Inbox.','empty'));return}
-   for(const request of allRequests){
-     const card=el('div',undefined,'feedcard'),body=el('div',undefined,'cardbody');
-     const labels={queued:'Queued',researching:'Researching',completed:'Research completed · Awaiting publication',failed:'Research failed'};
-     body.append(el('div',labels[request.status]||'Unknown','cardmeta'));
-     body.append(el('h2',request.title||'Untitled research','feedtitle'));
-     if(request.status==='failed'&&request.error)body.append(el('p',request.error,'feedsummary'));
-     card.append(body);grid.append(card);
-   }
+ let visible=[];
+ if(view==='archive'){
+   visible=items.filter(x=>isDone(x.id)).sort(newestFirst);
+ }else if(view==='research'){
+   visible=items.filter(x=>!isDone(x.id)&&itemKind(x)==='research').sort(newestFirst);
+ }else{
+   const briefs=items.filter(x=>!isDone(x.id)&&itemKind(x)==='briefing').sort(newestFirst);
+   // Uncompiled registered-source articles remain reachable without mixing
+   // commissioned research reports into the Daily Briefing stream.
+   const uncovered=items.filter(x=>!isDone(x.id)&&itemKind(x)==='source'&&!compilationFor(x.id)).sort(newestFirst);
+   visible=[...briefs,...uncovered];
+ }
+ status.textContent=visible.length+' '+(view==='archive'?'archived items':view==='research'?'research reports':'briefings and uncovered sources')+
+   (note?' · '+note:'')+(!storageOK?' · Reading state cannot be saved':'');
+ if(!visible.length&&!(view==='research'&&allRequests.length)){
+   grid.append(el('p',view==='archive'?'Nothing archived yet.':view==='research'?'No research reports yet.':'You are all caught up.','empty'));
    return;
  }
- const visible=items.filter(x=>isDone(x.id)===(view==='archive'));
- status.textContent=visible.length+' '+(view==='archive'?'saved stories':'new stories')+(note?' · '+note:'')+(!storageOK?' · Reading state cannot be saved':'');
- if(!visible.length){grid.append(el('p',view==='archive'?'Nothing here yet. Finished stories will appear here.':'You are all caught up.','empty'));return}
+ let sourceHeadingShown=false;
  for(const item of visible){
+  if(view==='briefing'&&itemKind(item)==='source'&&!sourceHeadingShown){
+    grid.append(el('h2','Source updates not yet in a briefing','sectiontitle'));
+    sourceHeadingShown=true;
+  }
  const card=el('div',undefined,'feedcard');
  const open=el('button',undefined,'feed-open');open.type='button';open.setAttribute('aria-label','Read '+item.title);open.onclick=()=>openItem(item.id);
  const body=el('div',undefined,'cardbody');
@@ -179,6 +254,7 @@ function render(items,note){
  };
  controls.append(action);card.append(controls);grid.append(card);
  }
+ if(view==='research')appendResearchQueue();
 }
 function inline(parent,raw){
  const text=String(raw||'');const pattern=/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)|\*\*([^*]+)\*\*/g;
@@ -191,7 +267,39 @@ function renderArticle(blocks,legacyUrl){
  if(!blocks.length){const url=safeUrl(legacyUrl);if(url){const p=el('p',undefined,'noarticle'),link=el('a','Open legacy article');link.href=url;link.target='_blank';link.rel='noopener noreferrer';p.append(link);articleBody.append(p)}else articleBody.append(el('p','This item has audio but no article yet.','noarticle'));return}
  let previousList=null;
  for(const block of blocks){
- if(!block||typeof block.text!=='string')continue;
+ if(!block)continue;
+ if(block.type==='table'&&Array.isArray(block.headers)&&Array.isArray(block.rows)){
+   previousList=null;
+   const scroll=el('div',undefined,'table-scroll');
+   scroll.tabIndex=0;
+   scroll.setAttribute('role','region');
+   scroll.setAttribute('aria-label','Scrollable article data table');
+   const table=el('table',undefined,'article-table');
+   const head=el('thead'),headerRow=el('tr');
+   for(let col=0;col<block.headers.length;col++){
+     const th=el('th');
+     th.setAttribute('scope','col');
+     if(Array.isArray(block.align))th.setAttribute('data-align',block.align[col]||'left');
+     inline(th,String(block.headers[col]));
+     headerRow.append(th);
+   }
+   head.append(headerRow);table.append(head);
+   const tbody=el('tbody');
+   for(const cells of block.rows){
+     if(!Array.isArray(cells)||cells.length!==block.headers.length)continue;
+     const tr=el('tr');
+     for(let col=0;col<cells.length;col++){
+       const td=el('td');
+       if(Array.isArray(block.align))td.setAttribute('data-align',block.align[col]||'left');
+       inline(td,String(cells[col]));
+       tr.append(td);
+     }
+     tbody.append(tr);
+   }
+   table.append(tbody);scroll.append(table);articleBody.append(scroll);
+   continue;
+ }
+ if(typeof block.text!=='string')continue;
  const type=block.type;
  if(type==='heading'&&block.level===1)continue;
  if(type==='bullet'){
@@ -215,19 +323,26 @@ function updateReaderState(){
  document.getElementById('restore').hidden=!done;
  document.getElementById('readerarchive').hidden=done;
 }
-function openItem(id){
+function openItem(id,viaLink=false){
  const item=allItems.find(x=>x.id===id);if(!item)return;
+ if(currentId&&currentId!==id){
+   articlePositions[currentId]=scrollY;
+   if(viaLink)articleTrail.push(currentId);
+ }else if(!currentId){
+   feedPositions[view]=scrollY;
+ }
  if(speechRunning&&speechId!==id)stopNarration();
  currentId=id;readMs=0;maxDepth=0;bottomSeen=false;contentAvailable=item.blocks.length>0;tickAt=Date.now();
  feed.hidden=true;reader.hidden=false;
- document.getElementById('back').textContent='← Back to '+(view==='archive'?'Archive':'Inbox');
+ document.getElementById('back').textContent=articleTrail.length?'← Back to article':
+   '← Back to '+(view==='archive'?'Archive':view==='research'?'Research':'Daily Briefing');
  document.getElementById('readertitle').textContent=item.title;
  document.getElementById('readersummary').textContent=item.summary;
  document.getElementById('readerbyline').textContent=[item.source,item.date].filter(Boolean).join('  ·  ');
  const linked=compilationFor(item.id),coveredButton=document.getElementById('coveredby');
  coveredButton.hidden=!linked;
  if(linked){coveredButton.textContent='In the '+(linked.date||'daily')+' briefing';
- coveredButton.onclick=()=>openItem(linked.id)}
+ coveredButton.onclick=()=>openItem(linked.id,true)}
  document.getElementById('readtime').textContent=item.reading_minutes?item.reading_minutes+' min read':'';
  const cover=item.cover_origin==='offline_art'?null:safeUrl(item.cover_url),img=document.getElementById('readercover');img.hidden=!cover;
  if(cover){img.src=cover;img.onerror=()=>{img.hidden=true}}else img.removeAttribute('src');
@@ -236,9 +351,27 @@ function openItem(id){
  readaloud.hidden=(!!safeUrl(item.audio_url)&&failedAudioId!==item.id)||!item.blocks.length;
  listen.textContent='▶ Listen';readaloud.textContent='▶ Read aloud';
  const toolbar=document.getElementById('toolbar');toolbar.hidden=false;
- renderArticle(item.blocks,item.article_url);updateReaderState();window.scrollTo(0,0);
+ renderArticle(item.blocks,item.article_url);
+ const coveredSection=document.getElementById('coveredsection'),links=document.getElementById('coveredarticles');
+ links.replaceChildren();
+ if(itemKind(item)==='briefing'){
+   for(const contentId of item.covered_content_ids||[]){
+     const covered=allItems.find(x=>x.id===contentId);
+     if(!covered)continue;
+     const button=el('button',covered.title,'coveredlink');
+     button.type='button';
+     button.setAttribute('aria-label','Read covered article: '+covered.title);
+     button.onclick=()=>openItem(covered.id,true);
+     links.append(button);
+   }
+ }
+ coveredSection.hidden=!links.children.length;
+ updateReaderState();window.scrollTo(0,articlePositions[id]||0);
 }
-document.getElementById('back').onclick=()=>{stopNarration();setView(view)};
+document.getElementById('back').onclick=()=>{
+ if(articleTrail.length)openItem(articleTrail.pop(),false);
+ else{if(speechRunning)stopNarration();setView(view)}
+};
 document.getElementById('restore').onclick=()=>{if(currentId)markUnread(currentId)};
 document.getElementById('readerarchive').onclick=()=>manualArchive(currentId);
 function stopNarration(){
@@ -247,9 +380,18 @@ function stopNarration(){
 }
 function readableText(item){
  let section=false;
- return (item.blocks||[]).filter(b=>b&&typeof b.text==='string'&&b.type!=='code')
+ return (item.blocks||[]).filter(b=>b&&(typeof b.text==='string'||b.type==='table')&&b.type!=='code')
   .filter(b=>{if(b.type==='heading'&&String(b.text).trim().toLowerCase()==='sources')section=true;return !section})
-  .map(b=>String(b.text).replace(/\[([^\]]+)\]\(https?:\/\/[^)]+\)/g,'$1')
+  .map(b=>{
+    if(b.type==='table'){
+      const headers=Array.isArray(b.headers)?b.headers:[];
+      return (Array.isArray(b.rows)?b.rows:[]).map(row=>
+        Array.isArray(row)?row.map((cell,i)=>(headers[i]||'Column '+(i+1))+': '+cell).join('; '):''
+      ).join('. ');
+    }
+    return String(b.text);
+  })
+  .map(text=>text.replace(/\[([^\]]+)\]\(https?:\/\/[^)]+\)/g,'$1')
        .replace(/[*_\x60#]/g,'').replace(/https?:\/\/\S+/g,'').trim()).filter(Boolean).join('. ');
 }
 function speechChunks(text){
@@ -299,6 +441,37 @@ function readAloud(item){
  nextSpeechChunk();
 }
 document.getElementById('readaloud').onclick=()=>{const item=allItems.find(x=>x.id===currentId);if(item)readAloud(item)};
+function audioClock(seconds){
+ if(!Number.isFinite(seconds)||seconds<0)return '0:00';
+ const whole=Math.floor(seconds);
+ return Math.floor(whole/60)+':'+String(whole%60).padStart(2,'0');
+}
+function syncPlayerUI(){
+ const duration=Number.isFinite(player.duration)&&player.duration>0?player.duration:0;
+ const position=Number.isFinite(player.currentTime)?Math.max(0,player.currentTime):0;
+ elapsed.textContent=audioClock(position);
+ remaining.textContent='−'+audioClock(Math.max(0,duration-position));
+ seekbar.disabled=!duration;
+ if(duration)seekbar.value=String(Math.max(0,Math.min(1000,Math.round(position/duration*1000))));
+ playpause.textContent=player.paused?'▶':'Ⅱ';
+ playpause.setAttribute('aria-label',player.paused?'Play audio':'Pause audio');
+}
+playpause.onclick=()=>{
+ if(!playingId)return;
+ if(player.paused)player.play().then(syncPlayerUI).catch(()=>{document.getElementById('nowplaying').textContent='Tap Play to resume audio'});
+ else player.pause();
+ syncPlayerUI();
+};
+seekbar.addEventListener('input',()=>{
+ if(!playingId||!Number.isFinite(player.duration)||player.duration<=0)return;
+ player.currentTime=player.duration*Number(seekbar.value)/1000;
+ lastAudioPosition=null;
+ syncPlayerUI();
+});
+player.addEventListener('durationchange',syncPlayerUI);
+player.addEventListener('play',syncPlayerUI);
+player.addEventListener('pause',syncPlayerUI);
+player.addEventListener('seeked',syncPlayerUI);
 document.getElementById('listen').onclick=()=>{
  const item=allItems.find(x=>x.id===currentId);if(!item)return;
  const url=safeUrl(item.audio_url);
@@ -306,17 +479,37 @@ document.getElementById('listen').onclick=()=>{
  stopNarration();
  if(playingId!==item.id){player.src=url;playingId=item.id;listenedSeconds=0;lastAudioPosition=null}
  playerbar.hidden=false;document.getElementById('nowplaying').textContent=item.title;
- player.play().catch(()=>{document.getElementById('nowplaying').textContent='Tap the native play control to start audio'});
+ syncPlayerUI();
+ player.play().then(syncPlayerUI).catch(()=>{document.getElementById('nowplaying').textContent='Tap Play to start audio';syncPlayerUI()});
 };
-document.getElementById('closeaudio').onclick=()=>{player.pause();playerbar.hidden=true};
+document.getElementById('recoveraudio').onclick=()=>{
+ // WebKit sometimes reports playing/currentTime even though audible output
+ // is silent. No Web Audio output inspection is reliable in a host WebView;
+ // recovery must therefore be a user-initiated decoder reset.
+ const item=allItems.find(x=>x.id===playingId);
+ const url=item?safeUrl(item.audio_url):null;
+ if(!url){document.getElementById('nowplaying').textContent='No audio source available to recover';return}
+ pendingRecoveryTime=Number.isFinite(player.currentTime)?Math.max(0,player.currentTime):0;
+ lastAudioPosition=null; // seeking/reloading is not evidence of listening
+ document.getElementById('nowplaying').textContent='Reconnecting audio near '+audioClock(pendingRecoveryTime)+'…';
+ player.pause();
+ player.removeAttribute('src');
+ player.load();
+ player.src=url;
+ player.load(); // loadedmetadata will seek and resume
+ syncPlayerUI();
+};
+document.getElementById('closeaudio').onclick=()=>{pendingRecoveryTime=null;player.pause();playerbar.hidden=true;syncPlayerUI()};
 player.addEventListener('seeking',()=>{lastAudioPosition=null});
 player.addEventListener('timeupdate',()=>{
  if(player.paused||player.seeking||!Number.isFinite(player.currentTime))return;
  const current=player.currentTime;
  if(lastAudioPosition!==null){const diff=current-lastAudioPosition;if(diff>0&&diff<60)listenedSeconds+=diff}
  lastAudioPosition=current;
+ syncPlayerUI();
 });
 player.addEventListener('ended',()=>{
+ syncPlayerUI();
  const item=allItems.find(x=>x.id===playingId);
  if(item&&Number.isFinite(item.audio_duration)&&item.audio_duration>0&&
     player.currentTime<item.audio_duration*0.95){
@@ -327,6 +520,19 @@ player.addEventListener('ended',()=>{
  else document.getElementById('nowplaying').textContent='Playback ended · Not enough listening time to archive';
 });
 player.addEventListener('loadedmetadata',()=>{
+ if(pendingRecoveryTime!==null){
+   const target=pendingRecoveryTime;
+   pendingRecoveryTime=null;
+   if(Number.isFinite(player.duration)&&player.duration>0){
+     player.currentTime=Math.min(target,Math.max(0,player.duration-0.25));
+   }
+   document.getElementById('nowplaying').textContent=
+       (allItems.find(x=>x.id===playingId)?.title||'Audio')+' · Restarted at '+audioClock(player.currentTime);
+   player.play().then(syncPlayerUI).catch(()=>{
+     document.getElementById('nowplaying').textContent='Tap Play to resume after audio recovery';
+   });
+ }
+ syncPlayerUI();
  const item=allItems.find(x=>x.id===playingId);
  if(item&&item.audio_duration&&Number.isFinite(player.duration)&&
     Math.abs(player.duration-item.audio_duration)>Math.max(4,item.audio_duration*0.05)){
@@ -336,6 +542,7 @@ player.addEventListener('loadedmetadata',()=>{
 player.addEventListener('stalled',()=>{document.getElementById('nowplaying').textContent='Playback stalled · Waiting for audio data'});
 
 player.addEventListener('error',()=>{
+ pendingRecoveryTime=null;
  failedAudioId=playingId;
  document.getElementById('nowplaying').textContent='Podcast audio unavailable. You can still read the article.';
  if(currentId===playingId&&allItems.some(x=>x.id===currentId&&x.blocks.length)){
@@ -357,7 +564,10 @@ function readingTick(){
  if(!currentId||reader.hidden||document.hidden||!contentAvailable||isDone(currentId)||
     (playingId===currentId&&!player.paused)||(speechRunning&&speechId===currentId))return;
  readMs+=delta;updateScroll();
- const item=allItems.find(x=>x.id===currentId),textLen=item?item.blocks.reduce((n,b)=>n+String(b.text||'').length,0):0;
+ const item=allItems.find(x=>x.id===currentId),textLen=item?item.blocks.reduce((n,b)=>{
+  if(b.type==='table'&&Array.isArray(b.rows))return n+b.rows.reduce((total,row)=>total+(Array.isArray(row)?row.join(' ').length:0),0);
+  return n+String(b.text||'').length;
+ },0):0;
  const minMs=textLen<450?7000:textLen<1800?13000:20000;
  if(bottomSeen&&readMs>=minMs)markDone(currentId,'article');
 }
