@@ -37,6 +37,7 @@ class FakeElement {
   removeAttribute() {}
   setAttribute(name,value) { this.attributes[name] = value; }
   pause() { this.paused = true; }
+  load() { this.loadCount = (this.loadCount || 0) + 1; this.paused = true; }
   play() { this.paused = false; return Promise.resolve(); }
 }
 function makeEnvironment(saved = {}) {
@@ -63,7 +64,7 @@ function makeEnvironment(saved = {}) {
   };
   const ctx = {
     console,URL,URLSearchParams,Date,document,
-    window:{addEventListener(){},scrollTo(){}},
+    window:{addEventListener(){},scrollTo(x,y){ctx.scrollY=y||0}},
     innerHeight:650,scrollY:0,location:{search:''},
     localStorage:{
       getItem(k){return storage[k] || null},
@@ -80,7 +81,7 @@ function makeEnvironment(saved = {}) {
 }
 function article(id){
   return "{id:'"+id+"',title:'A grounded research story',summary:'Short context',source:'Your research',"+
-    "date:'2026-11-04',cover_url:'',audio_url:'',"+
+    "date:'2026-11-04',origin:'daily_compilation',cover_url:'',audio_url:'',"+
     "blocks:[{type:'heading',level:1,text:'A grounded research story'},"+
     "{type:'paragraph',text:'The source provides evidence about the tradeoff.'}],reading_minutes:1}";
 }
@@ -124,6 +125,14 @@ function article(id){
   player.events.ended();
   assert.equal(e.run("isDone('mp3-story')"),true,'completed MP3 should archive');
 }
+
+// Muse iOS host chrome intercepts the top of the WebView; tabs must sit below it.
+// This static guard does NOT replace real-device coordinate-based touch acceptance.
+assert.match(html, /--muse-header-clearance:68px/);
+assert.match(html, /padding:calc\(12px \+ var\(--muse-header-clearance\)\)/);
+assert.match(html, /padding:calc\(10px \+ var\(--muse-header-clearance\)\)/);
+assert.match(html, /header-clearance/);
+assert.match(html, /display-mode:standalone[^}]*--muse-header-clearance:0px/);
 
 // Touch screens should not inherit sticky hover-red article titles after tapping.
 assert.match(html, /@media\s*\(hover:hover\)\s*and\s*\(pointer:fine\)/);
@@ -200,4 +209,147 @@ assert.match(html, /\.feedcard\[hidden\]\{display:none!important\}/);
   assert.equal(e.get('listen').hidden,false,'compiled episode has real audio');
   assert.equal(e.get('readaloud').hidden,true);
 }
+
+// Daily Briefing contains compiled reports; completed on-demand articles live
+// under Research. Source articles remain linked from the compilation.
+{
+  const e=makeEnvironment();
+  e.run("render(["+
+    "{id:'daily-8',origin:'daily_compilation',title:'Earlier briefing',date:'2026-11-08',source:'Focu',blocks:[{type:'paragraph',text:'Earlier'}],covered_content_ids:[]},"+
+    "{id:'source-1',origin:'registered_source',title:'Original experiment',date:'2026-11-09',source:'Anthropic',blocks:[{type:'paragraph',text:'Evidence'}]},"+
+    "{id:'daily-9',origin:'daily_compilation',title:'Latest briefing',date:'2026-11-09',source:'Focu',audio_url:'media/briefing.mp3',blocks:[{type:'paragraph',text:'Daily report'}],covered_content_ids:['source-1','research-1']},"+
+    "{id:'research-1',origin:'user_initiated',title:'New METR research',date:'2026-11-09',source:'Your research',blocks:[{type:'paragraph',text:'Evidence-backed analysis'}]},"+
+    "{id:'research-2',origin:'user_initiated',title:'Earlier research',date:'2026-11-06',source:'Your research',blocks:[{type:'paragraph',text:'Prior analysis'}]}"+
+  "],'')");
+  assert.equal(e.run('view'),'briefing');
+  assert.equal(e.get('grid').children.length,2,'daily home lists compilations, not covered sources or research');
+  assert.match(e.get('grid').children[0].children[0].children[0].children[1].textContent,/Latest briefing/);
+  e.run("openItem('daily-9')");
+  assert.equal(e.get('coveredsection').hidden,false);
+  assert.equal(e.get('coveredarticles').children.length,2,'daily briefing links all covered original articles');
+  e.get('coveredarticles').children[0].onclick();
+  assert.equal(e.run('currentId'),'source-1');
+  assert.equal(e.get('coveredby').hidden,false);
+  e.get('back').onclick();
+  assert.equal(e.run('currentId'),'daily-9','Back from source returns to briefing');
+  e.get('listen').onclick();
+  assert.equal(e.get('playerbar').hidden,false,'briefing playback controls active');
+  assert.equal(e.run('playingId'),'daily-9');
+  e.run("setView('research')");
+  assert.equal(e.get('playerbar').hidden,false,'tab switching must not interrupt playback');
+  assert.equal(e.get('player').paused,false);
+  assert.equal(e.get('grid').children.length,2,'research lists published commissioned research only');
+  assert.match(e.get('grid').children[0].children[0].children[0].children[1].textContent,/New METR research/);
+  e.run("openItem('research-1')");
+  e.run('scrollY=280');
+  e.run("setView('briefing')");
+  e.run("setView('research')");
+  e.run("openItem('research-1')");
+  assert.equal(e.run('scrollY'),280,'per-article reading position is restored after tab switch');
+  e.get('readerarchive').onclick();
+  e.run("setView('archive')");
+  assert.equal(e.get('grid').children.length,1,'archived research stays reachable in Archive');
+  e.get('grid').children[0].children[1].children[0].onclick();
+  e.run("setView('research')");
+  assert.equal(e.get('grid').children.length,2,'Restore returns research to its own category');
+}
+// #34: an explicit decoder restart can rescue audible output when the iOS
+// webview's clock advances but sound has stopped. It does not fabricate time
+// listened or invent an automatic audible-output detector.
+{
+  assert.match(html, /id="recoveraudio"/);
+  const e=makeEnvironment();
+  e.run("render([{id:'long-audio',origin:'daily_compilation',title:'24 minute briefing',date:'2026-11-09',audio_url:'assets/long.mp3',blocks:[{type:'paragraph',text:'Long evidence-backed report'}]}],'')");
+  e.run("openItem('long-audio')");
+  e.get('listen').onclick();
+  const audio=e.get('player');
+  audio.duration=1442.077;
+  audio.currentTime=275;
+  e.get('recoveraudio').onclick();
+  assert.equal(audio.loadCount,2,'recovery resets WebKit media resource twice');
+  assert.equal(audio.src,'assets/long.mp3','recovery never changes canonical content');
+  assert.match(e.get('nowplaying').textContent,/Reconnecting audio/);
+  audio.currentTime=0; // reset by the new decoder
+  audio.events.loadedmetadata();
+  assert.equal(audio.currentTime,275,'seek returns to interrupted timestamp');
+  assert.equal(audio.paused,false,'recovered media resumes after metadata');
+  assert.equal(e.run('lastAudioPosition'),null,'seek does not count as listening');
+  assert.equal(e.run("isDone('long-audio')"),false,'recovery must not archive a partial listen');
+}
+
+// The Research tab also displays pending requests without replacing finished reports.
+{
+  const e=makeEnvironment();
+  e.run("allRequests=[{intent_id:'int_123',title:'Queued investigation',status:'queued'}]");
+  e.run("render([{id:'research-complete',title:'Finished research',origin:'user_initiated',source:'Your research',date:'2026-11-09',blocks:[{type:'paragraph',text:'Research'}]}],'')");
+  e.run("setView('research')");
+  assert.equal(e.get('grid').children.length,3,'report plus queue heading and queued request');
+}
+// Muse-safe player must be above the host bottom chrome; finger hit targets are
+// touch-sized instead of relying on the iOS native tiny audio seek thumb.
+{
+  assert.match(html, /--muse-chrome-clearance:68px/);
+  assert.match(html, /env\(safe-area-inset-bottom,0px\)/);
+  assert.match(html, /#seekbar\{[^}]*height:44px/);
+  const e=makeEnvironment();
+  e.run("render([{id:'mp3',origin:'daily_compilation',title:'Audio briefing',date:'2026-11-09',audio_url:'assets/brief.mp3',blocks:[{type:'paragraph',text:'Brief'}]}],'')");
+  e.run("openItem('mp3')");
+  e.get('listen').onclick();
+  const audio=e.get('player');
+  audio.duration=240;
+  audio.events.loadedmetadata();
+  const slider=e.get('seekbar');
+  assert.equal(slider.disabled,false);
+  slider.value='500';
+  slider.events.input();
+  assert.equal(audio.currentTime,120,'touch scrubbing reaches the requested half-way position');
+  assert.equal(e.get('elapsed').textContent,'2:00');
+  assert.equal(e.get('remaining').textContent,'−2:00');
+  e.get('playpause').onclick();
+  assert.equal(audio.paused,true,'custom Play/Pause button controls the HTMLAudioElement');
+}
+
+
+// Financial Markdown tables stay semantic and horizontally scrollable on iOS.
+{
+  assert.match(html, /\.table-scroll\{[^}]*overflow-x:auto/);
+  assert.match(html, /aria-label','Scrollable article data table'/);
+  const e=makeEnvironment();
+  const blocks=[
+    {
+      type:'table',
+      headers:['Item (Q3 2026)','Figure','Notes / comparatives'],
+      align:['left','right','left'],
+      rows:[
+        ['Revenue','**$116k** ($116 thousand)','vs $55k Q3 2025 (+110%; Seeking Alpha calculates +140%)'],
+        ['Net loss attributable','**−$20.8M**','vs −$19.527M in the income statement']
+      ]
+    },
+    {type:'paragraph',text:'Figures must remain precisely attributed.'}
+  ];
+  e.run('renderArticle('+JSON.stringify(blocks)+',"")');
+  const wrapper=e.get('articlebody').children[0];
+  assert.equal(wrapper.name,'div');
+  assert.equal(wrapper.className,'table-scroll');
+  assert.equal(wrapper.attributes.role,'region');
+  assert.equal(wrapper.attributes['aria-label'],'Scrollable article data table');
+  const table=wrapper.children[0];
+  assert.equal(table.name,'table');
+  const head=table.children[0].children[0];
+  assert.equal(head.children[1].name,'th');
+  assert.equal(head.children[1].attributes.scope,'col');
+  assert.equal(head.children[1].attributes['data-align'],'right');
+  const rows=table.children[1].children;
+  assert.equal(rows.length,2);
+  assert.equal(rows[0].children[1].children.find(n=>n.name==='strong').textContent,'$116k');
+  assert.ok(rows[0].children[1].children.some(n=>n.textContent===' ($116 thousand)'));
+  assert.equal(rows[1].children[1].children.find(n=>n.name==='strong').textContent,'−$20.8M');
+  assert.match(rows[1].children[2].children[0].textContent,/−\$19\.527M/);
+  e.run('render([{id:"financial",origin:"user_initiated",source:"Your research",title:"Finance",date:"2026-11-09",blocks:'+JSON.stringify(blocks)+'}],"")');
+  const spoken=e.run('readableText(allItems[0])');
+  assert.match(spoken,/Item \(Q3 2026\): Revenue; Figure: \$116k/);
+  assert.match(spoken,/Notes \/ comparatives: vs \$55k/);
+  assert.match(spoken,/Net loss attributable; Figure: −\$20.8M/);
+}
+
 console.log('Focu reader behavior: article, local read-aloud, persistence and audio end passed');

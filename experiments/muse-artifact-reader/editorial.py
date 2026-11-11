@@ -105,6 +105,74 @@ def shorten(text, limit):
     return prefix.rstrip(" ,;:.") + "…"
 
 
+def _pipe_cells(line):
+    """Parse GFM table cells without splitting escaped or inline-code pipes.
+
+    Preserve Markdown formatting for safe client-side text rendering.
+    """
+    line = line.strip()
+    if "|" not in line:
+        return None
+    if line.startswith("|"):
+        line = line[1:]
+    if line.endswith("|") and not line.endswith(r"\|"):
+        line = line[:-1]
+    cells, current = [], []
+    in_code = False
+    index = 0
+    while index < len(line):
+        char = line[index]
+        if char == "\\" and index + 1 < len(line) and line[index + 1] == "|":
+            current.append("|")
+            index += 2
+            continue
+        if char == "`":
+            in_code = not in_code
+        if char == "|" and not in_code:
+            cells.append("".join(current).strip())
+            current = []
+        else:
+            current.append(char)
+        index += 1
+    cells.append("".join(current).strip())
+    return cells
+
+
+def _table_at(lines, start):
+    """Return structured table and next line index if a valid GFM table starts here.
+
+    A malformed row is left as ordinary text instead of guessing columns.
+    """
+    if start + 2 >= len(lines):
+        return None
+    headers = _pipe_cells(lines[start])
+    delimiters = _pipe_cells(lines[start + 1])
+    if not headers or len(headers) < 2 or not delimiters or len(delimiters) != len(headers):
+        return None
+    if not all(re.fullmatch(r":?-{3,}:?", cell) for cell in delimiters):
+        return None
+    alignments = [
+        "center" if cell.startswith(":") and cell.endswith(":") else
+        "right" if cell.endswith(":") else
+        "left" for cell in delimiters
+    ]
+    rows = []
+    offset = start + 2
+    while offset < len(lines):
+        raw = lines[offset].strip()
+        if not raw or raw.startswith(("```", "~~~")):
+            break
+        cells = _pipe_cells(raw)
+        if not cells or len(cells) != len(headers):
+            break
+        rows.append(cells)
+        offset += 1
+    if not rows:
+        return None
+    return {"type": "table", "headers": headers, "align": alignments,
+            "rows": rows}, offset
+
+
 def blocks_from_markdown(markdown):
     """Convert Markdown to bounded, structured text blocks, not arbitrary HTML."""
     blocks = []
@@ -121,7 +189,10 @@ def blocks_from_markdown(markdown):
                 blocks.append({"type": kind, "text": text})
         paragraph = []
 
-    for raw in lines:
+    skip_before = 0
+    for index, raw in enumerate(lines):
+        if index < skip_before:
+            continue
         line = raw.rstrip()
         stripped = line.strip()
         if stripped.startswith(chr(96) * 3):
@@ -137,6 +208,13 @@ def blocks_from_markdown(markdown):
             continue
         if not stripped:
             flush()
+            kind = "paragraph"
+            continue
+        table = _table_at(lines, index)
+        if table is not None:
+            flush()
+            block, skip_before = table
+            blocks.append(block)
             kind = "paragraph"
             continue
         heading = re.match(r"^(#{1,4})\s+(.+)$", stripped)
