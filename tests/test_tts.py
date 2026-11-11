@@ -154,6 +154,16 @@ class LongFormSynthesisTests(unittest.TestCase):
         # overlapped or truncated audio.
         self.assertGreater(audit["decoded_duration_seconds"], 2.2)
         self.assertLess(audit["decoded_duration_seconds"], 4.0)
+        import subprocess
+        probe = subprocess.run([
+            "ffprobe", "-v", "error", "-select_streams", "a:0",
+            "-show_entries", "stream=bit_rate,sample_rate,channels",
+            "-of", "json", str(out)
+        ], capture_output=True, text=True, check=True)
+        track = json.loads(probe.stdout)["streams"][0]
+        self.assertEqual(track["sample_rate"], "44100")
+        self.assertEqual(track["channels"], 1)
+        self.assertLess(abs(int(track["bit_rate"]) - 128000), 5000)
 
     def test_boundary_silences_are_normalized(self):
         from focu.media_integrity import inspect_mp3
