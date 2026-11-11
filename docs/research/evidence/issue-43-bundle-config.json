@@ -1,0 +1,45 @@
+{
+ "issue": 43,
+ "repos": [],
+ "packages": [
+  {
+   "name": "framework7",
+   "files": [
+    "/framework7-bundle\\.min\\.js",
+    "/framework7-bundle\\.min\\.css"
+   ]
+  },
+  {
+   "name": "@ionic/core",
+   "files": [
+    "/css/ionic\\.bundle\\.css",
+    "/dist/ionic/ionic\\.esm\\.js"
+   ]
+  },
+  {
+   "name": "konsta",
+   "files": []
+  },
+  {
+   "name": "media-chrome",
+   "files": [
+    "/dist/iife/index\\.js",
+    "/dist/index\\.js"
+   ]
+  },
+  {
+   "name": "@picocss/pico",
+   "files": [
+    "/css/pico\\.min\\.css"
+   ]
+  },
+  {
+   "name": "vidstack",
+   "files": [
+    "/cdn/vidstack\\.js",
+    "/cdn/with-layouts/vidstack\\.js",
+    "/player/styles/default/theme\\.css"
+   ]
+  }
+ ]
+}

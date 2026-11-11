@@ -1,0 +1,214 @@
+{
+  "schema": "focu-oss-activity-snapshot/1",
+  "captured_at": "2026-11-11T08:46:49Z",
+  "issue": 43,
+  "method": "Reproducible, dated community-activity + bundle-weight snapshot for OSS research (#42, #43).\n\nStdlib only. GitHub data is read through the already-authenticated `gh api` CLI\n(no token is read, printed or stored by this script). npm/jsDelivr data is read\nfrom public endpoints. Output is normalized, non-secret JSON.\n\nMetric definitions (all windows are [window_start, captured_at) in UTC):\n- stars: repository stargazers_count at capture time.\n- commits_90d: commits reachable from the DEFAULT BRANCH with committer date\n  >= now-90d (GitHub `commits?since=`), counted by pagination Link `last` page\n  with per_page=1. Not pushed_at; not other branches.\n- contributors_6mo: distinct commit authors (GitHub login, else author name)\n  on the default branch since now-182d. Paginated up to MAX_COMMIT_PAGES*100\n  commits; if truncated the value is reported as a LOWER BOUND.\n  Bot accounts (login ends with \"[bot]\") are reported separately.\n- latest_release: /releases?per_page=5 newest non-draft (prerelease flagged);\n  null if the repository publishes no GitHub releases (tags are not counted).\n- issues: GitHub search (is:issue excludes PRs) totals for opened and closed in\n  the last 90 days, plus current open issue count.\n- responsiveness: the RESPONSIVENESS_SAMPLE most recently created issues in the\n  90-day window; first comment whose author_association is OWNER/MEMBER/\n  COLLABORATOR (non-bot) is a maintainer response. Maintainers with only\n  CONTRIBUTOR association are missed, so the rate is a conservative estimate.",
+  "repos": [],
+  "packages": [
+    {
+      "package": "framework7",
+      "version": "9.3.0",
+      "license": "MIT",
+      "npm_unpacked_size_bytes": 14790421,
+      "npm_file_count": 681,
+      "dependencies": [
+        "dom7",
+        "htm",
+        "path-to-regexp",
+        "skeleton-elements",
+        "ssr-window",
+        "swiper"
+      ],
+      "measured_files": [
+        {
+          "path": "/framework7-bundle.min.js",
+          "raw_bytes": 808365,
+          "gzip9_bytes": 209791,
+          "url": "https://cdn.jsdelivr.net/npm/framework7@9.3.0/framework7-bundle.min.js",
+          "absolute_url_hosts_mentioned": [
+            "framework7.io",
+            "www.w3.org"
+          ]
+        },
+        {
+          "path": "/framework7-bundle.min.css",
+          "raw_bytes": 485792,
+          "gzip9_bytes": 71891,
+          "url": "https://cdn.jsdelivr.net/npm/framework7@9.3.0/framework7-bundle.min.css",
+          "absolute_url_hosts_mentioned": [
+            "framework7.io",
+            "www.w3.org"
+          ]
+        }
+      ],
+      "unmatched_patterns": []
+    },
+    {
+      "package": "@ionic/core",
+      "version": "9.0.10",
+      "license": "MIT",
+      "npm_unpacked_size_bytes": 20859137,
+      "npm_file_count": 2739,
+      "dependencies": [
+        "@stencil/core",
+        "ionicons",
+        "tslib"
+      ],
+      "measured_files": [
+        {
+          "path": "/css/ionic.bundle.css",
+          "raw_bytes": 38657,
+          "gzip9_bytes": 6119,
+          "url": "https://cdn.jsdelivr.net/npm/@ionic/core@9.0.10/css/ionic.bundle.css",
+          "absolute_url_hosts_mentioned": []
+        },
+        {
+          "path": "/dist/ionic/ionic.esm.js",
+          "raw_bytes": 25424,
+          "gzip9_bytes": 6314,
+          "url": "https://cdn.jsdelivr.net/npm/@ionic/core@9.0.10/dist/ionic/ionic.esm.js",
+          "absolute_url_hosts_mentioned": [
+            "ionicframework.com"
+          ]
+        }
+      ],
+      "unmatched_patterns": []
+    },
+    {
+      "package": "konsta",
+      "version": "5.5.0",
+      "license": "MIT",
+      "npm_unpacked_size_bytes": 1321270,
+      "npm_file_count": 632,
+      "dependencies": [
+        "tailwind-merge"
+      ],
+      "measured_files": [],
+      "unmatched_patterns": []
+    },
+    {
+      "package": "media-chrome",
+      "version": "4.19.4",
+      "license": "MIT",
+      "npm_unpacked_size_bytes": 5123128,
+      "npm_file_count": 400,
+      "dependencies": [
+        "ce-la-react"
+      ],
+      "measured_files": [
+        {
+          "path": "/dist/iife/index.js",
+          "raw_bytes": 178115,
+          "gzip9_bytes": 43363,
+          "url": "https://cdn.jsdelivr.net/npm/media-chrome@4.19.4/dist/iife/index.js",
+          "absolute_url_hosts_mentioned": [
+            "www.w3.org"
+          ]
+        },
+        {
+          "path": "/dist/index.js",
+          "raw_bytes": 2791,
+          "gzip9_bytes": 646,
+          "url": "https://cdn.jsdelivr.net/npm/media-chrome@4.19.4/dist/index.js",
+          "absolute_url_hosts_mentioned": []
+        }
+      ],
+      "unmatched_patterns": []
+    },
+    {
+      "package": "@picocss/pico",
+      "version": "2.1.1",
+      "license": "MIT",
+      "npm_unpacked_size_bytes": 19558862,
+      "npm_file_count": 305,
+      "dependencies": [],
+      "measured_files": [
+        {
+          "path": "/css/pico.min.css",
+          "raw_bytes": 83319,
+          "gzip9_bytes": 11640,
+          "url": "https://cdn.jsdelivr.net/npm/@picocss/pico@2.1.1/css/pico.min.css",
+          "absolute_url_hosts_mentioned": [
+            "picocss.com",
+            "www.w3.org"
+          ]
+        }
+      ],
+      "unmatched_patterns": []
+    },
+    {
+      "package": "vidstack",
+      "version": "1.15.7",
+      "license": "MIT",
+      "npm_unpacked_size_bytes": 4130529,
+      "npm_file_count": 253,
+      "dependencies": [
+        "@floating-ui/dom",
+        "fscreen",
+        "lit-html",
+        "media-captions",
+        "unplugin"
+      ],
+      "measured_files": [
+        {
+          "path": "/cdn/vidstack.js",
+          "raw_bytes": 157177,
+          "gzip9_bytes": 43476,
+          "url": "https://cdn.jsdelivr.net/npm/vidstack@1.15.7/cdn/vidstack.js",
+          "absolute_url_hosts_mentioned": [
+            "cdn.jsdelivr.net",
+            "f.vimeocdn.com",
+            "fresnel.vimeocdn.com",
+            "googleads.g.doubleclick.net",
+            "i.vimeocdn.com",
+            "i.ytimg.com",
+            "static.doubleclick.net",
+            "videojs.org",
+            "www.google.com",
+            "www.gstatic.com"
+          ]
+        },
+        {
+          "path": "/cdn/with-layouts/vidstack.js",
+          "raw_bytes": 214664,
+          "gzip9_bytes": 57519,
+          "url": "https://cdn.jsdelivr.net/npm/vidstack@1.15.7/cdn/with-layouts/vidstack.js",
+          "absolute_url_hosts_mentioned": [
+            "cdn.jsdelivr.net",
+            "f.vimeocdn.com",
+            "fresnel.vimeocdn.com",
+            "googleads.g.doubleclick.net",
+            "i.vimeocdn.com",
+            "i.ytimg.com",
+            "static.doubleclick.net",
+            "videojs.org",
+            "www.google.com",
+            "www.gstatic.com",
+            "www.w3.org"
+          ]
+        },
+        {
+          "path": "/player/styles/default/theme.css",
+          "raw_bytes": 66599,
+          "gzip9_bytes": 10253,
+          "url": "https://cdn.jsdelivr.net/npm/vidstack@1.15.7/player/styles/default/theme.css",
+          "absolute_url_hosts_mentioned": [
+            "www.w3.org"
+          ]
+        }
+      ],
+      "unmatched_patterns": []
+    }
+  ],
+  "finished_at": "2026-11-11T08:46:53Z",
+  "rate_limit_after": {
+    "core": {
+      "remaining": 4810,
+      "limit": 5000
+    },
+    "search": {
+      "remaining": 29,
+      "limit": 30
+    }
+  }
+}
