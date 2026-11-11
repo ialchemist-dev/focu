@@ -1,0 +1,654 @@
+{
+  "schema": "focu-oss-activity-snapshot/1",
+  "captured_at": "2026-11-11T08:43:41Z",
+  "issue": 42,
+  "method": "Reproducible, dated community-activity + bundle-weight snapshot for OSS research (#42, #43).\n\nStdlib only. GitHub data is read through the already-authenticated `gh api` CLI\n(no token is read, printed or stored by this script). npm/jsDelivr data is read\nfrom public endpoints. Output is normalized, non-secret JSON.\n\nMetric definitions (all windows are [window_start, captured_at) in UTC):\n- stars: repository stargazers_count at capture time.\n- commits_90d: commits reachable from the DEFAULT BRANCH with committer date\n  >= now-90d (GitHub `commits?since=`), counted by pagination Link `last` page\n  with per_page=1. Not pushed_at; not other branches.\n- contributors_6mo: distinct commit authors (GitHub login, else author name)\n  on the default branch since now-182d. Paginated up to MAX_COMMIT_PAGES*100\n  commits; if truncated the value is reported as a LOWER BOUND.\n  Bot accounts (login ends with \"[bot]\") are reported separately.\n- latest_release: /releases?per_page=5 newest non-draft (prerelease flagged);\n  null if the repository publishes no GitHub releases (tags are not counted).\n- issues: GitHub search (is:issue excludes PRs) totals for opened and closed in\n  the last 90 days, plus current open issue count.\n- responsiveness: the RESPONSIVENESS_SAMPLE most recently created issues in the\n  90-day window; first comment whose author_association is OWNER/MEMBER/\n  COLLABORATOR (non-bot) is a maintainer response. Maintainers with only\n  CONTRIBUTOR association are missed, so the rate is a conservative estimate.",
+  "repos": [
+    {
+      "repo": "souzatharsis/podcastfy",
+      "html_url": "https://github.com/souzatharsis/podcastfy",
+      "archived": false,
+      "default_branch": "main",
+      "license_spdx": "Apache-2.0",
+      "stars": 6801,
+      "forks": 791,
+      "pushed_at_not_activity": "2026-05-04T14:49:10Z",
+      "last_default_branch_commit": "2026-05-04T14:49:10Z",
+      "commits_90d": 0,
+      "contributors_6mo": {
+        "distinct_human": 0,
+        "distinct_bot": 0,
+        "commits_scanned": 0,
+        "truncated_lower_bound": false
+      },
+      "latest_release": {
+        "tag": "v0.4.0",
+        "published_at": "2024-11-16T19:07:47Z",
+        "prerelease": false,
+        "url": "https://github.com/souzatharsis/podcastfy/releases/tag/v0.4.0"
+      },
+      "issues_opened_90d": 5,
+      "issues_closed_90d": 0,
+      "issues_open_now": 90,
+      "responsiveness_90d": {
+        "sample_size": 5,
+        "external_issues_in_sample": 5,
+        "external_with_maintainer_comment": 0,
+        "external_closed": 0,
+        "median_hours_to_first_maintainer_comment": null,
+        "sample": [
+          {
+            "number": 318,
+            "created_at": "2026-10-17T10:42:41Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 317,
+            "created_at": "2026-10-17T10:02:33Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 316,
+            "created_at": "2026-10-13T13:09:06Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 315,
+            "created_at": "2026-09-26T10:57:08Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 314,
+            "created_at": "2026-09-13T08:20:46Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          }
+        ]
+      },
+      "windows": {
+        "commits_90d_since": "2026-08-13T08:43:41Z",
+        "contributors_since": "2026-05-13T08:43:41Z",
+        "issue_window_since_date": "2026-08-13"
+      }
+    },
+    {
+      "repo": "lfnovo/open-notebook",
+      "html_url": "https://github.com/lfnovo/open-notebook",
+      "archived": false,
+      "default_branch": "main",
+      "license_spdx": "MIT",
+      "stars": 41843,
+      "forks": 4811,
+      "pushed_at_not_activity": "2026-11-08T21:47:02Z",
+      "last_default_branch_commit": "2026-11-08T13:51:23Z",
+      "commits_90d": 114,
+      "contributors_6mo": {
+        "distinct_human": 61,
+        "distinct_bot": 1,
+        "commits_scanned": 340,
+        "truncated_lower_bound": false
+      },
+      "latest_release": {
+        "tag": "v1.15.1",
+        "published_at": "2026-11-04T14:19:57Z",
+        "prerelease": false,
+        "url": "https://github.com/lfnovo/open-notebook/releases/tag/v1.15.1"
+      },
+      "issues_opened_90d": 86,
+      "issues_closed_90d": 56,
+      "issues_open_now": 132,
+      "responsiveness_90d": {
+        "sample_size": 15,
+        "external_issues_in_sample": 13,
+        "external_with_maintainer_comment": 10,
+        "external_closed": 4,
+        "median_hours_to_first_maintainer_comment": 221.05,
+        "sample": [
+          {
+            "number": 1561,
+            "created_at": "2026-11-08T01:04:44Z",
+            "state": "open",
+            "author_association": "OWNER",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 1558,
+            "created_at": "2026-11-08T00:19:41Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": 9.7
+          },
+          {
+            "number": 1553,
+            "created_at": "2026-11-07T17:34:46Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": 6.0
+          },
+          {
+            "number": 1532,
+            "created_at": "2026-10-30T02:17:54Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 1531,
+            "created_at": "2026-10-28T08:15:26Z",
+            "state": "closed",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": 255.4
+          },
+          {
+            "number": 1510,
+            "created_at": "2026-10-17T00:44:14Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": 526.7
+          },
+          {
+            "number": 1509,
+            "created_at": "2026-10-17T00:44:13Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": 526.8
+          },
+          {
+            "number": 1507,
+            "created_at": "2026-10-16T06:23:06Z",
+            "state": "closed",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 1505,
+            "created_at": "2026-10-13T18:50:24Z",
+            "state": "closed",
+            "author_association": "CONTRIBUTOR",
+            "first_maintainer_comment_hours": 604.6
+          },
+          {
+            "number": 1494,
+            "created_at": "2026-10-11T20:29:27Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 1489,
+            "created_at": "2026-10-09T11:07:32Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": 99.0
+          },
+          {
+            "number": 1488,
+            "created_at": "2026-10-08T17:48:23Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": 116.3
+          },
+          {
+            "number": 1487,
+            "created_at": "2026-10-08T17:48:22Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": 726.0
+          },
+          {
+            "number": 1478,
+            "created_at": "2026-10-05T19:28:58Z",
+            "state": "closed",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": 186.7
+          },
+          {
+            "number": 1477,
+            "created_at": "2026-10-05T14:58:01Z",
+            "state": "open",
+            "author_association": "OWNER",
+            "first_maintainer_comment_hours": null
+          }
+        ]
+      },
+      "windows": {
+        "commits_90d_since": "2026-08-13T08:43:41Z",
+        "contributors_since": "2026-05-13T08:43:41Z",
+        "issue_window_since_date": "2026-08-13"
+      }
+    },
+    {
+      "repo": "stanford-oval/storm",
+      "html_url": "https://github.com/stanford-oval/storm",
+      "archived": false,
+      "default_branch": "main",
+      "license_spdx": "MIT",
+      "stars": 31853,
+      "forks": 3008,
+      "pushed_at_not_activity": "2025-09-30T18:07:21Z",
+      "last_default_branch_commit": "2025-09-30T18:07:17Z",
+      "commits_90d": 0,
+      "contributors_6mo": {
+        "distinct_human": 0,
+        "distinct_bot": 0,
+        "commits_scanned": 0,
+        "truncated_lower_bound": false
+      },
+      "latest_release": {
+        "tag": "v1.1.0",
+        "published_at": "2025-01-23T07:21:44Z",
+        "prerelease": false,
+        "url": "https://github.com/stanford-oval/storm/releases/tag/v1.1.0"
+      },
+      "issues_opened_90d": 7,
+      "issues_closed_90d": 1,
+      "issues_open_now": 64,
+      "responsiveness_90d": {
+        "sample_size": 7,
+        "external_issues_in_sample": 7,
+        "external_with_maintainer_comment": 0,
+        "external_closed": 1,
+        "median_hours_to_first_maintainer_comment": null,
+        "sample": [
+          {
+            "number": 581,
+            "created_at": "2026-11-04T22:02:47Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 580,
+            "created_at": "2026-11-03T00:03:44Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 575,
+            "created_at": "2026-10-23T02:36:38Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 573,
+            "created_at": "2026-09-29T08:15:02Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 572,
+            "created_at": "2026-09-24T01:07:48Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 567,
+            "created_at": "2026-08-16T17:34:51Z",
+            "state": "closed",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 565,
+            "created_at": "2026-08-14T09:30:43Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          }
+        ]
+      },
+      "windows": {
+        "commits_90d_since": "2026-08-13T08:43:41Z",
+        "contributors_since": "2026-05-13T08:43:41Z",
+        "issue_window_since_date": "2026-08-13"
+      }
+    },
+    {
+      "repo": "assafelovic/gpt-researcher",
+      "html_url": "https://github.com/assafelovic/gpt-researcher",
+      "archived": false,
+      "default_branch": "main",
+      "license_spdx": "Apache-2.0",
+      "stars": 30626,
+      "forks": 4210,
+      "pushed_at_not_activity": "2026-11-09T15:17:21Z",
+      "last_default_branch_commit": "2026-11-09T15:17:18Z",
+      "commits_90d": 272,
+      "contributors_6mo": {
+        "distinct_human": 72,
+        "distinct_bot": 1,
+        "commits_scanned": 400,
+        "truncated_lower_bound": false
+      },
+      "latest_release": {
+        "tag": "v3.8.0",
+        "published_at": "2026-11-09T15:12:43Z",
+        "prerelease": false,
+        "url": "https://github.com/assafelovic/gpt-researcher/releases/tag/v3.8.0"
+      },
+      "issues_opened_90d": 39,
+      "issues_closed_90d": 86,
+      "issues_open_now": 3,
+      "responsiveness_90d": {
+        "sample_size": 15,
+        "external_issues_in_sample": 15,
+        "external_with_maintainer_comment": 6,
+        "external_closed": 14,
+        "median_hours_to_first_maintainer_comment": 536.25,
+        "sample": [
+          {
+            "number": 2277,
+            "created_at": "2026-11-09T17:50:46Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 2253,
+            "created_at": "2026-11-01T09:33:03Z",
+            "state": "closed",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": 192.7
+          },
+          {
+            "number": 2251,
+            "created_at": "2026-10-31T22:26:13Z",
+            "state": "closed",
+            "author_association": "CONTRIBUTOR",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 2240,
+            "created_at": "2026-10-28T15:36:40Z",
+            "state": "closed",
+            "author_association": "CONTRIBUTOR",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 2239,
+            "created_at": "2026-10-28T15:36:38Z",
+            "state": "closed",
+            "author_association": "CONTRIBUTOR",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 2229,
+            "created_at": "2026-10-26T18:42:16Z",
+            "state": "closed",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": 327.6
+          },
+          {
+            "number": 2226,
+            "created_at": "2026-10-24T23:00:50Z",
+            "state": "closed",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": 371.3
+          },
+          {
+            "number": 2218,
+            "created_at": "2026-10-18T10:41:01Z",
+            "state": "closed",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 2214,
+            "created_at": "2026-10-17T12:52:05Z",
+            "state": "closed",
+            "author_association": "CONTRIBUTOR",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 2207,
+            "created_at": "2026-10-11T05:02:06Z",
+            "state": "closed",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": 701.2
+          },
+          {
+            "number": 2198,
+            "created_at": "2026-10-07T12:47:36Z",
+            "state": "closed",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 2197,
+            "created_at": "2026-10-07T12:45:17Z",
+            "state": "closed",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 2196,
+            "created_at": "2026-10-06T17:57:29Z",
+            "state": "closed",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": 808.3
+          },
+          {
+            "number": 2192,
+            "created_at": "2026-10-04T16:05:35Z",
+            "state": "closed",
+            "author_association": "CONTRIBUTOR",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 2180,
+            "created_at": "2026-09-29T09:29:03Z",
+            "state": "closed",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": 984.8
+          }
+        ]
+      },
+      "windows": {
+        "commits_90d_since": "2026-08-13T08:43:41Z",
+        "contributors_since": "2026-05-13T08:43:41Z",
+        "issue_window_since_date": "2026-08-13"
+      }
+    },
+    {
+      "repo": "langchain-ai/open_deep_research",
+      "html_url": "https://github.com/langchain-ai/open_deep_research",
+      "archived": true,
+      "default_branch": "main",
+      "license_spdx": "MIT",
+      "stars": 12678,
+      "forks": 1862,
+      "pushed_at_not_activity": "2026-08-10T18:13:37Z",
+      "last_default_branch_commit": "2026-08-10T18:13:29Z",
+      "commits_90d": 0,
+      "contributors_6mo": {
+        "distinct_human": 0,
+        "distinct_bot": 1,
+        "commits_scanned": 14,
+        "truncated_lower_bound": false
+      },
+      "latest_release": null,
+      "issues_opened_90d": 0,
+      "issues_closed_90d": 0,
+      "issues_open_now": 39,
+      "responsiveness_90d": {
+        "sample_size": 0,
+        "external_issues_in_sample": 0,
+        "external_with_maintainer_comment": 0,
+        "external_closed": 0,
+        "median_hours_to_first_maintainer_comment": null,
+        "sample": []
+      },
+      "windows": {
+        "commits_90d_since": "2026-08-13T08:43:41Z",
+        "contributors_since": "2026-05-13T08:43:41Z",
+        "issue_window_since_date": "2026-08-13"
+      }
+    },
+    {
+      "repo": "hexgrad/kokoro",
+      "html_url": "https://github.com/hexgrad/kokoro",
+      "archived": false,
+      "default_branch": "main",
+      "license_spdx": "Apache-2.0",
+      "stars": 10053,
+      "forks": 1125,
+      "pushed_at_not_activity": "2025-08-06T22:28:53Z",
+      "last_default_branch_commit": "2025-08-06T22:28:53Z",
+      "commits_90d": 0,
+      "contributors_6mo": {
+        "distinct_human": 0,
+        "distinct_bot": 0,
+        "commits_scanned": 0,
+        "truncated_lower_bound": false
+      },
+      "latest_release": null,
+      "issues_opened_90d": 17,
+      "issues_closed_90d": 2,
+      "issues_open_now": 180,
+      "responsiveness_90d": {
+        "sample_size": 15,
+        "external_issues_in_sample": 15,
+        "external_with_maintainer_comment": 0,
+        "external_closed": 0,
+        "median_hours_to_first_maintainer_comment": null,
+        "sample": [
+          {
+            "number": 394,
+            "created_at": "2026-11-08T06:49:33Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 393,
+            "created_at": "2026-11-06T22:38:09Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 392,
+            "created_at": "2026-11-06T06:52:28Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 391,
+            "created_at": "2026-11-05T22:59:38Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 390,
+            "created_at": "2026-11-02T20:57:43Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 388,
+            "created_at": "2026-11-02T10:37:20Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 385,
+            "created_at": "2026-10-29T16:15:59Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 380,
+            "created_at": "2026-10-21T19:46:08Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 379,
+            "created_at": "2026-10-10T16:27:33Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 376,
+            "created_at": "2026-10-06T07:09:26Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 370,
+            "created_at": "2026-09-13T19:55:09Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 369,
+            "created_at": "2026-09-04T12:59:57Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 368,
+            "created_at": "2026-08-30T10:00:59Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 367,
+            "created_at": "2026-08-30T10:00:58Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 366,
+            "created_at": "2026-08-28T14:54:44Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          }
+        ]
+      },
+      "windows": {
+        "commits_90d_since": "2026-08-13T08:43:41Z",
+        "contributors_since": "2026-05-13T08:43:41Z",
+        "issue_window_since_date": "2026-08-13"
+      }
+    }
+  ],
+  "packages": [],
+  "finished_at": "2026-11-11T08:45:03Z",
+  "rate_limit_after": {
+    "core": {
+      "remaining": 4912,
+      "limit": 5000
+    },
+    "search": {
+      "remaining": 23,
+      "limit": 30
+    }
+  }
+}

@@ -1,0 +1,527 @@
+{
+  "schema": "focu-oss-activity-snapshot/1",
+  "captured_at": "2026-11-11T08:46:49Z",
+  "issue": 42,
+  "method": "Reproducible, dated community-activity + bundle-weight snapshot for OSS research (#42, #43).\n\nStdlib only. GitHub data is read through the already-authenticated `gh api` CLI\n(no token is read, printed or stored by this script). npm/jsDelivr data is read\nfrom public endpoints. Output is normalized, non-secret JSON.\n\nMetric definitions (all windows are [window_start, captured_at) in UTC):\n- stars: repository stargazers_count at capture time.\n- commits_90d: commits reachable from the DEFAULT BRANCH with committer date\n  >= now-90d (GitHub `commits?since=`), counted by pagination Link `last` page\n  with per_page=1. Not pushed_at; not other branches.\n- contributors_6mo: distinct commit authors (GitHub login, else author name)\n  on the default branch since now-182d. Paginated up to MAX_COMMIT_PAGES*100\n  commits; if truncated the value is reported as a LOWER BOUND.\n  Bot accounts (login ends with \"[bot]\") are reported separately.\n- latest_release: /releases?per_page=5 newest non-draft (prerelease flagged);\n  null if the repository publishes no GitHub releases (tags are not counted).\n- issues: GitHub search (is:issue excludes PRs) totals for opened and closed in\n  the last 90 days, plus current open issue count.\n- responsiveness: the RESPONSIVENESS_SAMPLE most recently created issues in the\n  90-day window; first comment whose author_association is OWNER/MEMBER/\n  COLLABORATOR (non-bot) is a maintainer response. Maintainers with only\n  CONTRIBUTOR association are missed, so the rate is a conservative estimate.",
+  "repos": [
+    {
+      "repo": "lfnovo/podcast-creator",
+      "html_url": "https://github.com/lfnovo/podcast-creator",
+      "archived": false,
+      "default_branch": "main",
+      "license_spdx": "MIT",
+      "stars": 130,
+      "forks": 34,
+      "pushed_at_not_activity": "2026-10-04T02:03:16Z",
+      "last_default_branch_commit": "2026-10-04T01:28:19Z",
+      "commits_90d": 33,
+      "contributors_6mo": {
+        "distinct_human": 2,
+        "distinct_bot": 0,
+        "commits_scanned": 35,
+        "truncated_lower_bound": false
+      },
+      "latest_release": {
+        "tag": "v0.13.1",
+        "published_at": "2026-10-04T02:04:47Z",
+        "prerelease": false,
+        "url": "https://github.com/lfnovo/podcast-creator/releases/tag/v0.13.1"
+      },
+      "issues_opened_90d": 4,
+      "issues_closed_90d": 14,
+      "issues_open_now": 1,
+      "responsiveness_90d": {
+        "sample_size": 4,
+        "external_issues_in_sample": 1,
+        "external_with_maintainer_comment": 1,
+        "external_closed": 1,
+        "median_hours_to_first_maintainer_comment": 188.8,
+        "sample": [
+          {
+            "number": 51,
+            "created_at": "2026-10-04T01:10:18Z",
+            "state": "closed",
+            "author_association": "OWNER",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 44,
+            "created_at": "2026-10-03T18:52:26Z",
+            "state": "closed",
+            "author_association": "OWNER",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 42,
+            "created_at": "2026-10-03T01:29:57Z",
+            "state": "closed",
+            "author_association": "OWNER",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 41,
+            "created_at": "2026-09-25T23:29:17Z",
+            "state": "closed",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": 188.8
+          }
+        ]
+      },
+      "windows": {
+        "commits_90d_since": "2026-08-13T08:46:49Z",
+        "contributors_since": "2026-05-13T08:46:49Z",
+        "issue_window_since_date": "2026-08-13"
+      }
+    },
+    {
+      "repo": "resemble-ai/chatterbox",
+      "html_url": "https://github.com/resemble-ai/chatterbox",
+      "archived": false,
+      "default_branch": "master",
+      "license_spdx": "MIT",
+      "stars": 27757,
+      "forks": 3735,
+      "pushed_at_not_activity": "2026-11-04T18:48:12Z",
+      "last_default_branch_commit": "2026-11-04T18:48:10Z",
+      "commits_90d": 1,
+      "contributors_6mo": {
+        "distinct_human": 3,
+        "distinct_bot": 0,
+        "commits_scanned": 3,
+        "truncated_lower_bound": false
+      },
+      "latest_release": {
+        "tag": "v0.1.2",
+        "published_at": "2025-06-13T14:42:01Z",
+        "prerelease": false,
+        "url": "https://github.com/resemble-ai/chatterbox/releases/tag/v0.1.2"
+      },
+      "issues_opened_90d": 17,
+      "issues_closed_90d": 1,
+      "issues_open_now": 289,
+      "responsiveness_90d": {
+        "sample_size": 15,
+        "external_issues_in_sample": 15,
+        "external_with_maintainer_comment": 0,
+        "external_closed": 0,
+        "median_hours_to_first_maintainer_comment": null,
+        "sample": [
+          {
+            "number": 579,
+            "created_at": "2026-11-03T04:08:41Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 578,
+            "created_at": "2026-11-03T04:08:32Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 576,
+            "created_at": "2026-10-28T09:54:34Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 574,
+            "created_at": "2026-10-18T17:47:08Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 571,
+            "created_at": "2026-10-10T17:46:07Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 567,
+            "created_at": "2026-09-29T04:18:03Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 566,
+            "created_at": "2026-09-23T03:59:15Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 564,
+            "created_at": "2026-09-17T08:37:03Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 561,
+            "created_at": "2026-09-12T08:59:15Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 560,
+            "created_at": "2026-09-11T09:09:45Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 558,
+            "created_at": "2026-09-08T03:05:30Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 557,
+            "created_at": "2026-09-06T15:11:19Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 556,
+            "created_at": "2026-09-04T16:38:41Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 555,
+            "created_at": "2026-08-29T20:13:24Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 552,
+            "created_at": "2026-08-21T08:44:30Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          }
+        ]
+      },
+      "windows": {
+        "commits_90d_since": "2026-08-13T08:46:49Z",
+        "contributors_since": "2026-05-13T08:46:49Z",
+        "issue_window_since_date": "2026-08-13"
+      }
+    },
+    {
+      "repo": "MODSetter/SurfSense",
+      "html_url": "https://github.com/MODSetter/SurfSense",
+      "archived": false,
+      "default_branch": "main",
+      "license_spdx": "Apache-2.0",
+      "stars": 16837,
+      "forks": 1607,
+      "pushed_at_not_activity": "2026-11-10T18:00:01Z",
+      "last_default_branch_commit": "2026-11-03T16:07:56Z",
+      "commits_90d": 3423,
+      "contributors_6mo": {
+        "distinct_human": 29,
+        "distinct_bot": 1,
+        "commits_scanned": 2000,
+        "truncated_lower_bound": true
+      },
+      "latest_release": {
+        "tag": "v2.3.1",
+        "published_at": "2026-11-03T17:01:30Z",
+        "prerelease": false,
+        "url": "https://github.com/MODSetter/SurfSense/releases/tag/v2.3.1"
+      },
+      "issues_opened_90d": 140,
+      "issues_closed_90d": 202,
+      "issues_open_now": 54,
+      "responsiveness_90d": {
+        "sample_size": 15,
+        "external_issues_in_sample": 14,
+        "external_with_maintainer_comment": 10,
+        "external_closed": 6,
+        "median_hours_to_first_maintainer_comment": 3.0999999999999996,
+        "sample": [
+          {
+            "number": 2421,
+            "created_at": "2026-11-07T21:40:15Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": 1.9
+          },
+          {
+            "number": 2420,
+            "created_at": "2026-11-07T12:51:03Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": 10.7
+          },
+          {
+            "number": 2417,
+            "created_at": "2026-11-06T17:02:56Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": 4.3
+          },
+          {
+            "number": 2414,
+            "created_at": "2026-11-06T05:28:09Z",
+            "state": "open",
+            "author_association": "OWNER",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 2401,
+            "created_at": "2026-11-04T22:06:28Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 2386,
+            "created_at": "2026-11-03T06:18:27Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": 0.7
+          },
+          {
+            "number": 2375,
+            "created_at": "2026-10-30T22:49:24Z",
+            "state": "open",
+            "author_association": "CONTRIBUTOR",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 2369,
+            "created_at": "2026-10-29T13:31:34Z",
+            "state": "closed",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": 9.5
+          },
+          {
+            "number": 2366,
+            "created_at": "2026-10-28T00:18:16Z",
+            "state": "closed",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": 1.3
+          },
+          {
+            "number": 2348,
+            "created_at": "2026-10-25T18:09:28Z",
+            "state": "closed",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": 5.1
+          },
+          {
+            "number": 2345,
+            "created_at": "2026-10-25T15:57:04Z",
+            "state": "closed",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": 103.2
+          },
+          {
+            "number": 2333,
+            "created_at": "2026-10-22T22:58:40Z",
+            "state": "closed",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": 0.4
+          },
+          {
+            "number": 2327,
+            "created_at": "2026-10-22T13:09:04Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 2305,
+            "created_at": "2026-10-21T02:09:00Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": 0.4
+          },
+          {
+            "number": 2288,
+            "created_at": "2026-10-16T12:14:49Z",
+            "state": "closed",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          }
+        ]
+      },
+      "windows": {
+        "commits_90d_since": "2026-08-13T08:46:49Z",
+        "contributors_since": "2026-05-13T08:46:49Z",
+        "issue_window_since_date": "2026-08-13"
+      }
+    },
+    {
+      "repo": "remsky/Kokoro-FastAPI",
+      "html_url": "https://github.com/remsky/Kokoro-FastAPI",
+      "archived": false,
+      "default_branch": "master",
+      "license_spdx": "Apache-2.0",
+      "stars": 5669,
+      "forks": 941,
+      "pushed_at_not_activity": "2026-11-10T23:21:23Z",
+      "last_default_branch_commit": "2026-11-10T23:21:23Z",
+      "commits_90d": 138,
+      "contributors_6mo": {
+        "distinct_human": 22,
+        "distinct_bot": 1,
+        "commits_scanned": 253,
+        "truncated_lower_bound": false
+      },
+      "latest_release": {
+        "tag": "v0.10.0",
+        "published_at": "2026-11-08T07:11:55Z",
+        "prerelease": false,
+        "url": "https://github.com/remsky/Kokoro-FastAPI/releases/tag/v0.10.0"
+      },
+      "issues_opened_90d": 22,
+      "issues_closed_90d": 100,
+      "issues_open_now": 8,
+      "responsiveness_90d": {
+        "sample_size": 15,
+        "external_issues_in_sample": 10,
+        "external_with_maintainer_comment": 9,
+        "external_closed": 7,
+        "median_hours_to_first_maintainer_comment": 87.5,
+        "sample": [
+          {
+            "number": 594,
+            "created_at": "2026-11-07T15:17:46Z",
+            "state": "closed",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": 2.3
+          },
+          {
+            "number": 588,
+            "created_at": "2026-11-05T19:31:57Z",
+            "state": "closed",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": 0.1
+          },
+          {
+            "number": 586,
+            "created_at": "2026-11-05T04:21:28Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 582,
+            "created_at": "2026-11-03T06:15:13Z",
+            "state": "closed",
+            "author_association": "OWNER",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 579,
+            "created_at": "2026-10-31T18:24:01Z",
+            "state": "closed",
+            "author_association": "OWNER",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 561,
+            "created_at": "2026-10-28T15:36:45Z",
+            "state": "closed",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": 39.6
+          },
+          {
+            "number": 558,
+            "created_at": "2026-10-28T07:23:02Z",
+            "state": "closed",
+            "author_association": "OWNER",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 556,
+            "created_at": "2026-10-28T04:35:10Z",
+            "state": "closed",
+            "author_association": "OWNER",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 552,
+            "created_at": "2026-10-26T12:31:12Z",
+            "state": "closed",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": 87.5
+          },
+          {
+            "number": 551,
+            "created_at": "2026-10-26T01:54:49Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": 96.9
+          },
+          {
+            "number": 545,
+            "created_at": "2026-10-10T13:06:24Z",
+            "state": "closed",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": 281.5
+          },
+          {
+            "number": 542,
+            "created_at": "2026-10-05T20:30:32Z",
+            "state": "closed",
+            "author_association": "OWNER",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 539,
+            "created_at": "2026-09-26T20:07:19Z",
+            "state": "closed",
+            "author_association": "CONTRIBUTOR",
+            "first_maintainer_comment_hours": 610.6
+          },
+          {
+            "number": 537,
+            "created_at": "2026-09-15T13:42:17Z",
+            "state": "closed",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": 6.0
+          },
+          {
+            "number": 535,
+            "created_at": "2026-09-10T09:48:59Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": 235.9
+          }
+        ]
+      },
+      "windows": {
+        "commits_90d_since": "2026-08-13T08:46:49Z",
+        "contributors_since": "2026-05-13T08:46:49Z",
+        "issue_window_since_date": "2026-08-13"
+      }
+    }
+  ],
+  "packages": [],
+  "finished_at": "2026-11-11T08:48:01Z",
+  "rate_limit_after": {
+    "core": {
+      "remaining": 4746,
+      "limit": 5000
+    },
+    "search": {
+      "remaining": 28,
+      "limit": 30
+    }
+  }
+}

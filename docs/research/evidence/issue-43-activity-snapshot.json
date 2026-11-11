@@ -1,0 +1,730 @@
+{
+  "schema": "focu-oss-activity-snapshot/1",
+  "captured_at": "2026-11-11T08:45:06Z",
+  "issue": 43,
+  "method": "Reproducible, dated community-activity + bundle-weight snapshot for OSS research (#42, #43).\n\nStdlib only. GitHub data is read through the already-authenticated `gh api` CLI\n(no token is read, printed or stored by this script). npm/jsDelivr data is read\nfrom public endpoints. Output is normalized, non-secret JSON.\n\nMetric definitions (all windows are [window_start, captured_at) in UTC):\n- stars: repository stargazers_count at capture time.\n- commits_90d: commits reachable from the DEFAULT BRANCH with committer date\n  >= now-90d (GitHub `commits?since=`), counted by pagination Link `last` page\n  with per_page=1. Not pushed_at; not other branches.\n- contributors_6mo: distinct commit authors (GitHub login, else author name)\n  on the default branch since now-182d. Paginated up to MAX_COMMIT_PAGES*100\n  commits; if truncated the value is reported as a LOWER BOUND.\n  Bot accounts (login ends with \"[bot]\") are reported separately.\n- latest_release: /releases?per_page=5 newest non-draft (prerelease flagged);\n  null if the repository publishes no GitHub releases (tags are not counted).\n- issues: GitHub search (is:issue excludes PRs) totals for opened and closed in\n  the last 90 days, plus current open issue count.\n- responsiveness: the RESPONSIVENESS_SAMPLE most recently created issues in the\n  90-day window; first comment whose author_association is OWNER/MEMBER/\n  COLLABORATOR (non-bot) is a maintainer response. Maintainers with only\n  CONTRIBUTOR association are missed, so the rate is a conservative estimate.",
+  "repos": [
+    {
+      "repo": "framework7io/framework7",
+      "html_url": "https://github.com/framework7io/framework7",
+      "archived": false,
+      "default_branch": "master",
+      "license_spdx": "MIT",
+      "stars": 18774,
+      "forks": 3183,
+      "pushed_at_not_activity": "2026-10-30T22:25:51Z",
+      "last_default_branch_commit": "2026-10-30T22:25:48Z",
+      "commits_90d": 18,
+      "contributors_6mo": {
+        "distinct_human": 4,
+        "distinct_bot": 0,
+        "commits_scanned": 38,
+        "truncated_lower_bound": false
+      },
+      "latest_release": {
+        "tag": "v9.2.0",
+        "published_at": "2026-09-28T18:02:25Z",
+        "prerelease": false,
+        "url": "https://github.com/framework7io/framework7/releases/tag/v9.2.0"
+      },
+      "issues_opened_90d": 7,
+      "issues_closed_90d": 9,
+      "issues_open_now": 231,
+      "responsiveness_90d": {
+        "sample_size": 7,
+        "external_issues_in_sample": 7,
+        "external_with_maintainer_comment": 1,
+        "external_closed": 4,
+        "median_hours_to_first_maintainer_comment": 144.1,
+        "sample": [
+          {
+            "number": 4411,
+            "created_at": "2026-11-09T16:20:01Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 4409,
+            "created_at": "2026-11-09T00:21:53Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 4408,
+            "created_at": "2026-11-06T16:09:27Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 4407,
+            "created_at": "2026-10-23T06:21:20Z",
+            "state": "closed",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 4406,
+            "created_at": "2026-10-17T18:12:57Z",
+            "state": "closed",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": 144.1
+          },
+          {
+            "number": 4402,
+            "created_at": "2026-08-16T14:12:09Z",
+            "state": "closed",
+            "author_association": "CONTRIBUTOR",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 4401,
+            "created_at": "2026-08-16T07:32:32Z",
+            "state": "closed",
+            "author_association": "CONTRIBUTOR",
+            "first_maintainer_comment_hours": null
+          }
+        ]
+      },
+      "windows": {
+        "commits_90d_since": "2026-08-13T08:45:06Z",
+        "contributors_since": "2026-05-13T08:45:06Z",
+        "issue_window_since_date": "2026-08-13"
+      }
+    },
+    {
+      "repo": "ionic-team/ionic-framework",
+      "html_url": "https://github.com/ionic-team/ionic-framework",
+      "archived": false,
+      "default_branch": "main",
+      "license_spdx": "MIT",
+      "stars": 52750,
+      "forks": 13289,
+      "pushed_at_not_activity": "2026-11-11T00:55:45Z",
+      "last_default_branch_commit": "2026-11-10T17:14:52Z",
+      "commits_90d": 171,
+      "contributors_6mo": {
+        "distinct_human": 22,
+        "distinct_bot": 2,
+        "commits_scanned": 322,
+        "truncated_lower_bound": false
+      },
+      "latest_release": {
+        "tag": "v9.0.10",
+        "published_at": "2026-10-28T17:39:02Z",
+        "prerelease": false,
+        "url": "https://github.com/ionic-team/ionic-framework/releases/tag/v9.0.10"
+      },
+      "issues_opened_90d": 61,
+      "issues_closed_90d": 202,
+      "issues_open_now": 443,
+      "responsiveness_90d": {
+        "sample_size": 15,
+        "external_issues_in_sample": 15,
+        "external_with_maintainer_comment": 1,
+        "external_closed": 3,
+        "median_hours_to_first_maintainer_comment": 2.4,
+        "sample": [
+          {
+            "number": 31725,
+            "created_at": "2026-11-10T19:54:16Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 31716,
+            "created_at": "2026-11-09T17:50:54Z",
+            "state": "closed",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": 2.4
+          },
+          {
+            "number": 31709,
+            "created_at": "2026-11-06T15:17:33Z",
+            "state": "open",
+            "author_association": "CONTRIBUTOR",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 31708,
+            "created_at": "2026-11-06T13:18:05Z",
+            "state": "open",
+            "author_association": "CONTRIBUTOR",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 31696,
+            "created_at": "2026-11-05T01:46:31Z",
+            "state": "closed",
+            "author_association": "CONTRIBUTOR",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 31687,
+            "created_at": "2026-11-03T05:32:18Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 31679,
+            "created_at": "2026-11-02T08:05:34Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 31674,
+            "created_at": "2026-10-30T09:05:04Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 31670,
+            "created_at": "2026-10-29T18:03:22Z",
+            "state": "open",
+            "author_association": "CONTRIBUTOR",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 31659,
+            "created_at": "2026-10-27T08:12:55Z",
+            "state": "open",
+            "author_association": "CONTRIBUTOR",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 31658,
+            "created_at": "2026-10-27T02:19:08Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 31650,
+            "created_at": "2026-10-24T16:55:57Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 31642,
+            "created_at": "2026-10-23T19:42:42Z",
+            "state": "closed",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 31639,
+            "created_at": "2026-10-23T13:17:16Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 31633,
+            "created_at": "2026-10-22T10:03:01Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          }
+        ]
+      },
+      "windows": {
+        "commits_90d_since": "2026-08-13T08:45:06Z",
+        "contributors_since": "2026-05-13T08:45:06Z",
+        "issue_window_since_date": "2026-08-13"
+      }
+    },
+    {
+      "repo": "konstaui/konsta",
+      "html_url": "https://github.com/konstaui/konsta",
+      "archived": false,
+      "default_branch": "master",
+      "license_spdx": "MIT",
+      "stars": 4289,
+      "forks": 159,
+      "pushed_at_not_activity": "2026-10-15T23:49:39Z",
+      "last_default_branch_commit": "2026-10-15T23:49:37Z",
+      "commits_90d": 8,
+      "contributors_6mo": {
+        "distinct_human": 4,
+        "distinct_bot": 0,
+        "commits_scanned": 31,
+        "truncated_lower_bound": false
+      },
+      "latest_release": {
+        "tag": "v5.5.0",
+        "published_at": "2026-09-28T16:57:55Z",
+        "prerelease": false,
+        "url": "https://github.com/konstaui/konsta/releases/tag/v5.5.0"
+      },
+      "issues_opened_90d": 3,
+      "issues_closed_90d": 2,
+      "issues_open_now": 10,
+      "responsiveness_90d": {
+        "sample_size": 3,
+        "external_issues_in_sample": 3,
+        "external_with_maintainer_comment": 1,
+        "external_closed": 2,
+        "median_hours_to_first_maintainer_comment": 577.0,
+        "sample": [
+          {
+            "number": 284,
+            "created_at": "2026-09-04T15:52:34Z",
+            "state": "closed",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": 577.0
+          },
+          {
+            "number": 283,
+            "created_at": "2026-08-27T13:37:14Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 281,
+            "created_at": "2026-08-18T16:53:54Z",
+            "state": "closed",
+            "author_association": "CONTRIBUTOR",
+            "first_maintainer_comment_hours": null
+          }
+        ]
+      },
+      "windows": {
+        "commits_90d_since": "2026-08-13T08:45:06Z",
+        "contributors_since": "2026-05-13T08:45:06Z",
+        "issue_window_since_date": "2026-08-13"
+      }
+    },
+    {
+      "repo": "muxinc/media-chrome",
+      "html_url": "https://github.com/muxinc/media-chrome",
+      "archived": false,
+      "default_branch": "main",
+      "license_spdx": "MIT",
+      "stars": 2768,
+      "forks": 129,
+      "pushed_at_not_activity": "2026-11-09T21:40:44Z",
+      "last_default_branch_commit": "2026-11-09T21:40:44Z",
+      "commits_90d": 23,
+      "contributors_6mo": {
+        "distinct_human": 12,
+        "distinct_bot": 1,
+        "commits_scanned": 35,
+        "truncated_lower_bound": false
+      },
+      "latest_release": {
+        "tag": "v4.19.4",
+        "published_at": "2026-10-23T13:18:30Z",
+        "prerelease": false,
+        "url": "https://github.com/muxinc/media-chrome/releases/tag/v4.19.4"
+      },
+      "issues_opened_90d": 13,
+      "issues_closed_90d": 14,
+      "issues_open_now": 2,
+      "responsiveness_90d": {
+        "sample_size": 13,
+        "external_issues_in_sample": 13,
+        "external_with_maintainer_comment": 2,
+        "external_closed": 11,
+        "median_hours_to_first_maintainer_comment": 406.2,
+        "sample": [
+          {
+            "number": 1339,
+            "created_at": "2026-11-05T10:00:56Z",
+            "state": "open",
+            "author_association": "CONTRIBUTOR",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 1335,
+            "created_at": "2026-10-26T10:49:14Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 1334,
+            "created_at": "2026-10-22T18:50:04Z",
+            "state": "closed",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 1332,
+            "created_at": "2026-10-17T16:42:44Z",
+            "state": "closed",
+            "author_association": "CONTRIBUTOR",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 1328,
+            "created_at": "2026-10-10T19:45:20Z",
+            "state": "closed",
+            "author_association": "CONTRIBUTOR",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 1324,
+            "created_at": "2026-10-01T11:22:21Z",
+            "state": "closed",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 1314,
+            "created_at": "2026-09-10T23:12:59Z",
+            "state": "closed",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 1313,
+            "created_at": "2026-08-29T18:30:25Z",
+            "state": "closed",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 1310,
+            "created_at": "2026-08-25T23:19:25Z",
+            "state": "closed",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 1309,
+            "created_at": "2026-08-25T22:40:16Z",
+            "state": "closed",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": 811.6
+          },
+          {
+            "number": 1308,
+            "created_at": "2026-08-21T22:59:19Z",
+            "state": "closed",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": 0.8
+          },
+          {
+            "number": 1307,
+            "created_at": "2026-08-13T21:16:00Z",
+            "state": "closed",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 1306,
+            "created_at": "2026-08-13T21:11:33Z",
+            "state": "closed",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          }
+        ]
+      },
+      "windows": {
+        "commits_90d_since": "2026-08-13T08:45:06Z",
+        "contributors_since": "2026-05-13T08:45:06Z",
+        "issue_window_since_date": "2026-08-13"
+      }
+    },
+    {
+      "repo": "picocss/pico",
+      "html_url": "https://github.com/picocss/pico",
+      "archived": true,
+      "default_branch": "main",
+      "license_spdx": "MIT",
+      "stars": 16818,
+      "forks": 519,
+      "pushed_at_not_activity": "2026-10-04T04:00:49Z",
+      "last_default_branch_commit": "2026-10-04T04:00:48Z",
+      "commits_90d": 2,
+      "contributors_6mo": {
+        "distinct_human": 1,
+        "distinct_bot": 0,
+        "commits_scanned": 2,
+        "truncated_lower_bound": false
+      },
+      "latest_release": {
+        "tag": "v2.1.1",
+        "published_at": "2025-03-15T06:49:00Z",
+        "prerelease": false,
+        "url": "https://github.com/picocss/pico/releases/tag/v2.1.1"
+      },
+      "issues_opened_90d": 1,
+      "issues_closed_90d": 1,
+      "issues_open_now": 93,
+      "responsiveness_90d": {
+        "sample_size": 1,
+        "external_issues_in_sample": 1,
+        "external_with_maintainer_comment": 0,
+        "external_closed": 0,
+        "median_hours_to_first_maintainer_comment": null,
+        "sample": [
+          {
+            "number": 751,
+            "created_at": "2026-09-15T19:41:38Z",
+            "state": "open",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          }
+        ]
+      },
+      "windows": {
+        "commits_90d_since": "2026-08-13T08:45:06Z",
+        "contributors_since": "2026-05-13T08:45:06Z",
+        "issue_window_since_date": "2026-08-13"
+      }
+    },
+    {
+      "repo": "vidstack/player",
+      "html_url": "https://github.com/vidstack/player",
+      "archived": false,
+      "default_branch": "main",
+      "license_spdx": "MIT",
+      "stars": 3734,
+      "forks": 230,
+      "pushed_at_not_activity": "2026-10-07T20:09:44Z",
+      "last_default_branch_commit": "2026-10-07T20:09:42Z",
+      "commits_90d": 10,
+      "contributors_6mo": {
+        "distinct_human": 8,
+        "distinct_bot": 1,
+        "commits_scanned": 76,
+        "truncated_lower_bound": false
+      },
+      "latest_release": null,
+      "issues_opened_90d": 7,
+      "issues_closed_90d": 148,
+      "issues_open_now": 1,
+      "responsiveness_90d": {
+        "sample_size": 7,
+        "external_issues_in_sample": 6,
+        "external_with_maintainer_comment": 4,
+        "external_closed": 6,
+        "median_hours_to_first_maintainer_comment": 917.1999999999999,
+        "sample": [
+          {
+            "number": 1871,
+            "created_at": "2026-10-10T07:46:32Z",
+            "state": "closed",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 1868,
+            "created_at": "2026-10-06T02:35:48Z",
+            "state": "open",
+            "author_association": "MEMBER",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 1863,
+            "created_at": "2026-10-02T17:34:38Z",
+            "state": "closed",
+            "author_association": "CONTRIBUTOR",
+            "first_maintainer_comment_hours": null
+          },
+          {
+            "number": 1862,
+            "created_at": "2026-09-18T12:13:15Z",
+            "state": "closed",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": 422.7
+          },
+          {
+            "number": 1858,
+            "created_at": "2026-09-03T04:12:09Z",
+            "state": "closed",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": 790.8
+          },
+          {
+            "number": 1855,
+            "created_at": "2026-08-23T15:19:24Z",
+            "state": "closed",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": 1043.6
+          },
+          {
+            "number": 1854,
+            "created_at": "2026-08-22T13:55:56Z",
+            "state": "closed",
+            "author_association": "NONE",
+            "first_maintainer_comment_hours": 1069.3
+          }
+        ]
+      },
+      "windows": {
+        "commits_90d_since": "2026-08-13T08:45:06Z",
+        "contributors_since": "2026-05-13T08:45:06Z",
+        "issue_window_since_date": "2026-08-13"
+      }
+    }
+  ],
+  "packages": [
+    {
+      "package": "framework7",
+      "version": "9.3.0",
+      "license": "MIT",
+      "npm_unpacked_size_bytes": 14790421,
+      "npm_file_count": 681,
+      "dependencies": [
+        "dom7",
+        "htm",
+        "path-to-regexp",
+        "skeleton-elements",
+        "ssr-window",
+        "swiper"
+      ],
+      "measured_files": [
+        {
+          "path": "/framework7-bundle.min.js",
+          "raw_bytes": 808365,
+          "gzip9_bytes": 209791,
+          "url": "https://cdn.jsdelivr.net/npm/framework7@9.3.0/framework7-bundle.min.js"
+        },
+        {
+          "path": "/framework7-bundle.min.css",
+          "raw_bytes": 485792,
+          "gzip9_bytes": 71891,
+          "url": "https://cdn.jsdelivr.net/npm/framework7@9.3.0/framework7-bundle.min.css"
+        }
+      ],
+      "unmatched_patterns": []
+    },
+    {
+      "package": "@ionic/core",
+      "version": "9.0.10",
+      "license": "MIT",
+      "npm_unpacked_size_bytes": 20859137,
+      "npm_file_count": 2739,
+      "dependencies": [
+        "@stencil/core",
+        "ionicons",
+        "tslib"
+      ],
+      "measured_files": [
+        {
+          "path": "/css/ionic.bundle.css",
+          "raw_bytes": 38657,
+          "gzip9_bytes": 6119,
+          "url": "https://cdn.jsdelivr.net/npm/@ionic/core@9.0.10/css/ionic.bundle.css"
+        },
+        {
+          "path": "/dist/ionic/ionic.esm.js",
+          "raw_bytes": 25424,
+          "gzip9_bytes": 6314,
+          "url": "https://cdn.jsdelivr.net/npm/@ionic/core@9.0.10/dist/ionic/ionic.esm.js"
+        }
+      ],
+      "unmatched_patterns": []
+    },
+    {
+      "package": "konsta",
+      "version": "5.5.0",
+      "license": "MIT",
+      "npm_unpacked_size_bytes": 1321270,
+      "npm_file_count": 632,
+      "dependencies": [
+        "tailwind-merge"
+      ],
+      "measured_files": [],
+      "unmatched_patterns": []
+    },
+    {
+      "package": "media-chrome",
+      "version": "4.19.4",
+      "license": "MIT",
+      "npm_unpacked_size_bytes": 5123128,
+      "npm_file_count": 400,
+      "dependencies": [
+        "ce-la-react"
+      ],
+      "measured_files": [
+        {
+          "path": "/dist/iife/index.js",
+          "raw_bytes": 178115,
+          "gzip9_bytes": 43363,
+          "url": "https://cdn.jsdelivr.net/npm/media-chrome@4.19.4/dist/iife/index.js"
+        },
+        {
+          "path": "/dist/index.js",
+          "raw_bytes": 2791,
+          "gzip9_bytes": 646,
+          "url": "https://cdn.jsdelivr.net/npm/media-chrome@4.19.4/dist/index.js"
+        }
+      ],
+      "unmatched_patterns": []
+    },
+    {
+      "package": "@picocss/pico",
+      "version": "2.1.1",
+      "license": "MIT",
+      "npm_unpacked_size_bytes": 19558862,
+      "npm_file_count": 305,
+      "dependencies": [],
+      "measured_files": [
+        {
+          "path": "/css/pico.min.css",
+          "raw_bytes": 83319,
+          "gzip9_bytes": 11640,
+          "url": "https://cdn.jsdelivr.net/npm/@picocss/pico@2.1.1/css/pico.min.css"
+        }
+      ],
+      "unmatched_patterns": []
+    },
+    {
+      "package": "vidstack",
+      "version": "1.15.7",
+      "license": "MIT",
+      "npm_unpacked_size_bytes": 4130529,
+      "npm_file_count": 253,
+      "dependencies": [
+        "@floating-ui/dom",
+        "fscreen",
+        "lit-html",
+        "media-captions",
+        "unplugin"
+      ],
+      "measured_files": [
+        {
+          "path": "/cdn/vidstack.js",
+          "raw_bytes": 157177,
+          "gzip9_bytes": 43476,
+          "url": "https://cdn.jsdelivr.net/npm/vidstack@1.15.7/cdn/vidstack.js"
+        },
+        {
+          "path": "/cdn/with-layouts/vidstack.js",
+          "raw_bytes": 214664,
+          "gzip9_bytes": 57519,
+          "url": "https://cdn.jsdelivr.net/npm/vidstack@1.15.7/cdn/with-layouts/vidstack.js"
+        },
+        {
+          "path": "/player/styles/default/theme.css",
+          "raw_bytes": 66599,
+          "gzip9_bytes": 10253,
+          "url": "https://cdn.jsdelivr.net/npm/vidstack@1.15.7/player/styles/default/theme.css"
+        }
+      ],
+      "unmatched_patterns": []
+    }
+  ],
+  "finished_at": "2026-11-11T08:46:40Z",
+  "rate_limit_after": {
+    "core": {
+      "remaining": 4816,
+      "limit": 5000
+    },
+    "search": {
+      "remaining": 16,
+      "limit": 30
+    }
+  }
+}
