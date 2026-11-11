@@ -14,6 +14,7 @@ from editorial import editorial, compose_article_with_openai, markdown_from_html
 from cover_art import typographic_svg, candidate_source_image, fetch_source_cover, generate_ai_cover
 from focu.media_integrity import inspect_mp3, MediaIntegrityError
 from focu.audience import load_profile, calibration, mismatch_report, detect_domain
+from focu.briefing import find_boilerplate
 
 def sha256(path):
     h = hashlib.sha256()
@@ -158,6 +159,17 @@ def build(deliveries, output, template, limit, *, fetch_source_covers=False, gen
                 if legacy_html.stat().st_size > 1_000_000:
                     raise ValueError("Legacy HTML article exceeds 1 MB: " + episode_id)
                 markdown = markdown_from_html(legacy_html.read_text(encoding="utf-8", errors="replace"))
+            # Fail closed: a daily briefing article must never carry
+            # press-release boilerplate (prospectus retrieval instructions,
+            # contact blocks, securities-law disclaimers). Script QC applies
+            # the same detector; this is the article-side gate (style
+            # v2026-11-10.2, issue code boilerplate_contamination).
+            if content_origin == "daily_compilation" and markdown:
+                hits = find_boilerplate(markdown)
+                if hits:
+                    raise ValueError(
+                        "Boilerplate contamination in daily briefing article "
+                        + episode_id + ": " + json.dumps(hits[:5]))
             # Curated article.md wins. Otherwise an explicit opt-in may turn
             # research into original article prose, with a keyed local cache.
             if (generate_editorial and markdown and markdown_path.name == "research.md"):
