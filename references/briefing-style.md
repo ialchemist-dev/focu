@@ -1,6 +1,6 @@
 # Focu personal secretary briefing style
 
-**Version:** 2026-11-10.2
+**Version:** 2026-11-10.3
 **Owner:** Jerry Yu
 **Purpose:** Source of truth for scripted daily briefings and Muse/Open Notebook generation prompts.
 **Edit policy:** Change this file, append a dated changelog entry, commit, and use the updated version for future (not frozen) episodes. No source registration or production state change is required.
@@ -10,7 +10,7 @@
 The YAML block below is read by `focu.briefing` and the daily composer. Keep the setting names stable; edit the values to change the next briefing.
 
 ```yaml
-version: "2026-11-10.2"
+version: "2026-11-10.3"
 language: en
 recipient: "Jerry"
 speaker_label: "Host: "
@@ -52,11 +52,14 @@ forbidden_phrases:
 7. Default to a single voice. Do not write theatrical dialogue, sound cues, music, or stage directions.
 8. **No press-release boilerplate.** Never include zero-value tail matter from a source document, in the article or the script: street addresses; telephone numbers; email addresses; instructions for obtaining a prospectus or other documents (e.g. "may be obtained from", "Attention: … Department"); securities-law disclaimer boilerplate ("does not constitute an offer", registration-statement effectiveness language); media-contact blocks; "forward-looking statements" disclaimers; and company "About" boilerplate paragraphs. The only exception is when contact information itself is the news, which is almost never. Automated QC fails any script or briefing article containing these patterns (`boilerplate_contamination`), and ingest strips such paragraphs from source bodies before they can become briefing material.
 
+9. Never refer to a visual that is not present in the deliverable: no dangling "Figure 1", "Fig. 2", "Table 3", "Chart 4", etc., in the **daily article or spoken script**. If a source depends on a visual, state the underlying finding and its actual measurements in standalone prose with attribution. Removing a visual locator must never remove an important experimental result or number. If you cannot reconstruct the meaning from the original source, flag it for review and block publication rather than inventing a description.
+
 ## Required QC gate
 
 - Generate a unit/section manifest with stable IDs and original numeric facts.
 - Validate each input item has its own script section and retains its key numeric tokens.
 - Check every script for forbidden packaging phrases; do not silently deliver a failed script. Recompose or flag.
+- Reject unresolved visual locators in daily text/articles and transcripts. A figure index is not a measured value; preserve actual data.
 - Run the boilerplate detector over every script and every briefing article; any hit fails QC (`boilerplate_contamination`) and blocks synthesis and publication until the text is cleaned.
 - Persist QC results and style version/hash with the generated script. For externally authored scripts, run the same validator before audio synthesis.
 - These automated checks are not a substitute for factual review of paraphrases.
@@ -67,3 +70,5 @@ forbidden_phrases:
 - **2026-11-09 — v2026-11-09.2:** Owner feedback: every daily briefing (written article and spoken script) now opens with an agenda: the number of items, then each item's title and source, before the first item section. Factual listing only, no summaries or teasers.
 - **2026-11-10 — v2026-11-10.1:** Coverage QC now recognizes the `Agenda:` paragraph (strips it before section matching and checks it lists every title and source). Fixes the 2026-11-10 run, whose script QC had forced the agenda out; no change to the agenda requirement itself.
 - **2026-11-10 — v2026-11-10.2:** Owner feedback: the Nov 10 briefing read aloud the Anthropic IPO press release's prospectus boilerplate (underwriter street addresses, phone, email, SEC registration legalese). New requirement #8 bans press-release boilerplate from articles and scripts; script QC and the publisher's article gate now fail closed on it (`boilerplate_contamination`), and ingest strips boilerplate paragraphs from source bodies.
+
+- **2026-11-10 — v2026-11-10.3:** Integrate the missing-visual-reference prohibition and QC from PR #35 with the agenda and press-release boilerplate policy already on main. Both gates remain active.
