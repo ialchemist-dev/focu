@@ -289,6 +289,29 @@ class PipelineTests(unittest.TestCase):
         ep = self.store.episodes(result["run_id"])[0]
         self.assertEqual(ep["status"], "finalized")
 
+    def test_ingest_strips_real_press_release_boilerplate(self):
+        # Article-shaped body from the 2026-11-10 Anthropic IPO release: the
+        # prospectus retrieval paragraph must be stripped at ingest so it
+        # never reaches the briefing script (style v2026-11-10.2).
+        body = ("Anthropic launched the roadshow for its proposed initial public offering. "
+                "The proposed offering consists of 825,000,000 shares of Class A common stock.\n\n"
+                "Copies of the preliminary prospectus may be obtained from Goldman Sachs & Co. LLC, "
+                "Attention: Prospectus Department, 200 West Street, New York, NY 10282, by telephone "
+                "at (866) 471-2526, or by email at prospectus-ny@ny.email.gs.com.")
+        file = self.units_file([self.item(body=body)])
+        with patch("focu.tts.status", return_value={"provider": "openai", "configured": False,
+                                                    "credential_source": "missing"}):
+            result = run_pipeline(self.store, self.cfg, self.today, "audio", file)
+        self.assertEqual(result["status"], "completed")
+        ep = self.store.episodes(result["run_id"])[0]
+        stored = self.store.units(ep["episode_id"])[0]["body"]
+        self.assertIn("825,000,000 shares", stored)
+        self.assertNotIn("200 West Street", stored)
+        self.assertNotIn("prospectus-ny@ny.email.gs.com", stored)
+        script = (self.store.data_dir / "episodes" / self.today /
+                  "research-script.txt").read_text()
+        self.assertNotIn("200 West Street", script)
+
     def test_builtin_tts_synthesis_failure_records_stage_and_finalizes_text(self):
         file = self.units_file([self.item()])
         with patch.dict(os.environ, {"OPENAI_API_KEY": "test-only"}), \
