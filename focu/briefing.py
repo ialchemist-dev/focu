@@ -15,6 +15,83 @@ DEFAULT_STYLE = Path(__file__).resolve().parents[1] / "references" / "briefing-s
 NUMBER = re.compile(r"(?<![A-Za-z0-9])(?:[$€£]\s*)?\d[\d,]*(?:\.\d+)?\s*(?:%|[kKmMbB]|million|billion|thousand)?(?![A-Za-z0-9])")
 ORDER = {"registered_source": 0, "requested_research": 1, "interest_follow_up": 2}
 
+# --- Press-release boilerplate policy (style v2026-11-10.2) ------------------
+# Zero-value tail matter from press releases (prospectus/document retrieval
+# instructions, contact blocks, securities-law disclaimers, media contacts,
+# "About <company>" blocks) must never enter a briefing article or script.
+# find_boilerplate() is the fail-closed detector used by script QC and the
+# reader publisher; strip_boilerplate_paragraphs() removes whole offending
+# paragraphs at ingest so the material never reaches the briefing writer.
+BOILERPLATE_EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+BOILERPLATE_PHONE = re.compile(
+    r"(?:\(\d{3}\)\s*\d{3}[-.]\d{4}|\b\d{3}[-.]\d{3}[-.]\d{4}\b|\b1-\d{3}-\d{3}-\d{4}\b)")
+BOILERPLATE_STREET = re.compile(
+    r"\b\d{1,6}\s+(?:[A-Z][A-Za-z0-9.'-]*\s+){0,3}?"
+    r"(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Drive|Dr|Lane|Ln|Way|"
+    r"Court|Ct|Plaza|Square|Parkway|Pkwy)\b\.?")
+BOILERPLATE_STATE_ZIP = re.compile(r"\b[A-Z]{2}\s\d{5}(?:-\d{4})?\b")
+BOILERPLATE_PHRASES = (
+    "may be obtained from", "prospectus department", "attention: prospectus",
+    "does not constitute an offer", "registration statement relating to",
+    "registration statement becomes effective", "not yet become effective",
+    "offers to buy be accepted", "securities may not be sold",
+    "forward-looking statements", "forward looking statements",
+    "for media inquiries", "media contact",
+)
+# Phrases strong enough to drop a whole source paragraph at ingest.
+BOILERPLATE_DROP_PHRASES = BOILERPLATE_PHRASES + (
+    "registration statement", "attention:", "preliminary prospectus",
+    "copies of the prospectus",
+)
+_ABOUT_HEADING = re.compile(r"^About\s+[A-Z][\w&.'-]*(?:\s+[A-Z][\w&.'-]*){0,3}\s*$")
+
+
+def find_boilerplate(text):
+    """Return [{kind, match}] for every boilerplate pattern found in text."""
+    text = text or ""
+    hits = []
+    for kind, pattern in (("email", BOILERPLATE_EMAIL), ("phone", BOILERPLATE_PHONE),
+                          ("street_address", BOILERPLATE_STREET),
+                          ("state_zip", BOILERPLATE_STATE_ZIP)):
+        for match in pattern.finditer(text):
+            hits.append({"kind": kind, "match": match.group().strip()})
+    lowered = text.casefold()
+    for phrase in BOILERPLATE_PHRASES:
+        if phrase in lowered:
+            hits.append({"kind": "marker_phrase", "match": phrase})
+    return hits
+
+
+def strip_boilerplate_paragraphs(body):
+    """Drop whole boilerplate paragraphs from a source body.
+
+    Returns (cleaned_body, dropped_count). A paragraph is dropped when it
+    carries a drop-list phrase, when it is a pure contact block (an email
+    plus a phone number or street address), or when one of the last three
+    paragraphs is an "About <Company>" block. Substantive paragraphs are
+    kept verbatim.
+    """
+    paragraphs = re.split(r"\n\s*\n", (body or "").strip())
+    kept, dropped = [], 0
+    total = len(paragraphs)
+    for index, para in enumerate(paragraphs):
+        text = para.strip()
+        if not text:
+            continue
+        lowered = text.casefold()
+        drop = any(phrase in lowered for phrase in BOILERPLATE_DROP_PHRASES)
+        if not drop and BOILERPLATE_EMAIL.search(text):
+            drop = bool(BOILERPLATE_PHONE.search(text) or BOILERPLATE_STREET.search(text))
+        if not drop and index >= total - 3:
+            first_line = text.split("\n", 1)[0].strip()
+            drop = bool(_ABOUT_HEADING.match(first_line)) and len(first_line) <= 60
+        if drop:
+            dropped += 1
+        else:
+            kept.append(para)
+    cleaned = "\n\n".join(para.strip() for para in kept)
+    return (cleaned + "\n" if cleaned else ""), dropped
+
 
 class BriefingQCError(ValueError):
     pass
@@ -178,6 +255,8 @@ def validate_script(script, units, style):
     for phrase in style["forbidden_phrases"]:
         if phrase.casefold() in full_text.casefold():
             issues.append({"issue": "forbidden_show_packaging", "phrase": phrase})
+    for hit in find_boilerplate(full_text):
+        issues.append({"issue": "boilerplate_contamination", **hit})
     if re.search(r"^\s*(?:Co-host|Speaker\s*[12]|Guest):", full_text, re.M | re.I):
         issues.append({"issue": "multiple_speakers"})
     minutes = round(len(full_text.split()) / style["words_per_minute"], 2)
