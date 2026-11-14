@@ -1,0 +1,5 @@
+[
+ {"claim_id":"C1","text":"Newsletter A readers spend 120 minutes per week reading it","value":120,"unit":"min/week","as_of":"2026-11-01","class":"reported_fact","source_ids":["S1"],"quote":"our readers spend an average of 120 minutes a week with us"},
+ {"claim_id":"C2","text":"Example Analytics estimates 80 minutes per week for Newsletter B","value":80,"unit":"min/week","as_of":"2026-11-10","class":"estimate","estimator":"Example Analytics, opt-in panel survey","source_ids":["S2"],"quote":"we estimate Newsletter B at roughly 80 minutes weekly"},
+ {"claim_id":"C3","text":"Gap between A (reported) and B (estimated)","value":40,"unit":"min/week","class":"derived","formula":"C1 - C2 = 120 - 80 = 40","input_claim_ids":["C1","C2"],"source_ids":["S1","S2"],"quote":null}
+]

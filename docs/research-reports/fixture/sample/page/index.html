@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark"><link rel="icon" href="data:,">
+<title>示例夹具：两份虚构通讯的阅读时长</title>
+<style>
+:root{--bg:#fcfcfb;--card:#fff;--ink:#0b0b0b;--ink2:#52514e;--muted:#6b6a66;--line:#e3e2dd;--accent:#2a78d6;--accent-soft:#cde2fb;--warn-bg:#fff4e0;--warn-ink:#7a4b00;--chip:#f1f0ec;--code:#f3f2ee}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#1a1a19;--card:#232322;--ink:#f0efec;--ink2:#c3c2b7;--muted:#a3a29a;--line:#3a3a37;--accent:#3987e5;--accent-soft:#184f95;--warn-bg:#3a2c10;--warn-ink:#f2cf8a;--chip:#2d2d2b;--code:#2b2b29}}
+:root[data-theme=dark]{--bg:#1a1a19;--card:#232322;--ink:#f0efec;--ink2:#c3c2b7;--muted:#a3a29a;--line:#3a3a37;--accent:#3987e5;--accent-soft:#184f95;--warn-bg:#3a2c10;--warn-ink:#f2cf8a;--chip:#2d2d2b;--code:#2b2b29}
+*{box-sizing:border-box}html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.7 -apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Noto Sans CJK SC","Microsoft YaHei",sans-serif}
+a{color:var(--accent)}code{background:var(--code);padding:0 .3em;border-radius:4px;font-size:.92em;word-break:break-word}
+.wrap{max-width:980px;margin:0 auto;padding:0 18px}
+header.top{border-bottom:1px solid var(--line);background:var(--card)}
+header.top .wrap{display:flex;gap:12px;align-items:center;justify-content:space-between;min-height:56px;flex-wrap:wrap}
+.crumb{color:var(--ink2);font-size:.92rem}
+button.theme{min-height:44px;min-width:44px;border:1px solid var(--line);background:var(--chip);color:var(--ink);border-radius:10px;padding:0 12px;font:inherit;cursor:pointer}
+h1{font-size:1.75rem;line-height:1.3;margin:22px 0 6px}h2{font-size:1.3rem;margin:36px 0 10px;scroll-margin-top:12px}h3{font-size:1.08rem;margin:20px 0 6px}
+.meta{color:var(--ink2);font-size:.92rem}
+.hero{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 18px 8px;margin:16px 0}
+.hero .q{font-size:1.05rem;color:var(--ink2)}.hero .a{font-size:1.15rem;font-weight:600;margin:6px 0 10px}
+.takeaways{list-style:none;padding:0;margin:0;display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+.takeaways li{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.takeaways b{display:block;margin-bottom:2px}
+.scope{font-size:.93rem;color:var(--ink2);margin:12px 0}
+nav.toc{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px 14px;margin:14px 0}
+nav.toc ol{margin:0;padding-left:1.3em;columns:2;column-gap:28px}nav.toc a{display:inline-block;padding:6px 0;min-height:36px}
+@media (max-width:640px){nav.toc ol{columns:1}h1{font-size:1.45rem}}
+.cite{display:inline-flex;align-items:center;justify-content:center;min-height:28px;min-width:28px;font-size:.78rem;line-height:1;padding:4px 7px;margin:0 1px;border-radius:6px;background:var(--chip);text-decoration:none;vertical-align:1px}
+.tag{display:inline-block;font-size:.75rem;padding:1px 7px;border-radius:999px;border:1px solid var(--line);color:var(--ink2);white-space:nowrap}
+.tag.reported_fact{border-color:var(--accent)}.tag.vendor_claim{border-style:dashed}.tag.estimate{background:var(--chip)}.tag.derived{font-style:italic}.tag.synthesis{font-style:italic;border-color:var(--warn-ink)}
+.concl{border-left:4px solid var(--accent);background:var(--card);padding:10px 14px;border-radius:0 10px 10px 0;margin:14px 0}
+.synthesis{border-left:4px dashed var(--warn-ink);background:var(--card);padding:10px 14px;border-radius:0 10px 10px 0;margin:14px 0}
+.warn{background:var(--warn-bg);color:var(--warn-ink);border-radius:10px;padding:10px 14px;margin:12px 0;font-size:.95rem}
+figure{margin:18px 0;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px}
+figure svg{width:100%;max-width:560px;height:auto;display:block;margin:0 auto}figcaption{font-size:.88rem;color:var(--ink2);margin-top:8px}
+svg text{fill:var(--ink);font-family:inherit}svg .sub{fill:var(--ink2)}svg .grid{stroke:var(--line)}
+svg .box{fill:var(--bg);stroke:var(--line);stroke-width:1.5}svg .box.hl{stroke:var(--accent);stroke-width:2}
+svg .bar{fill:var(--accent)}svg .bar2{fill:var(--accent-soft)}svg .edge{stroke:var(--ink2);stroke-width:1.5;fill:none}
+table{border-collapse:collapse;width:100%;font-size:.94rem;background:var(--card)}
+th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}th{background:var(--chip)}
+@media (max-width:640px){table.cards,table.cards tbody,table.cards tr,table.cards td{display:block;width:100%}
+table.cards thead{display:none}table.cards tr{border:1px solid var(--line);border-radius:12px;margin:0 0 12px;padding:6px 10px;background:var(--card)}
+table.cards td{border:0;border-bottom:1px dashed var(--line);padding:6px 0}table.cards td:last-child{border-bottom:0}
+table.cards td::before{content:attr(data-label);display:block;font-size:.78rem;color:var(--muted);font-weight:600}}
+details{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:6px 14px;margin:10px 0}
+summary{cursor:pointer;min-height:44px;display:flex;align-items:center;font-weight:600}
+ol.sources{padding-left:0;list-style:none}
+li.src{border-top:1px solid var(--line);padding:10px 0;scroll-margin-top:12px}li.src:target{background:var(--accent-soft);border-radius:8px;padding:10px}
+li.src a{overflow-wrap:anywhere;word-break:break-all}li.src .id{font-weight:700;margin-right:6px}li.src .q{color:var(--ink2);font-size:.9rem}
+footer{margin:40px 0 30px;padding-top:14px;border-top:1px solid var(--line);font-size:.88rem;color:var(--ink2)}
+.scroll{overflow-x:auto}
+</style></head><body>
+<header class="top"><div class="wrap"><span class="crumb">FOCU 研究报告 · 夹具</span>
+<button class="theme" id="theme" type="button" aria-label="切换深浅色">切换深色</button></div></header>
+<main class="wrap">
+<h1>示例夹具：两份虚构通讯的阅读时长</h1>
+<p class="meta">截至 2026-11-13 · 3 个来源（含 1 个构建者补充） · <strong>虚构夹具</strong>：所有机构、数字与 example.org 链接均为编造，只用于验证模板与检查器</p>
+
+<section class="hero" id="overview" aria-label="一分钟总览">
+<div class="q">问题：读者每周在通讯 A 和通讯 B 上各花多少分钟？</div>
+<div class="a">结论：A 自报每周 120 分钟 <a class="cite" href="#src-S1">S1</a>，B 只有第三方估计约 80 分钟 <a class="cite" href="#src-S2">S2</a>；两者口径不同，40 分钟差距只是派生参考。</div>
+<ul class="takeaways">
+<li><b>A：自报 120 分钟/周</b>来自 A 自己的年度读者报告 <span class="tag reported_fact" data-claim="C1" data-class="reported_fact">公司报告</span> <a class="cite" href="#src-S1">S1</a></li>
+<li><b>B：估计约 80 分钟/周</b>第三方面板调查，不是 B 自报 <span class="tag estimate" data-claim="C2" data-class="estimate">估计</span> <a class="cite" href="#src-S2">S2</a></li>
+<li><b>差距 40 分钟/周</b>= 120 − 80，混合了自报与估计 <span class="tag derived" data-claim="C3" data-class="derived">派生</span></li>
+</ul>
+<p class="scope">范围：2026 年 11 月公开材料；读者：任何想看模板效果的人。未能核实：1 项（见 <a href="#limits">局限</a>）。</p>
+</section>
+
+<nav class="toc" aria-label="目录"><ol>
+<li><a href="#q1">阅读时长对比</a></li>
+<li><a href="#context">补充背景（构建者补充）</a></li>
+<li><a href="#limits">无法核实 &amp; 方法</a></li>
+<li><a href="#sources">来源</a></li>
+</ol></nav>
+
+<h2 id="q1">1. 阅读时长对比</h2>
+<table class="cards"><thead><tr><th>对象</th><th>每周分钟（类别）</th><th>来源</th></tr></thead><tbody>
+<tr><td data-label="对象">通讯 A</td><td data-label="每周分钟">120 <span class="tag reported_fact" data-claim="C1" data-class="reported_fact">公司报告</span></td><td data-label="来源"><a class="cite" href="#src-S1">S1</a></td></tr>
+<tr><td data-label="对象">通讯 B</td><td data-label="每周分钟">80 <span class="tag estimate" data-claim="C2" data-class="estimate">估计 · Example Analytics</span></td><td data-label="来源"><a class="cite" href="#src-S2">S2</a></td></tr>
+<tr><td data-label="对象">差距</td><td data-label="每周分钟">40 <span class="tag derived" data-claim="C3" data-class="derived">派生：C1 − C2</span></td><td data-label="来源"><a class="cite" href="#src-S1">S1</a> <a class="cite" href="#src-S2">S2</a></td></tr>
+</tbody></table>
+
+<figure>
+<script type="application/json" data-chart>
+{"type":"bar","title":"每周阅读时长","unit":"分钟","series":[
+ {"label":"通讯 A（自报）","value":120,"claim":"C1"},
+ {"label":"通讯 B（估计）","value":80,"claim":"C2"},
+ {"label":"差距（派生）","value":40,"claim":"C3"}
+]}
+</script>
+<details><summary>数据表</summary><table><tr><th>项目</th><th>分钟/周</th><th>claim</th></tr>
+<tr><td>通讯 A（自报）</td><td>120</td><td>C1</td></tr><tr><td>通讯 B（估计）</td><td>80</td><td>C2</td></tr><tr><td>差距（派生）</td><td>40</td><td>C3</td></tr></table></details>
+<figcaption>数据：claims.json C1、C2；C3 = C1 − C2 = 40 <a class="cite" href="#src-S1">S1</a> <a class="cite" href="#src-S2">S2</a>。自报与估计口径不同，柱长可比但含义不完全可比。</figcaption>
+</figure>
+<div class="concl"><b>本节结论：</b>A 的阅读时长更长，但 B 的数字是第三方估计，不是自报事实。</div>
+
+<h2 id="context">2. 补充背景（构建者补充）</h2>
+<p>B 自称有 5 万订阅者 <span class="tag vendor_claim" data-claim="C4" data-class="vendor_claim">自述</span> <a class="cite" href="#src-S3">S3</a>。此条由构建者在 <code>addenda/addendum-1/</code> 中登记，原研究文件未修改。</p>
+<div class="synthesis"><span class="tag synthesis">叙事综合</span> 两个数字来自不同口径：一个是自报，一个是估计。在 B 发布自有数据前，把差距读作“方向”而不是“精确值”更稳妥 <a class="cite" href="#src-S1">S1</a> <a class="cite" href="#src-S2">S2</a>。</div>
+
+<h2 id="limits">无法核实 &amp; 方法</h2>
+<ul>
+<li>B 未公布自有阅读时长数据，因此无法做同口径比较。</li>
+<li>方法：虚构夹具，未运行任何网络检索；英文查询规则仅作示意。</li>
+</ul>
+
+<h2 id="sources">来源</h2>
+<ol class="sources">
+<li class="src" id="src-S1"><span class="id">S1</span><b>Newsletter A annual reader report</b> — Newsletter A<br>
+<span class="meta">发布：2026-11-01 · 访问：2026-11-13 · 类型：primary</span><br>
+<a href="https://example.org/a/reader-report" rel="noopener">https://example.org/a/reader-report</a>
+<div class="q">“our readers spend an average of 120 minutes a week with us” <span class="tag">C1</span></div></li>
+<li class="src" id="src-S2"><span class="id">S2</span><b>Newsletter engagement panel 2026</b> — Example Analytics<br>
+<span class="meta">发布：2026-11-10 · 访问：2026-11-13 · 类型：secondary</span><br>
+<a href="https://example.org/analytics/panel-2026" rel="noopener">https://example.org/analytics/panel-2026</a>
+<div class="q">“we estimate Newsletter B at roughly 80 minutes weekly” <span class="tag">C2</span></div></li>
+<li class="src" id="src-S3"><span class="id">S3</span><b>Newsletter B about page</b> — Newsletter B（构建者补充，addendum-1）<br>
+<span class="meta">发布：2026-10-20 · 访问：2026-11-13 · 类型：vendor</span><br>
+<a href="https://example.org/b/about" rel="noopener">https://example.org/b/about</a>
+<div class="q">“join 50,000 subscribers” <span class="tag">C4</span></div></li>
+</ol>
+
+<footer id="provenance">
+<p>应用偏好 ID：<code>pa_topdown_overview</code>、<code>pa_citations_required</code>（本次手工选择的当前上下文，不是自动产品记忆）· 画像版本：<code>pv-fixture</code></p>
+<p>研究输入已冻结（frozen.sha256）；构建者补充只在 addenda/ 中。结构检查不证明语义支持；语义审阅：not_run；owner 验收：pending。</p>
+</footer>
+</main>
+<script>
+(function(){
+var b=document.getElementById('theme'),r=document.documentElement;
+function cur(){return r.dataset.theme||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light')}
+function lab(){b.textContent=cur()==='dark'?'切换浅色':'切换深色'}
+b.addEventListener('click',function(){r.dataset.theme=cur()==='dark'?'light':'dark';lab()});lab();
+var NS='http://www.w3.org/2000/svg';
+function el(n,a,t){var e=document.createElementNS(NS,n);for(var k in a)e.setAttribute(k,a[k]);if(t!=null)e.textContent=t;return e}
+function fmt(v){return Number(v).toLocaleString('en-US')}
+document.querySelectorAll('script[data-chart]').forEach(function(s){
+  var spec;try{spec=JSON.parse(s.textContent)}catch(e){console.error('chart JSON',e);return}
+  if(spec.type!=='bar'||!spec.series||!spec.series.length)return;
+  var W=360,L=110,R=64,row=34,top=28,H=top+spec.series.length*row+8;
+  var max=Math.max.apply(null,spec.series.map(function(p){return Math.abs(p.value)}))||1;
+  var svg=el('svg',{viewBox:'0 0 '+W+' '+H,role:'img','aria-label':spec.title+'（'+(spec.unit||'')+'）'});
+  svg.appendChild(el('title',{},spec.title));
+  var g=el('g',{'font-size':'13'});svg.appendChild(g);
+  g.appendChild(el('text',{x:0,y:16,'font-weight':'600'},spec.title+(spec.unit?'（'+spec.unit+'）':'')));
+  g.appendChild(el('line',{'class':'grid',x1:L,y1:top-4,x2:L,y2:H-4}));
+  spec.series.forEach(function(p,i){
+    var y=top+i*row,w=Math.max(1,(W-L-R)*Math.abs(p.value)/max);
+    g.appendChild(el('text',{x:0,y:y+18},p.label));
+    var rect=el('rect',{'class':'bar',x:L,y:y+4,width:w.toFixed(1),height:22,rx:4});
+    rect.appendChild(el('title',{},p.label+': '+fmt(p.value)+' '+(spec.unit||'')+' — '+p.claim));rect.setAttribute('data-claim-ref',p.claim);
+    g.appendChild(rect);g.appendChild(el('text',{x:(L+w+6).toFixed(1),y:y+20},fmt(p.value)));
+  });
+  s.parentNode.insertBefore(svg,s);
+});
+})();
+</script>
+</body></html>

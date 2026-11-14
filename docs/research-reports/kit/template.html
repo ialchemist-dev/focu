@@ -1,0 +1,161 @@
+<!doctype html>
+<!--
+  FOCU research report — buildless, self-contained HTML template.
+  Copy this file to <research_dir>/page/index.html and replace every {{...}} slot.
+  Contract and conventions: docs/research-reports/README.md (section "Page contract").
+  Keep: inline CSS/JS only, no external fonts/scripts/images (data: URIs are fine),
+  required ids overview / limits / sources / provenance, citations as
+  <a class="cite" href="#src-S1">S1</a>, numeric charts as <script type="application/json" data-chart>.
+  Validate: python3 docs/research-reports/kit/check_report.py <research_dir>
+-->
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark"><link rel="icon" href="data:,">
+<title>{{TITLE}}</title>
+<style>
+:root{--bg:#fcfcfb;--card:#fff;--ink:#0b0b0b;--ink2:#52514e;--muted:#6b6a66;--line:#e3e2dd;--accent:#2a78d6;--accent-soft:#cde2fb;--warn-bg:#fff4e0;--warn-ink:#7a4b00;--chip:#f1f0ec;--code:#f3f2ee}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#1a1a19;--card:#232322;--ink:#f0efec;--ink2:#c3c2b7;--muted:#a3a29a;--line:#3a3a37;--accent:#3987e5;--accent-soft:#184f95;--warn-bg:#3a2c10;--warn-ink:#f2cf8a;--chip:#2d2d2b;--code:#2b2b29}}
+:root[data-theme=dark]{--bg:#1a1a19;--card:#232322;--ink:#f0efec;--ink2:#c3c2b7;--muted:#a3a29a;--line:#3a3a37;--accent:#3987e5;--accent-soft:#184f95;--warn-bg:#3a2c10;--warn-ink:#f2cf8a;--chip:#2d2d2b;--code:#2b2b29}
+*{box-sizing:border-box}html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.7 -apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Noto Sans CJK SC","Microsoft YaHei",sans-serif}
+a{color:var(--accent)}code{background:var(--code);padding:0 .3em;border-radius:4px;font-size:.92em;word-break:break-word}
+.wrap{max-width:980px;margin:0 auto;padding:0 18px}
+header.top{border-bottom:1px solid var(--line);background:var(--card)}
+header.top .wrap{display:flex;gap:12px;align-items:center;justify-content:space-between;min-height:56px;flex-wrap:wrap}
+.crumb{color:var(--ink2);font-size:.92rem}
+button.theme{min-height:44px;min-width:44px;border:1px solid var(--line);background:var(--chip);color:var(--ink);border-radius:10px;padding:0 12px;font:inherit;cursor:pointer}
+h1{font-size:1.75rem;line-height:1.3;margin:22px 0 6px}h2{font-size:1.3rem;margin:36px 0 10px;scroll-margin-top:12px}h3{font-size:1.08rem;margin:20px 0 6px}
+.meta{color:var(--ink2);font-size:.92rem}
+.hero{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 18px 8px;margin:16px 0}
+.hero .q{font-size:1.05rem;color:var(--ink2)}.hero .a{font-size:1.15rem;font-weight:600;margin:6px 0 10px}
+.takeaways{list-style:none;padding:0;margin:0;display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+.takeaways li{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.takeaways b{display:block;margin-bottom:2px}
+.scope{font-size:.93rem;color:var(--ink2);margin:12px 0}
+nav.toc{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px 14px;margin:14px 0}
+nav.toc ol{margin:0;padding-left:1.3em;columns:2;column-gap:28px}nav.toc a{display:inline-block;padding:6px 0;min-height:36px}
+@media (max-width:640px){nav.toc ol{columns:1}h1{font-size:1.45rem}}
+.cite{display:inline-flex;align-items:center;justify-content:center;min-height:28px;min-width:28px;font-size:.78rem;line-height:1;padding:4px 7px;margin:0 1px;border-radius:6px;background:var(--chip);text-decoration:none;vertical-align:1px}
+.tag{display:inline-block;font-size:.75rem;padding:1px 7px;border-radius:999px;border:1px solid var(--line);color:var(--ink2);white-space:nowrap}
+.tag.reported_fact{border-color:var(--accent)}.tag.vendor_claim{border-style:dashed}.tag.estimate{background:var(--chip)}.tag.derived{font-style:italic}.tag.synthesis{font-style:italic;border-color:var(--warn-ink)}
+.concl{border-left:4px solid var(--accent);background:var(--card);padding:10px 14px;border-radius:0 10px 10px 0;margin:14px 0}
+.synthesis{border-left:4px dashed var(--warn-ink);background:var(--card);padding:10px 14px;border-radius:0 10px 10px 0;margin:14px 0}
+.warn{background:var(--warn-bg);color:var(--warn-ink);border-radius:10px;padding:10px 14px;margin:12px 0;font-size:.95rem}
+figure{margin:18px 0;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px}
+figure svg{width:100%;max-width:560px;height:auto;display:block;margin:0 auto}figcaption{font-size:.88rem;color:var(--ink2);margin-top:8px}
+svg text{fill:var(--ink);font-family:inherit}svg .sub{fill:var(--ink2)}svg .grid{stroke:var(--line)}
+svg .box{fill:var(--bg);stroke:var(--line);stroke-width:1.5}svg .box.hl{stroke:var(--accent);stroke-width:2}
+svg .bar{fill:var(--accent)}svg .bar2{fill:var(--accent-soft)}svg .edge{stroke:var(--ink2);stroke-width:1.5;fill:none}
+table{border-collapse:collapse;width:100%;font-size:.94rem;background:var(--card)}
+th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}th{background:var(--chip)}
+@media (max-width:640px){table.cards,table.cards tbody,table.cards tr,table.cards td{display:block;width:100%}
+table.cards thead{display:none}table.cards tr{border:1px solid var(--line);border-radius:12px;margin:0 0 12px;padding:6px 10px;background:var(--card)}
+table.cards td{border:0;border-bottom:1px dashed var(--line);padding:6px 0}table.cards td:last-child{border-bottom:0}
+table.cards td::before{content:attr(data-label);display:block;font-size:.78rem;color:var(--muted);font-weight:600}}
+details{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:6px 14px;margin:10px 0}
+summary{cursor:pointer;min-height:44px;display:flex;align-items:center;font-weight:600}
+ol.sources{padding-left:0;list-style:none}
+li.src{border-top:1px solid var(--line);padding:10px 0;scroll-margin-top:12px}li.src:target{background:var(--accent-soft);border-radius:8px;padding:10px}
+li.src a{overflow-wrap:anywhere;word-break:break-all}li.src .id{font-weight:700;margin-right:6px}li.src .q{color:var(--ink2);font-size:.9rem}
+footer{margin:40px 0 30px;padding-top:14px;border-top:1px solid var(--line);font-size:.88rem;color:var(--ink2)}
+.scroll{overflow-x:auto}
+</style></head><body>
+<header class="top"><div class="wrap"><span class="crumb">{{SERIES_LABEL e.g. FOCU 研究报告}}</span>
+<button class="theme" id="theme" type="button" aria-label="切换深浅色">切换深色</button></div></header>
+<main class="wrap">
+
+<h1>{{TITLE}}</h1>
+<p class="meta">截至 {{AS_OF}} · {{N}} 个来源 · {{REPORT_KIND e.g. 深度研究 / Daily 轻量版}}</p>
+
+<!-- 1. One-minute top-down overview. Question -> answer -> a few cited takeaways -> scope.
+     Aim for "readable in about a minute"; do not promise it fits one screen. -->
+<section class="hero" id="overview" aria-label="一分钟总览">
+<div class="q">问题：{{QUESTION — the owner's purpose in one sentence}}</div>
+<div class="a">结论：{{ANSWER — 1–2 sentences, every number cited}} <a class="cite" href="#src-S1">S1</a></div>
+<ul class="takeaways">
+<li><b>{{TAKEAWAY}}</b>{{one line}} <span class="tag reported_fact" data-claim="C1" data-class="reported_fact">事实</span> <a class="cite" href="#src-S1">S1</a></li>
+</ul>
+<p class="scope">范围：{{scope, time window, reader}}；未能核实：{{count}} 项（见 <a href="#limits">局限</a>）。</p>
+</section>
+
+<nav class="toc" aria-label="目录"><ol>
+<li><a href="#q1">{{SECTION 1}}</a></li>
+<li><a href="#limits">无法核实 &amp; 方法</a></li>
+<li><a href="#sources">来源</a></li>
+</ol></nav>
+
+<!-- 2. One section per numbered question: comparison table (class="cards" stacks on mobile),
+     optional chart / diagram, then a 1–2 sentence conclusion. -->
+<h2 id="q1">1. {{SECTION 1}}</h2>
+<table class="cards"><thead><tr><th>项目</th><th>数值（类别）</th><th>来源</th></tr></thead><tbody>
+<tr><td data-label="项目">{{item}}</td><td data-label="数值">{{value}} <span class="tag reported_fact" data-claim="C1" data-class="reported_fact">事实</span></td><td data-label="来源"><a class="cite" href="#src-S1">S1</a></td></tr>
+</tbody></table>
+
+<!-- Numeric chart: values MUST equal claims.json (key selects a field when value is an object).
+     The script renders a horizontal bar chart; the table stays as the accessible fallback. -->
+<figure>
+<script type="application/json" data-chart>
+{"type":"bar","title":"{{CHART TITLE}}","unit":"{{UNIT}}","series":[
+ {"label":"{{A}}","value":0,"claim":"C1"}
+]}
+</script>
+<details><summary>数据表</summary><table><tr><th>项目</th><th>数值</th><th>claim</th></tr><tr><td>{{A}}</td><td>0</td><td>C1</td></tr></table></details>
+<figcaption>数据：claims.json C1 <a class="cite" href="#src-S1">S1</a>。派生值写出公式与输入 claim。</figcaption>
+</figure>
+
+<div class="concl"><b>本节结论：</b>{{1–2 sentences}}</div>
+
+<!-- Optional narrative synthesis (Daily light variant or cross-source reading):
+     must be visibly marked, grounded in cited items, and add no new facts. -->
+<div class="synthesis"><span class="tag synthesis">叙事综合</span> {{connective reading of cited items only}} <a class="cite" href="#src-S1">S1</a></div>
+
+<h2 id="limits">无法核实 &amp; 方法</h2>
+<ul>
+<li>{{Could not verify: question → why}}</li>
+<li>{{Method: search language, as-of time, exclusions, tools actually used}}</li>
+</ul>
+
+<h2 id="sources">来源</h2>
+<ol class="sources">
+<li class="src" id="src-S1"><span class="id">S1</span><b>{{Title}}</b> — {{Publisher}}<br>
+<span class="meta">发布：{{date}} · 访问：{{date}} · 类型：{{primary|secondary|vendor}}</span><br>
+<a href="{{URL exactly as in notes/sources-key.md}}" rel="noopener">{{URL}}</a>
+<div class="q">“{{short supporting excerpt, not the full text}}” <span class="tag">C1</span></div></li>
+</ol>
+
+<footer id="provenance">
+<p>应用偏好 ID：{{ids}}（本次手工选择的当前上下文，不是自动产品记忆）· 画像版本：<code>{{profile_version}}</code></p>
+<p>研究输入已冻结（frozen.sha256）；构建者补充只在 addenda/ 中。结构检查不证明语义支持；语义审阅：{{independent|same_worker|not_run}}；owner 验收：{{pending}}。</p>
+</footer>
+</main>
+<script>
+(function(){
+var b=document.getElementById('theme'),r=document.documentElement;
+function cur(){return r.dataset.theme||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light')}
+function lab(){b.textContent=cur()==='dark'?'切换浅色':'切换深色'}
+b.addEventListener('click',function(){r.dataset.theme=cur()==='dark'?'light':'dark';lab()});lab();
+var NS='http://www.w3.org/2000/svg';
+function el(n,a,t){var e=document.createElementNS(NS,n);for(var k in a)e.setAttribute(k,a[k]);if(t!=null)e.textContent=t;return e}
+function fmt(v){return Number(v).toLocaleString('en-US')}
+document.querySelectorAll('script[data-chart]').forEach(function(s){
+  var spec;try{spec=JSON.parse(s.textContent)}catch(e){console.error('chart JSON',e);return}
+  if(spec.type!=='bar'||!spec.series||!spec.series.length)return;
+  var W=360,L=110,R=64,row=34,top=28,H=top+spec.series.length*row+8;
+  var max=Math.max.apply(null,spec.series.map(function(p){return Math.abs(p.value)}))||1;
+  var svg=el('svg',{viewBox:'0 0 '+W+' '+H,role:'img','aria-label':spec.title+'（'+(spec.unit||'')+'）'});
+  svg.appendChild(el('title',{},spec.title));
+  var g=el('g',{'font-size':'13'});svg.appendChild(g);
+  g.appendChild(el('text',{x:0,y:16,'font-weight':'600'},spec.title+(spec.unit?'（'+spec.unit+'）':'')));
+  g.appendChild(el('line',{'class':'grid',x1:L,y1:top-4,x2:L,y2:H-4}));
+  spec.series.forEach(function(p,i){
+    var y=top+i*row,w=Math.max(1,(W-L-R)*Math.abs(p.value)/max);
+    g.appendChild(el('text',{x:0,y:y+18},p.label));
+    var rect=el('rect',{'class':'bar',x:L,y:y+4,width:w.toFixed(1),height:22,rx:4});
+    rect.appendChild(el('title',{},p.label+': '+fmt(p.value)+' '+(spec.unit||'')+' — '+p.claim));rect.setAttribute('data-claim-ref',p.claim);
+    g.appendChild(rect);g.appendChild(el('text',{x:(L+w+6).toFixed(1),y:y+20},fmt(p.value)));
+  });
+  s.parentNode.insertBefore(svg,s);
+});
+})();
+</script>
+</body></html>
