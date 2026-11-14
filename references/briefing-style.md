@@ -1,6 +1,6 @@
 # Focu personal secretary briefing style
 
-**Version:** 2026-11-10.3
+**Version:** 2026-11-14.1
 **Owner:** Jerry Yu
 **Purpose:** Source of truth for scripted daily briefings and Muse/Open Notebook generation prompts.
 **Edit policy:** Change this file, append a dated changelog entry, commit, and use the updated version for future (not frozen) episodes. No source registration or production state change is required.
@@ -10,7 +10,7 @@
 The YAML block below is read by `focu.briefing` and the daily composer. Keep the setting names stable; edit the values to change the next briefing.
 
 ```yaml
-version: "2026-11-10.3"
+version: "2026-11-14.1"
 language: en
 recipient: "Jerry"
 speaker_label: "Host: "
@@ -54,10 +54,13 @@ forbidden_phrases:
 
 9. Never refer to a visual that is not present in the deliverable: no dangling "Figure 1", "Fig. 2", "Table 3", "Chart 4", etc., in the **daily article or spoken script**. If a source depends on a visual, state the underlying finding and its actual measurements in standalone prose with attribution. Removing a visual locator must never remove an important experimental result or number. If you cannot reconstruct the meaning from the original source, flag it for review and block publication rather than inventing a description.
 
+10. **Links are locators, not content.** URLs stay in the written article, where they can be tapped; the spoken script never reads a URL aloud — read the content the link points to, not the link. Digits inside a URL (post IDs, tracking parameters) are not figures, and dotted version identifiers (v1.0.0, 2.5.1) are product identifiers, not measured quantities: coverage QC excludes both from the key figures a script must preserve, so a script is never failed — or padded — for omitting them.
+
 ## Required QC gate
 
 - Generate a unit/section manifest with stable IDs and original numeric facts.
 - Validate each input item has its own script section and retains its key numeric tokens.
+- Exclude locator material from key-figure extraction: strip URLs and dotted version identifiers before collecting numeric tokens (style v2026-11-14.1, requirement #10), and strip URLs from any script body before synthesis.
 - Check every script for forbidden packaging phrases; do not silently deliver a failed script. Recompose or flag.
 - Reject unresolved visual locators in daily text/articles and transcripts. A figure index is not a measured value; preserve actual data.
 - Run the boilerplate detector over every script and every briefing article; any hit fails QC (`boilerplate_contamination`) and blocks synthesis and publication until the text is cleaned.
@@ -72,3 +75,4 @@ forbidden_phrases:
 - **2026-11-10 — v2026-11-10.2:** Owner feedback: the Nov 10 briefing read aloud the Anthropic IPO press release's prospectus boilerplate (underwriter street addresses, phone, email, SEC registration legalese). New requirement #8 bans press-release boilerplate from articles and scripts; script QC and the publisher's article gate now fail closed on it (`boilerplate_contamination`), and ingest strips boilerplate paragraphs from source bodies.
 
 - **2026-11-10 — v2026-11-10.3:** Integrate the missing-visual-reference prohibition and QC from PR #35 with the agenda and press-release boilerplate policy already on main. Both gates remain active.
+- **2026-11-14 — v2026-11-14.1:** Owner feedback: the Nov 14 briefing's audio read all 34 LinkedIn permalinks aloud, because coverage QC treated the digits inside each URL as key figures and the authored script failed QC for omitting them. New requirement #10: links are locators, not content — URLs stay in the article, are never read aloud, and URL digits plus dotted version identifiers are excluded from key-figure extraction in both the daily composer and the single-podcast fidelity check; the deterministic fallback script strips URLs before synthesis.

@@ -50,6 +50,33 @@ VISUAL_LABEL = (r"(?:fig(?:ure)?s?\.?|tables?|charts?|diagrams?|panels?|screensh
                 r"(?:S?\d+[A-Za-z]?)(?:(?:\s*[,/&–-]\s*|\s+(?:and|to)\s+)S?\d+[A-Za-z]?)*")
 VISUAL_REF = re.compile(r"\b" + VISUAL_LABEL + r"\b", re.I)
 
+# --- Link policy (style v2026-11-14.1) ---------------------------------------
+# URLs are locators, not content: the written article keeps them, the spoken
+# script never reads them aloud, and digits inside a URL are not figures.
+# Dotted version identifiers (v1.0.0, 2.5.1) are product identifiers, not
+# measured quantities; without this, NUMBER extracts a partial tail such as
+# "0.0" from "1.0.0" and coverage QC demands it in the script.
+URL_REF = re.compile(r"(?:https?://|www\.)\S+", re.I)
+VERSION_REF = re.compile(r"\bv?\d+(?:\.\d+){2,}\b", re.I)
+
+
+def strip_urls(text):
+    """Remove URLs from text, keeping markdown link labels as words."""
+    text = re.sub(r"\[([^\]]+)\]\([^)\s]+\)", r"\1", text or "")
+    text = re.sub(r"\(\s*(?:https?://|www\.)\S+?\s*\)", "", text)
+    return URL_REF.sub("", text)
+
+
+def locator_free_text(text):
+    """Text with URLs and dotted version identifiers removed.
+
+    Key-figure extraction runs over this so locator digits (e.g. the ID in a
+    LinkedIn permalink) and version tails are never treated as figures the
+    spoken script must preserve.
+    """
+    text = URL_REF.sub(" ", text or "")
+    return VERSION_REF.sub(" ", text)
+
 
 def find_boilerplate(text):
     """Return [{kind, match}] for every boilerplate pattern found in text."""
@@ -195,7 +222,7 @@ def ordered_units(units):
 
 
 def key_figures(item):
-    measured_text = VISUAL_REF.sub(" ", item["title"] + " " + item["body"])
+    measured_text = locator_free_text(VISUAL_REF.sub(" ", item["title"] + " " + item["body"]))
     return list(dict.fromkeys(m.group().strip() for m in NUMBER.finditer(measured_text)))
 
 
@@ -218,7 +245,7 @@ def render_script(units, style):
         attribution = style["attribution"].replace("{source}", item["source"])
         headline = _plain(item["title"]).rstrip(".") + "."
         parts.append(prefix + " ".join(piece for piece in
-             (headline, spoken_body_without_visual_pointers(item["body"]), reason, attribution) if piece))
+             (headline, spoken_body_without_visual_pointers(strip_urls(item["body"])), reason, attribution) if piece))
     if style["closing"].strip():
         parts.append(prefix + style["closing"].strip())
     return "\n\n".join(parts) + "\n" if parts else ""

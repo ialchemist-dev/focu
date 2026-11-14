@@ -104,6 +104,36 @@ class BriefingTests(unittest.TestCase):
         self.assertEqual(key_figures(units_with_figures[0]), ["31%", "42%", "57"])
         self.assertTrue(validate_script(script, units_with_figures, style)["passed"])
 
+    def test_urls_are_not_spoken_and_url_digits_are_not_figures(self):
+        style = read_style()
+        post_id = "7526714905299763201"
+        items = [{
+            "id": "linkedin-1", "origin": "registered_source", "source": "LinkedIn Feed",
+            "title": "LinkedIn Feed — Friday, November 13, 2026",
+            "body": "1. Jane Doe shipped a tool "
+                    f"(https://www.linkedin.com/feed/update/urn:li:ugcPost:{post_id}/). "
+                    "It is 30% smaller and covers 4,536 acres."
+        }]
+        figures = key_figures(items[0])
+        self.assertNotIn(post_id, figures)
+        self.assertIn("30%", figures)
+        self.assertIn("4,536", figures)
+        script = render_script(items, style)
+        self.assertNotIn("http", script)
+        self.assertNotIn(post_id, script)
+        qc = validate_script(script, items, style)
+        self.assertTrue(qc["passed"], qc["issues"])
+
+    def test_version_identifiers_are_not_figures(self):
+        item = {"id": "v-1", "origin": "registered_source", "source": "LinkedIn Feed",
+                "title": "Local AI release",
+                "body": "Julien released llama.cpp v1.0.0, a stable foundation. "
+                        "Downloads rose 25%."}
+        figures = key_figures(item)
+        self.assertNotIn("0.0", figures)
+        self.assertNotIn("1.0", figures)
+        self.assertIn("25%", figures)
+
     def test_dangling_visuals_fail_strict_qc_even_with_otherwise_complete_script(self):
         style = read_style()
         script = render_script(units(), style) + "\\nHost: See Figure 2 and Table 3.\\n"

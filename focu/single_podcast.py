@@ -14,6 +14,7 @@ import time
 import urllib.parse
 
 from focu.audience import calibration, writing_guidance, mismatch_report, detect_domain
+from focu.briefing import locator_free_text
 from focu.intents import IntentStore
 from focu.open_notebook import OpenNotebookClient
 from focu.transcript import transcript_text as _transcript_text
@@ -93,7 +94,7 @@ def article_sections(article):
         body = article[begin:end].strip()
         title = re.sub(r"[*_\x60]", "", heading.group(2)).strip()
         figures = list(dict.fromkeys(m.group().strip()
-                     for m in NUMBER.finditer(title + " " + body)))
+                     for m in NUMBER.finditer(locator_free_text(title + " " + body))))
         units.append({"id": f"section_{pos+1}", "heading": title,
                       "figures": figures, "body": body})
     if len({u["heading"].casefold() for u in units}) != len(units):
