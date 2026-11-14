@@ -1,0 +1,15 @@
+{
+ "slug": "fixture-sample",
+ "fixture": true,
+ "profile_version": "pv-fixture",
+ "applied_preference_ids": ["pa_topdown_overview", "pa_citations_required"],
+ "preference_source": "manual_current_context",
+ "tools_actually_used": ["hand-written fixture; no web research was run"],
+ "builder_addenda": ["addenda/addendum-1"],
+ "qa": {
+  "structure": {"state": "passed", "evidence": "python3 docs/research-reports/kit/check_report.py docs/research-reports/fixture/sample"},
+  "render": {"state": "not_run", "evidence": null, "note": "screenshots live outside Git; record passed/failed only with an evidence path from a real run"},
+  "semantic": {"state": "not_run", "reviewer": "none"},
+  "owner": {"state": "pending"}
+ }
+}

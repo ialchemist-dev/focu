@@ -20,6 +20,8 @@ bash scripts/bootstrap.sh
 
 See [Agent Installation](docs/AGENT_INSTALL.md) for Muse/OpenClaw usage, limitations and an end-to-end evidence handoff. Focu does not yet autonomously run a research agent or produce v0.2 audio.
 
+**Research reports (manual workflow):** [docs/research-reports/](docs/research-reports/README.md) covers the flow from purpose to an English mission, then a frozen report with sources and claims, then a self-contained responsive HTML page with QA. It includes templates, a buildless HTML kit, a stdlib citation/structure checker and a [copy-paste Muse instruction](docs/research-reports/muse-instruction.zh.md). It does not change the scheduled Daily pipeline.
+
 ---
 
 ## Legacy v0.1 feed-to-podcast pipeline
