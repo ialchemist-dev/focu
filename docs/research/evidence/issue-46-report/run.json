@@ -1,0 +1,14 @@
+{
+ "slug": "focu-issue46-world-models-active-measurement",
+ "profile_version": "pv-2026-11-16-manual",
+ "applied_preference_ids": ["pa_editorial_intent", "pa_topdown_overview", "pa_citations_required", "pa_visuals_preferred", "pa_english_queries_chinese_report"],
+ "preference_source": "manual_current_context",
+ "tools_actually_used": ["WebSearch (English queries)", "curl (public pages, no login)", "web-fetch agent (OpenReview, blocked by browser challenge)", "python3 stdlib HTML-to-text", "docs/research-reports/kit/template.html", "docs/research-reports/kit/check_report.py", "docs/research-reports/kit/render_qa.mjs (existing Playwright + system Chrome, nothing installed)"],
+ "builder_addenda": [],
+ "qa": {
+  "structure": {"state": "passed", "evidence": "python3 docs/research-reports/kit/check_report.py <research_dir> (0 errors, 0 warnings)"},
+  "render": {"state": "passed", "evidence": "render-qa/render-qa.json (task-local, outside Git; 390/1440 x light/dark, screenshots outside Git)"},
+  "semantic": {"state": "passed", "reviewer": "same_worker", "note": "Automated quote-in-snapshot check: 14/15 quoted claims verbatim in local snapshot; B2 matches after en-dash->hyphen normalisation, I1 after removing markdown bold. Same worker as writer; no independent review. Paper full text (S2/S3) not read."},
+  "owner": {"state": "pending"}
+ }
+}
