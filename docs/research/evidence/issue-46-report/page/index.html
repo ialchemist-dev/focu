@@ -50,6 +50,9 @@ li.src{border-top:1px solid var(--line);padding:10px 0;scroll-margin-top:12px}li
 li.src a{overflow-wrap:anywhere;word-break:break-all}li.src .id{font-weight:700;margin-right:6px}li.src .q{color:var(--ink2);font-size:.9rem}
 footer{margin:40px 0 30px;padding-top:14px;border-top:1px solid var(--line);font-size:.88rem;color:var(--ink2)}
 .scroll{overflow-x:auto}
+/* v2 (2026-11-16): mobile reflow of hand-drawn diagrams; same text, stacked layout below 640px */
+figure svg.dg-narrow{display:none;max-width:400px}figure svg.chart{max-width:420px}
+@media (max-width:640px){figure svg.dg-wide{display:none}figure svg.dg-narrow{display:block}}
 </style></head><body>
 <header class="top"><div class="wrap"><span class="crumb">FOCU 研究报告 · #46</span>
 <button class="theme" id="theme" type="button" aria-label="切换深浅色">切换深色</button></div></header>
@@ -81,7 +84,7 @@ footer{margin:40px 0 30px;padding-top:14px;border-top:1px solid var(--line);font
 
 <h2 id="map">证据地图：三套口径，不能合并</h2>
 <figure>
-<svg viewBox="0 0 560 300" role="img" aria-label="证据地图：论文、博文、新闻稿三类来源与各自口径">
+<svg class="dg-wide" viewBox="0 0 560 300" role="img" aria-label="证据地图：论文、博文、新闻稿三类来源与各自口径">
 <title>证据地图</title>
 <rect class="box hl" x="8" y="10" width="172" height="130" rx="10"/>
 <text x="20" y="34" font-weight="600" font-size="14">论文摘要 S1</text>
@@ -107,6 +110,32 @@ footer{margin:40px 0 30px;padding-top:14px;border-top:1px solid var(--line);font
 <path class="edge" d="M94 140 V170"/><path class="edge" d="M280 140 V170"/>
 <text x="20" y="258" font-size="12" class="sub">指标各不相同：IoU 增益 / 铜金属量误差 / 铜品位误差；</text>
 <text x="20" y="278" font-size="12" class="sub">样本各不相同：合成世界 / 2 个真实矿床 / 1 个项目</text>
+</svg>
+<svg class="dg-narrow" viewBox="0 0 320 708" role="img" aria-label="证据地图（窄屏纵向版）：论文、博文、新闻稿三类来源与各自口径">
+<title>证据地图</title>
+<rect class="box hl" x="18" y="4" width="298" height="134" rx="10"/>
+<text x="30" y="30" font-size="15" font-weight="600">论文摘要 S1</text>
+<text x="30" y="54" font-size="14" class="sub">合成世界（400 / 1,536）</text>
+<text x="30" y="76" font-size="14">IoU 0.071→0.308</text>
+<text x="30" y="98" font-size="14">增益 0.0564 vs 0.0464</text>
+<text x="30" y="120" font-size="14" class="sub">workshop poster</text>
+<rect class="box" x="18" y="152" width="298" height="134" rx="10"/>
+<text x="30" y="178" font-size="15" font-weight="600">Fleet 博文 S4 / 帖子 S5</text>
+<text x="30" y="202" font-size="14" class="sub">合成：47%（vs 地质统计）</text>
+<text x="30" y="224" font-size="14">真实 2 矿床：89%</text>
+<text x="30" y="246" font-size="14">vs Claude：约 40%</text>
+<text x="30" y="268" font-size="14" class="sub">公司声称，方法未公开</text>
+<rect class="box" x="18" y="300" width="298" height="134" rx="10"/>
+<text x="30" y="326" font-size="15" font-weight="600">新闻稿 S6</text>
+<text x="30" y="350" font-size="14" class="sub">Valeriano 单一项目</text>
+<text x="30" y="372" font-size="14">品位误差 −38%</text>
+<text x="30" y="394" font-size="14">最深外扩孔最多 −67%</text>
+<text x="30" y="416" font-size="14" class="sub">训练：1,000 万合成世界</text>
+<path class="edge" d="M18 64 H8 V484 H18 M8 212 H18"/>
+<rect class="box" x="18" y="448" width="298" height="146" rx="10"/>
+<text x="30" y="474" font-size="15" font-weight="600"><tspan x="30">论文全文 / 附录 S3：</tspan><tspan x="30" dy="22">浏览器验证拦截，未读</tspan></text>
+<text x="30" y="524" font-size="14" class="sub"><tspan x="30">96 世界、约 75% vs 普通克里金</tspan><tspan x="30" dy="22">（只见于 issue 转录 S7）</tspan><tspan x="30" dy="22">→ 未核实</tspan></text>
+<text x="4" y="622" font-size="14" class="sub"><tspan x="4">指标各不相同：IoU 增益 / </tspan><tspan x="4" dy="22">铜金属量误差 / 铜品位误差；</tspan><tspan x="4" dy="30">样本各不相同：合成世界 / </tspan><tspan x="4" dy="22">2 个真实矿床 / 1 个项目</tspan></text>
 </svg>
 <figcaption>手绘示意图，非数值图。数字取自 claims P1–P5、B1、B3、B4、T1–T3、I1，各自来源见下文表格。</figcaption>
 </figure>
@@ -148,7 +177,7 @@ footer{margin:40px 0 30px;padding-top:14px;border-top:1px solid var(--line);font
 </figure>
 
 <figure>
-<svg viewBox="0 0 560 170" role="img" aria-label="机制示意：证据进入 reader，ranker 用模拟测量结果选下一孔，钻探后回到 reader">
+<svg class="dg-wide" viewBox="0 0 560 170" role="img" aria-label="机制示意：证据进入 reader，ranker 用模拟测量结果选下一孔，钻探后回到 reader">
 <title>reader 与 ranker 的闭环</title>
 <rect class="box" x="6" y="50" width="120" height="60" rx="10"/><text x="16" y="76" font-size="12">地表调查 + 钻孔</text><text x="16" y="96" font-size="12" class="sub">（多模态证据）</text>
 <rect class="box hl" x="150" y="50" width="120" height="60" rx="10"/><text x="160" y="76" font-size="13" font-weight="600">Reader</text><text x="160" y="96" font-size="12" class="sub">重建 3D 地下状态</text>
@@ -157,6 +186,26 @@ footer{margin:40px 0 30px;padding-top:14px;border-top:1px solid var(--line);font
 <path class="edge" d="M126 80 H150"/><path class="edge" d="M270 80 H294"/><path class="edge" d="M414 80 H438"/>
 <path class="edge" d="M496 110 V140 H66 V110"/>
 <text x="180" y="160" font-size="12" class="sub">隐藏状态在决策时间尺度上视为静止；行动只揭示证据</text>
+</svg>
+<svg class="dg-narrow" viewBox="0 0 320 412" role="img" aria-label="机制示意（窄屏纵向版）：证据进入 reader，ranker 用模拟测量结果选下一孔，钻探后回到 reader">
+<title>reader 与 ranker 的闭环</title>
+<rect class="box" x="4" y="4" width="240" height="66" rx="10"/>
+<text x="18" y="32" font-size="14">地表调查 + 钻孔</text>
+<text x="18" y="56" font-size="14" class="sub">（多模态证据）</text>
+<rect class="box hl" x="4" y="96" width="240" height="66" rx="10"/>
+<text x="18" y="124" font-size="15" font-weight="600">Reader</text>
+<text x="18" y="148" font-size="14" class="sub">重建 3D 地下状态</text>
+<rect class="box hl" x="4" y="188" width="240" height="66" rx="10"/>
+<text x="18" y="216" font-size="15" font-weight="600">Action ranker</text>
+<text x="18" y="240" font-size="14" class="sub">模拟结果选下一孔</text>
+<rect class="box" x="4" y="280" width="240" height="66" rx="10"/>
+<text x="18" y="308" font-size="14">实际钻探</text>
+<text x="18" y="332" font-size="14" class="sub">揭示新证据</text>
+<path class="edge" d="M124 70 V96"/>
+<path class="edge" d="M124 162 V188"/>
+<path class="edge" d="M124 254 V280"/>
+<path class="edge" d="M244 313 H290 V37 H244"/>
+<text x="4" y="380" font-size="14" class="sub"><tspan x="4">隐藏状态在决策时间尺度上视为静止；</tspan><tspan x="4" dy="22">行动只揭示证据</tspan></text>
 </svg>
 <figcaption>非数值示意，依据 S1 摘要和 S4 对 reader / ranker 的描述 <a class="cite" href="#src-S1">S1</a> <a class="cite" href="#src-S4">S4</a>。</figcaption>
 </figure>
@@ -255,11 +304,11 @@ function fmt(v){return Number(v).toLocaleString('en-US')}
 document.querySelectorAll('script[data-chart]').forEach(function(s){
   var spec;try{spec=JSON.parse(s.textContent)}catch(e){console.error('chart JSON',e);return}
   if(spec.type!=='bar'||!spec.series||!spec.series.length)return;
-  var W=360,L=110,R=64,row=34,top=28,H=top+spec.series.length*row+8;
+  var W=320,L=104,R=58,row=36,top=30,H=top+spec.series.length*row+8;
   var max=Math.max.apply(null,spec.series.map(function(p){return Math.abs(p.value)}))||1;
-  var svg=el('svg',{viewBox:'0 0 '+W+' '+H,role:'img','aria-label':spec.title+'（'+(spec.unit||'')+'）'});
+  var svg=el('svg',{'class':'chart',viewBox:'0 0 '+W+' '+H,role:'img','aria-label':spec.title+'（'+(spec.unit||'')+'）'});
   svg.appendChild(el('title',{},spec.title));
-  var g=el('g',{'font-size':'13'});svg.appendChild(g);
+  var g=el('g',{'font-size':'14'});svg.appendChild(g);
   g.appendChild(el('text',{x:0,y:16,'font-weight':'600'},spec.title+(spec.unit?'（'+spec.unit+'）':'')));
   g.appendChild(el('line',{'class':'grid',x1:L,y1:top-4,x2:L,y2:H-4}));
   spec.series.forEach(function(p,i){
