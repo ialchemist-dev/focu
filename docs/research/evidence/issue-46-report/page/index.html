@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark"><link rel="icon" href="data:,">
+<title>Olivier & Muir 主动测量世界模型：数字核查（FOCU #46）</title>
+<style>
+:root{--bg:#fcfcfb;--card:#fff;--ink:#0b0b0b;--ink2:#52514e;--muted:#6b6a66;--line:#e3e2dd;--accent:#2a78d6;--accent-soft:#cde2fb;--warn-bg:#fff4e0;--warn-ink:#7a4b00;--chip:#f1f0ec;--code:#f3f2ee}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#1a1a19;--card:#232322;--ink:#f0efec;--ink2:#c3c2b7;--muted:#a3a29a;--line:#3a3a37;--accent:#3987e5;--accent-soft:#184f95;--warn-bg:#3a2c10;--warn-ink:#f2cf8a;--chip:#2d2d2b;--code:#2b2b29}}
+:root[data-theme=dark]{--bg:#1a1a19;--card:#232322;--ink:#f0efec;--ink2:#c3c2b7;--muted:#a3a29a;--line:#3a3a37;--accent:#3987e5;--accent-soft:#184f95;--warn-bg:#3a2c10;--warn-ink:#f2cf8a;--chip:#2d2d2b;--code:#2b2b29}
+*{box-sizing:border-box}html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.7 -apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Noto Sans CJK SC","Microsoft YaHei",sans-serif}
+a{color:var(--accent)}code{background:var(--code);padding:0 .3em;border-radius:4px;font-size:.92em;word-break:break-word}
+.wrap{max-width:980px;margin:0 auto;padding:0 18px}
+header.top{border-bottom:1px solid var(--line);background:var(--card)}
+header.top .wrap{display:flex;gap:12px;align-items:center;justify-content:space-between;min-height:56px;flex-wrap:wrap}
+.crumb{color:var(--ink2);font-size:.92rem}
+button.theme{min-height:44px;min-width:44px;border:1px solid var(--line);background:var(--chip);color:var(--ink);border-radius:10px;padding:0 12px;font:inherit;cursor:pointer}
+h1{font-size:1.75rem;line-height:1.3;margin:22px 0 6px}h2{font-size:1.3rem;margin:36px 0 10px;scroll-margin-top:12px}h3{font-size:1.08rem;margin:20px 0 6px}
+.meta{color:var(--ink2);font-size:.92rem}
+.hero{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 18px 8px;margin:16px 0}
+.hero .q{font-size:1.05rem;color:var(--ink2)}.hero .a{font-size:1.15rem;font-weight:600;margin:6px 0 10px}
+.takeaways{list-style:none;padding:0;margin:0;display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+.takeaways li{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.takeaways b{display:block;margin-bottom:2px}
+.scope{font-size:.93rem;color:var(--ink2);margin:12px 0}
+nav.toc{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px 14px;margin:14px 0}
+nav.toc ol{margin:0;padding-left:1.3em;columns:2;column-gap:28px}nav.toc a{display:inline-block;padding:6px 0;min-height:36px}
+@media (max-width:640px){nav.toc ol{columns:1}h1{font-size:1.45rem}}
+.cite{display:inline-flex;align-items:center;justify-content:center;min-height:28px;min-width:28px;font-size:.78rem;line-height:1;padding:4px 7px;margin:0 1px;border-radius:6px;background:var(--chip);text-decoration:none;vertical-align:1px}
+.tag{display:inline-block;font-size:.75rem;padding:1px 7px;border-radius:999px;border:1px solid var(--line);color:var(--ink2);white-space:nowrap}
+.tag.reported_fact{border-color:var(--accent)}.tag.vendor_claim{border-style:dashed}.tag.estimate{background:var(--chip)}.tag.derived{font-style:italic}.tag.synthesis{font-style:italic;border-color:var(--warn-ink)}
+.concl{border-left:4px solid var(--accent);background:var(--card);padding:10px 14px;border-radius:0 10px 10px 0;margin:14px 0}
+.synthesis{border-left:4px dashed var(--warn-ink);background:var(--card);padding:10px 14px;border-radius:0 10px 10px 0;margin:14px 0}
+.warn{background:var(--warn-bg);color:var(--warn-ink);border-radius:10px;padding:10px 14px;margin:12px 0;font-size:.95rem}
+figure{margin:18px 0;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px}
+figure svg{width:100%;max-width:560px;height:auto;display:block;margin:0 auto}figcaption{font-size:.88rem;color:var(--ink2);margin-top:8px}
+svg text{fill:var(--ink);font-family:inherit}svg .sub{fill:var(--ink2)}svg .grid{stroke:var(--line)}
+svg .box{fill:var(--bg);stroke:var(--line);stroke-width:1.5}svg .box.hl{stroke:var(--accent);stroke-width:2}
+svg .bar{fill:var(--accent)}svg .bar2{fill:var(--accent-soft)}svg .edge{stroke:var(--ink2);stroke-width:1.5;fill:none}
+table{border-collapse:collapse;width:100%;font-size:.94rem;background:var(--card)}
+th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}th{background:var(--chip)}
+@media (max-width:640px){table.cards,table.cards tbody,table.cards tr,table.cards td{display:block;width:100%}
+table.cards thead{display:none}table.cards tr{border:1px solid var(--line);border-radius:12px;margin:0 0 12px;padding:6px 10px;background:var(--card)}
+table.cards td{border:0;border-bottom:1px dashed var(--line);padding:6px 0}table.cards td:last-child{border-bottom:0}
+table.cards td::before{content:attr(data-label);display:block;font-size:.78rem;color:var(--muted);font-weight:600}}
+details{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:6px 14px;margin:10px 0}
+summary{cursor:pointer;min-height:44px;display:flex;align-items:center;font-weight:600}
+ol.sources{padding-left:0;list-style:none}
+li.src{border-top:1px solid var(--line);padding:10px 0;scroll-margin-top:12px}li.src:target{background:var(--accent-soft);border-radius:8px;padding:10px}
+li.src a{overflow-wrap:anywhere;word-break:break-all}li.src .id{font-weight:700;margin-right:6px}li.src .q{color:var(--ink2);font-size:.9rem}
+footer{margin:40px 0 30px;padding-top:14px;border-top:1px solid var(--line);font-size:.88rem;color:var(--ink2)}
+.scroll{overflow-x:auto}
+/* v2 (2026-11-16): mobile reflow of hand-drawn diagrams; same text, stacked layout below 640px */
+figure svg.dg-narrow{display:none;max-width:400px}figure svg.chart{max-width:420px}
+@media (max-width:640px){figure svg.dg-wide{display:none}figure svg.dg-narrow{display:block}}
+</style></head><body>
+<header class="top"><div class="wrap"><span class="crumb">FOCU 研究报告 · #46</span>
+<button class="theme" id="theme" type="button" aria-label="切换深浅色">切换深色</button></div></header>
+<main class="wrap">
+<h1>Olivier &amp; Muir《World Models for Active Measurement》：哪些数字来自论文，哪些来自博文</h1>
+<p class="meta">截至 2026-11-16 · 7 个来源（其中 2 个因浏览器验证不可读） · 深度研究（FOCU #46 数字核查）</p>
+
+<section class="hero" id="overview" aria-label="一分钟总览">
+<div class="q">问题：#46 引用的“89% 低于地质统计”“约 40% 低于 Claude”，是论文结果，还是只出现在帖子里？论文到底证明了什么？</div>
+<div class="a">结论：这两个数字出自 Fleet 2026-11-13 的博文 <a class="cite" href="#src-S4">S4</a>，LinkedIn 帖复述了它们 <a class="cite" href="#src-S5">S5</a>。测试对象是两个真实斑岩铜矿床。NeurIPS 公开摘要只有合成世界结果，并把野外迁移列为下一步 <a class="cite" href="#src-S1">S1</a>。论文全文读不到，所以“论文中是否也有这两个数字”仍未知，这不等于它们是假的。</div>
+<ul class="takeaways">
+<li><b>论文（合成数据）：IoU 0.071 → 0.308</b>400 个诊断世界，0 孔到 20 孔；打乱测值后降到 0.028 <span class="tag reported_fact" data-claim="P2" data-class="reported_fact">论文摘要</span> <a class="cite" href="#src-S1">S1</a></li>
+<li><b>排序策略增益 0.0564，对比 0.0464</b>1,536 个留出合成世界；相对优势 21.6% 是派生值 <span class="tag derived" data-claim="D1" data-class="derived">派生</span> <a class="cite" href="#src-S1">S1</a></li>
+<li><b>89% 和约 40%：两个真实矿床</b>0.2% Cu 以上铜金属量误差，只见于博文和帖子 <span class="tag vendor_claim" data-claim="B3" data-class="vendor_claim">公司声称</span> <a class="cite" href="#src-S4">S4</a> <a class="cite" href="#src-S5">S5</a></li>
+<li><b>Tau 3.8：38%，最多 67%</b>单一项目 Valeriano，铜品位误差对比克里金 <span class="tag vendor_claim" data-claim="T2" data-class="vendor_claim">公司声称</span> <a class="cite" href="#src-S6">S6</a></li>
+</ul>
+<p class="scope">范围：论文、作者帖子、Fleet 博文与新闻稿，2026-10 到 2026-11-16。读者：关注地下 ML 的 FOCU owner。会议性质为 NeurIPS 2026 <b>workshop poster</b>，不是主会，也不是野外验证。未能核实：4 项（见 <a href="#limits">局限</a>）。</p>
+</section>
+
+<nav class="toc" aria-label="目录"><ol>
+<li><a href="#map">证据地图</a></li>
+<li><a href="#q1">论文报告了什么</a></li>
+<li><a href="#q2">89% 与约 40% 的出处</a></li>
+<li><a href="#q3">Tau 3.8 新闻稿</a></li>
+<li><a href="#q4">对地下 ML / 地热的意义（推断）</a></li>
+<li><a href="#limits">无法核实 &amp; 方法</a></li>
+<li><a href="#sources">来源</a></li>
+</ol></nav>
+
+<h2 id="map">证据地图：三套口径，不能合并</h2>
+<figure>
+<svg class="dg-wide" viewBox="0 0 560 300" role="img" aria-label="证据地图：论文、博文、新闻稿三类来源与各自口径">
+<title>证据地图</title>
+<rect class="box hl" x="8" y="10" width="172" height="130" rx="10"/>
+<text x="20" y="34" font-weight="600" font-size="14">论文摘要 S1</text>
+<text x="20" y="56" font-size="12" class="sub">合成世界（400 / 1,536）</text>
+<text x="20" y="76" font-size="12">IoU 0.071→0.308</text>
+<text x="20" y="96" font-size="12">增益 0.0564 vs 0.0464</text>
+<text x="20" y="118" font-size="12" class="sub">workshop poster</text>
+<rect class="box" x="194" y="10" width="172" height="130" rx="10"/>
+<text x="206" y="34" font-weight="600" font-size="14">Fleet 博文 S4 / 帖子 S5</text>
+<text x="206" y="56" font-size="12" class="sub">合成：47%（vs 地质统计）</text>
+<text x="206" y="76" font-size="12">真实 2 矿床：89%</text>
+<text x="206" y="96" font-size="12">vs Claude：约 40%</text>
+<text x="206" y="118" font-size="12" class="sub">公司声称，方法未公开</text>
+<rect class="box" x="380" y="10" width="172" height="130" rx="10"/>
+<text x="392" y="34" font-weight="600" font-size="14">新闻稿 S6</text>
+<text x="392" y="56" font-size="12" class="sub">Valeriano 单一项目</text>
+<text x="392" y="76" font-size="12">品位误差 −38%</text>
+<text x="392" y="96" font-size="12">最深外扩孔最多 −67%</text>
+<text x="392" y="118" font-size="12" class="sub">训练：1,000 万合成世界</text>
+<rect class="box" x="8" y="170" width="544" height="56" rx="10"/>
+<text x="20" y="194" font-weight="600" font-size="13">论文全文 / 附录 S3：浏览器验证拦截，未读</text>
+<text x="20" y="214" font-size="12" class="sub">96 世界、约 75% vs 普通克里金（只见于 issue 转录 S7）→ 未核实</text>
+<path class="edge" d="M94 140 V170"/><path class="edge" d="M280 140 V170"/>
+<text x="20" y="258" font-size="12" class="sub">指标各不相同：IoU 增益 / 铜金属量误差 / 铜品位误差；</text>
+<text x="20" y="278" font-size="12" class="sub">样本各不相同：合成世界 / 2 个真实矿床 / 1 个项目</text>
+</svg>
+<svg class="dg-narrow" viewBox="0 0 320 708" role="img" aria-label="证据地图（窄屏纵向版）：论文、博文、新闻稿三类来源与各自口径">
+<title>证据地图</title>
+<rect class="box hl" x="18" y="4" width="298" height="134" rx="10"/>
+<text x="30" y="30" font-size="15" font-weight="600">论文摘要 S1</text>
+<text x="30" y="54" font-size="14" class="sub">合成世界（400 / 1,536）</text>
+<text x="30" y="76" font-size="14">IoU 0.071→0.308</text>
+<text x="30" y="98" font-size="14">增益 0.0564 vs 0.0464</text>
+<text x="30" y="120" font-size="14" class="sub">workshop poster</text>
+<rect class="box" x="18" y="152" width="298" height="134" rx="10"/>
+<text x="30" y="178" font-size="15" font-weight="600">Fleet 博文 S4 / 帖子 S5</text>
+<text x="30" y="202" font-size="14" class="sub">合成：47%（vs 地质统计）</text>
+<text x="30" y="224" font-size="14">真实 2 矿床：89%</text>
+<text x="30" y="246" font-size="14">vs Claude：约 40%</text>
+<text x="30" y="268" font-size="14" class="sub">公司声称，方法未公开</text>
+<rect class="box" x="18" y="300" width="298" height="134" rx="10"/>
+<text x="30" y="326" font-size="15" font-weight="600">新闻稿 S6</text>
+<text x="30" y="350" font-size="14" class="sub">Valeriano 单一项目</text>
+<text x="30" y="372" font-size="14">品位误差 −38%</text>
+<text x="30" y="394" font-size="14">最深外扩孔最多 −67%</text>
+<text x="30" y="416" font-size="14" class="sub">训练：1,000 万合成世界</text>
+<path class="edge" d="M18 64 H8 V484 H18 M8 212 H18"/>
+<rect class="box" x="18" y="448" width="298" height="146" rx="10"/>
+<text x="30" y="474" font-size="15" font-weight="600"><tspan x="30">论文全文 / 附录 S3：</tspan><tspan x="30" dy="22">浏览器验证拦截，未读</tspan></text>
+<text x="30" y="524" font-size="14" class="sub"><tspan x="30">96 世界、约 75% vs 普通克里金</tspan><tspan x="30" dy="22">（只见于 issue 转录 S7）</tspan><tspan x="30" dy="22">→ 未核实</tspan></text>
+<text x="4" y="622" font-size="14" class="sub"><tspan x="4">指标各不相同：IoU 增益 / </tspan><tspan x="4" dy="22">铜金属量误差 / 铜品位误差；</tspan><tspan x="4" dy="30">样本各不相同：合成世界 / </tspan><tspan x="4" dy="22">2 个真实矿床 / 1 个项目</tspan></text>
+</svg>
+<figcaption>手绘示意图，非数值图。数字取自 claims P1–P5、B1、B3、B4、T1–T3、I1，各自来源见下文表格。</figcaption>
+</figure>
+
+<h2 id="q1">1. 论文报告了什么（合成世界）</h2>
+<table class="cards"><thead><tr><th>指标</th><th>数值（类别）</th><th>样本 / 划分</th><th>来源</th></tr></thead><tbody>
+<tr><td data-label="指标">Cu-mass IoU，不钻孔</td><td data-label="数值">0.071 <span class="tag reported_fact" data-claim="P1" data-class="reported_fact">论文摘要</span></td><td data-label="样本">400 个合成诊断世界</td><td data-label="来源"><a class="cite" href="#src-S1">S1</a></td></tr>
+<tr><td data-label="指标">Cu-mass IoU，20 孔后</td><td data-label="数值">0.308 <span class="tag reported_fact" data-claim="P2" data-class="reported_fact">论文摘要</span></td><td data-label="样本">同上</td><td data-label="来源"><a class="cite" href="#src-S1">S1</a></td></tr>
+<tr><td data-label="指标">打乱钻孔测值（对照）</td><td data-label="数值">0.028 <span class="tag reported_fact" data-claim="P3" data-class="reported_fact">论文摘要</span></td><td data-label="样本">同上</td><td data-label="来源"><a class="cite" href="#src-S1">S1</a></td></tr>
+<tr><td data-label="指标">学习排序策略的 IoU 增益（公共区域，5 孔）</td><td data-label="数值">0.0564 <span class="tag reported_fact" data-claim="P4" data-class="reported_fact">论文摘要</span></td><td data-label="样本">1,536 个留出合成世界，reader 冻结</td><td data-label="来源"><a class="cite" href="#src-S1">S1</a></td></tr>
+<tr><td data-label="指标">预测铜靶向基线</td><td data-label="数值">0.0464 <span class="tag reported_fact" data-claim="P5" data-class="reported_fact">论文摘要</span></td><td data-label="样本">同上</td><td data-label="来源"><a class="cite" href="#src-S1">S1</a></td></tr>
+<tr><td data-label="指标">随机选孔基线</td><td data-label="数值">0.0276 <span class="tag reported_fact" data-claim="P6" data-class="reported_fact">论文摘要</span></td><td data-label="样本">同上</td><td data-label="来源"><a class="cite" href="#src-S1">S1</a></td></tr>
+<tr><td data-label="指标">相对预测铜靶向的优势</td><td data-label="数值">21.6% <span class="tag derived" data-claim="D1" data-class="derived">派生</span></td><td data-label="样本">(0.0564 / 0.0464 − 1) × 100 = 21.55</td><td data-label="来源"><a class="cite" href="#src-S1">S1</a></td></tr>
+<tr><td data-label="指标">总铜量 MAE 对比局部普通克里金</td><td data-label="数值">约 75% 更低 <span class="tag reported_fact" data-claim="I1" data-class="reported_fact">issue 转录，未核实</span></td><td data-label="样本">96 个合成世界（据 S7）</td><td data-label="来源"><a class="cite" href="#src-S7">S7</a></td></tr>
+</tbody></table>
+
+<figure>
+<script type="application/json" data-chart>
+{"type":"bar","title":"Cu-mass IoU（400 世界）","unit":"","series":[
+ {"label":"不钻孔","value":0.071,"claim":"P1"},
+ {"label":"20 孔后","value":0.308,"claim":"P2"},
+ {"label":"打乱测值","value":0.028,"claim":"P3"}
+]}
+</script>
+<details><summary>数据表</summary><table><tr><th>条件</th><th>IoU</th><th>claim</th></tr><tr><td>不钻孔</td><td>0.071</td><td>P1</td></tr><tr><td>20 孔后</td><td>0.308</td><td>P2</td></tr><tr><td>打乱测值</td><td>0.028</td><td>P3</td></tr></table></details>
+<figcaption>数据：claims.json P1–P3 <a class="cite" href="#src-S1">S1</a>。打乱测值后低于不钻孔，说明 reader 用到了测值内容，而不只是孔位。</figcaption>
+</figure>
+
+<figure>
+<script type="application/json" data-chart>
+{"type":"bar","title":"5 孔 IoU 增益（1,536 世界）","unit":"","series":[
+ {"label":"学习排序","value":0.0564,"claim":"P4"},
+ {"label":"预测铜靶向","value":0.0464,"claim":"P5"},
+ {"label":"随机","value":0.0276,"claim":"P6"}
+]}
+</script>
+<details><summary>数据表</summary><table><tr><th>策略</th><th>增益</th><th>claim</th></tr><tr><td>学习排序</td><td>0.0564</td><td>P4</td></tr><tr><td>预测铜靶向</td><td>0.0464</td><td>P5</td></tr><tr><td>随机</td><td>0.0276</td><td>P6</td></tr></table></details>
+<figcaption>数据：claims.json P4–P6 <a class="cite" href="#src-S1">S1</a>。摘要说相对四个基线的优势在多重比较校正后仍成立；另外两个基线的数值在全文中，未读到。</figcaption>
+</figure>
+
+<figure>
+<svg class="dg-wide" viewBox="0 0 560 170" role="img" aria-label="机制示意：证据进入 reader，ranker 用模拟测量结果选下一孔，钻探后回到 reader">
+<title>reader 与 ranker 的闭环</title>
+<rect class="box" x="6" y="50" width="120" height="60" rx="10"/><text x="16" y="76" font-size="12">地表调查 + 钻孔</text><text x="16" y="96" font-size="12" class="sub">（多模态证据）</text>
+<rect class="box hl" x="150" y="50" width="120" height="60" rx="10"/><text x="160" y="76" font-size="13" font-weight="600">Reader</text><text x="160" y="96" font-size="12" class="sub">重建 3D 地下状态</text>
+<rect class="box hl" x="294" y="50" width="120" height="60" rx="10"/><text x="304" y="76" font-size="13" font-weight="600">Action ranker</text><text x="304" y="96" font-size="12" class="sub">模拟结果选下一孔</text>
+<rect class="box" x="438" y="50" width="116" height="60" rx="10"/><text x="448" y="76" font-size="12">实际钻探</text><text x="448" y="96" font-size="12" class="sub">揭示新证据</text>
+<path class="edge" d="M126 80 H150"/><path class="edge" d="M270 80 H294"/><path class="edge" d="M414 80 H438"/>
+<path class="edge" d="M496 110 V140 H66 V110"/>
+<text x="180" y="160" font-size="12" class="sub">隐藏状态在决策时间尺度上视为静止；行动只揭示证据</text>
+</svg>
+<svg class="dg-narrow" viewBox="0 0 320 412" role="img" aria-label="机制示意（窄屏纵向版）：证据进入 reader，ranker 用模拟测量结果选下一孔，钻探后回到 reader">
+<title>reader 与 ranker 的闭环</title>
+<rect class="box" x="4" y="4" width="240" height="66" rx="10"/>
+<text x="18" y="32" font-size="14">地表调查 + 钻孔</text>
+<text x="18" y="56" font-size="14" class="sub">（多模态证据）</text>
+<rect class="box hl" x="4" y="96" width="240" height="66" rx="10"/>
+<text x="18" y="124" font-size="15" font-weight="600">Reader</text>
+<text x="18" y="148" font-size="14" class="sub">重建 3D 地下状态</text>
+<rect class="box hl" x="4" y="188" width="240" height="66" rx="10"/>
+<text x="18" y="216" font-size="15" font-weight="600">Action ranker</text>
+<text x="18" y="240" font-size="14" class="sub">模拟结果选下一孔</text>
+<rect class="box" x="4" y="280" width="240" height="66" rx="10"/>
+<text x="18" y="308" font-size="14">实际钻探</text>
+<text x="18" y="332" font-size="14" class="sub">揭示新证据</text>
+<path class="edge" d="M124 70 V96"/>
+<path class="edge" d="M124 162 V188"/>
+<path class="edge" d="M124 254 V280"/>
+<path class="edge" d="M244 313 H290 V37 H244"/>
+<text x="4" y="380" font-size="14" class="sub"><tspan x="4">隐藏状态在决策时间尺度上视为静止；</tspan><tspan x="4" dy="22">行动只揭示证据</tspan></text>
+</svg>
+<figcaption>非数值示意，依据 S1 摘要和 S4 对 reader / ranker 的描述 <a class="cite" href="#src-S1">S1</a> <a class="cite" href="#src-S4">S4</a>。</figcaption>
+</figure>
+
+<div class="concl"><b>本节结论：</b>摘要层面的数字都来自合成世界，内部一致，21.6% 可以复算出来。它们是一份 workshop poster 的作者自报结果，不是野外验证。issue 里的 75% 对比克里金，在可读版本的摘要中找不到。</div>
+
+<h2 id="q2">2. 89% 与约 40% 的出处</h2>
+<div class="warn">出处：Fleet 博文 “Beyond prediction: Subsurface World Models” 中的 “Closing the sim-to-real gap” 一节（2026-11-13）<a class="cite" href="#src-S4">S4</a>；LinkedIn 帖复述 <a class="cite" href="#src-S5">S5</a>。S1 没有这两个数字。S3 读不到，所以论文是否也包含它们仍是<b>未知</b>。</div>
+<table class="cards"><thead><tr><th>口径</th><th>对比对象</th><th>数值（类别）</th><th>来源</th></tr></thead><tbody>
+<tr><td data-label="口径">2 个真实斑岩铜矿床，留出钻孔，0.2% Cu 以上铜金属量</td><td data-label="对比对象">常规地质统计</td><td data-label="数值">约 89% 更低 <span class="tag vendor_claim" data-claim="B3" data-class="vendor_claim">公司声称</span></td><td data-label="来源"><a class="cite" href="#src-S4">S4</a> <a class="cite" href="#src-S5">S5</a></td></tr>
+<tr><td data-label="口径">同上</td><td data-label="对比对象">Opus 5.5、Fable 5.1；Fable 5.2</td><td data-label="数值">约 40% 更低；与 Fable 5.2 持平 <span class="tag vendor_claim" data-claim="B4" data-class="vendor_claim">公司声称</span></td><td data-label="来源"><a class="cite" href="#src-S4">S4</a> <a class="cite" href="#src-S5">S5</a></td></tr>
+<tr><td data-label="口径">同上，0.35% Cu 品位线</td><td data-label="对比对象">Fable 5.1/5.2；Opus 5.5</td><td data-label="数值">55%；64% <span class="tag vendor_claim" data-claim="B5" data-class="vendor_claim">公司声称</span></td><td data-label="来源"><a class="cite" href="#src-S4">S4</a></td></tr>
+<tr><td data-label="口径">留出合成矿床，早期钻孔间距约 200–400 m，0.2% Cu 以上总含铜量</td><td data-label="对比对象">常规地质统计</td><td data-label="数值">约 47% 更低 <span class="tag vendor_claim" data-claim="B1" data-class="vendor_claim">公司声称</span></td><td data-label="来源"><a class="cite" href="#src-S4">S4</a></td></tr>
+<tr><td data-label="口径">同上</td><td data-label="对比对象">Fable 5.2 / Opus 5.5 / Fable 5.1</td><td data-label="数值">25% / 33% / 47% <span class="tag vendor_claim" data-claim="B2" data-class="vendor_claim">公司声称</span></td><td data-label="来源"><a class="cite" href="#src-S4">S4</a></td></tr>
+</tbody></table>
+<figure>
+<script type="application/json" data-chart>
+{"type":"bar","title":"博文：2 个真实矿床误差降幅","unit":"%","series":[
+ {"label":"vs 地质统计","value":89,"claim":"B3"},
+ {"label":"vs Opus 5.5","value":40,"claim":"B4","key":"opus_5_5"},
+ {"label":"vs Fable 5.1","value":40,"claim":"B4","key":"fable_5_1"},
+ {"label":"vs Fable 5.2","value":0,"claim":"B4","key":"fable_5_2"}
+]}
+</script>
+<details><summary>数据表</summary><table><tr><th>对比</th><th>% 更低误差</th><th>claim</th></tr><tr><td>vs 地质统计</td><td>89</td><td>B3</td></tr><tr><td>vs Opus 5.5</td><td>40</td><td>B4.opus_5_5</td></tr><tr><td>vs Fable 5.1</td><td>40</td><td>B4.fable_5_1</td></tr><tr><td>vs Fable 5.2</td><td>0（持平）</td><td>B4.fable_5_2</td></tr></table></details>
+<figcaption>数据：claims.json B3、B4 <a class="cite" href="#src-S4">S4</a>。都是公司声称；矿床名称、留出孔数、误差定义均未披露。“约”字按原文保留。</figcaption>
+</figure>
+<div class="concl"><b>本节结论：</b>#46 的后续问题有了答案。两个数字的出处是博文和帖子，测试对象是两个真实矿床，和论文摘要的合成指标不是一回事，不能写成“论文显示 89%”。论文全文是否包含这两个数字，还要等 PDF 可读后再确认。</div>
+
+<h2 id="q3">3. Tau 3.8 新闻稿（另一套口径）</h2>
+<table class="cards"><thead><tr><th>项目</th><th>数值（类别）</th><th>口径</th><th>来源</th></tr></thead><tbody>
+<tr><td data-label="项目">训练数据</td><td data-label="数值">1,000 万个合成地质世界 <span class="tag vendor_claim" data-claim="T1" data-class="vendor_claim">公司声称</span></td><td data-label="口径">商业产品 Tau 3.8</td><td data-label="来源"><a class="cite" href="#src-S6">S6</a></td></tr>
+<tr><td data-label="项目">Valeriano 铜品位误差</td><td data-label="数值">低 38% <span class="tag vendor_claim" data-claim="T2" data-class="vendor_claim">公司声称</span></td><td data-label="口径">留出钻孔，对比用同样钻孔做的克里金；单一项目</td><td data-label="来源"><a class="cite" href="#src-S6">S6</a></td></tr>
+<tr><td data-label="项目">最深外扩孔</td><td data-label="数值">最多低 67% <span class="tag vendor_claim" data-claim="T3" data-class="vendor_claim">公司声称</span></td><td data-label="口径">“up to”属于最好情况</td><td data-label="来源"><a class="cite" href="#src-S6">S6</a></td></tr>
+</tbody></table>
+<div class="concl"><b>本节结论：</b>38% 指的是一个项目上的铜<b>品位</b>误差，89% 指的是两个矿床上的铜<b>金属量</b>误差，论文摘要用的是合成世界 IoU。三者的指标、样本和划分都不同，不能互相印证，也不能取平均。</div>
+
+<h2 id="q4">4. 对地下 ML / 地热的意义（推断）</h2>
+<div class="synthesis"><span class="tag synthesis">叙事综合</span> 以下是推断，不是来源中的事实。论文把问题写成“隐藏状态基本静止、行动只揭示证据”，再用模拟测量结果来训练“下一孔打在哪里”<a class="cite" href="#src-S1">S1</a>。这种表述在形式上也适用于地热勘探里的温度场和渗透率重建。不过有三点限制：（1）摘要说效益在训练用的铜质量目标上最强 <a class="cite" href="#src-S1">S1</a>；（2）合成世界生成器针对斑岩铜钼系统 <a class="cite" href="#src-S4">S4</a>；（3）野外表现目前只有公司声称 <a class="cite" href="#src-S4">S4</a> <a class="cite" href="#src-S6">S6</a>。所以这项工作<b>没有证明</b>可以迁移到地热。若要借鉴，可以先学它的评估设计：打乱测值做对照，以及在钻探邻域之外的公共区域上比较增益。</div>
+
+<h2 id="limits">无法核实 &amp; 方法</h2>
+<ul>
+<li><b>论文全文与附录未读</b> <a class="cite" href="#src-S2">S2</a> <a class="cite" href="#src-S3">S3</a>：OpenReview 的 PDF 和 forum 都返回浏览器验证页，api2 镜像返回 403 ChallengeRequired。没有登录，也没有绕过验证。arXiv 按作者检索没有找到同名论文。因此本报告<b>无法引用页码、表号或附录</b>。</li>
+<li><b>I1（96 个世界、约 75%）：</b>只见于 issue 转录 <a class="cite" href="#src-S7">S7</a>。S1 版本的摘要没有这句话。两者可能是摘要的不同版本（S7 称 OpenReview 最后修改于 2026-10-17），但这一点也未核实。</li>
+<li><b>89% 与约 40% 是否在论文或幻灯片里：</b>未找到公开幻灯片。帖子称作者“几周后”会在 workshop 报告该论文 <a class="cite" href="#src-S5">S5</a>。</li>
+<li><b>真实矿床测试的方法：</b>矿床名称、留出孔数、误差定义、地质统计方法和 Claude 的设置都未披露 <a class="cite" href="#src-S4">S4</a>。</li>
+<li><b>方法：</b>英文检索，未登录用 curl 读取公开页面，本地剥离 HTML 后检索关键字。研究员与构建者为同一 worker；语义审阅为 same_worker，没有独立审阅。访问时间 2026-11-16（UTC）。</li>
+</ul>
+<h2 id="sources">来源</h2>
+<ol class="sources">
+<li class="src" id="src-S1"><span class="id">S1</span><b>World Models for Active Measurement: Revealing Static Hidden Worlds and Planning What to Measure Next (poster page, abstract)</b> — NeurIPS 2026 virtual site, Workshop on World Models in Physical AI<br>
+<span class="meta">发布：unknown (listing page, no date shown) · 访问：2026-11-16 · 类型：primary (official workshop listing; abstract only)</span><br>
+<a href="https://neurips.cc/virtual/2026/175843" rel="noopener">https://neurips.cc/virtual/2026/175843</a>
+<div class="q">“Benefits are strongest for the copper-mass objective used to train the ranker.” <span class="tag">P1–P6</span></div></li>
+<li class="src" id="src-S2"><span class="id">S2</span><b>OpenReview forum iHAZ79hNuM (same paper)</b> — OpenReview<br>
+<span class="meta">发布：2026-10-03 per S7, not verified · 访问：2026-11-16 · 类型：primary (NOT READ: browser-verification challenge, HTTP 403 / challenge page)</span><br>
+<a href="https://openreview.net/forum?id=iHAZ79hNuM" rel="noopener">https://openreview.net/forum?id=iHAZ79hNuM</a>
+<div class="q">“（未读：浏览器验证页）”</div></li>
+<li class="src" id="src-S3"><span class="id">S3</span><b>OpenReview PDF iHAZ79hNuM (full paper)</b> — OpenReview<br>
+<span class="meta">发布：unknown · 访问：2026-11-16 · 类型：primary (NOT READ: browser-verification challenge; API mirror also 403)</span><br>
+<a href="https://openreview.net/pdf?id=iHAZ79hNuM" rel="noopener">https://openreview.net/pdf?id=iHAZ79hNuM</a>
+<div class="q">“（未读：浏览器验证页；页码 / 表号 / 附录均不可引用）”</div></li>
+<li class="src" id="src-S4"><span class="id">S4</span><b>Beyond prediction: Subsurface World Models (Dr Gerrit Olivier)</b> — Fleet Space Technologies newsroom blog<br>
+<span class="meta">发布：2026-11-13 · 访问：2026-11-16 · 类型：vendor (author&#x27;s employer blog)</span><br>
+<a href="https://www.fleetspace.com/newsroom/beyond-prediction-subsurface-world-models" rel="noopener">https://www.fleetspace.com/newsroom/beyond-prediction-subsurface-world-models</a>
+<div class="q">“On two large real porphyry copper deposits, Tau predicted the copper metal above 0.2 % Cu along held-out drill holes with about 89 % less error than conventional geostatistics” <span class="tag">B1–B5</span></div></li>
+<li class="src" id="src-S5"><span class="id">S5</span><b>Gerrit Olivier LinkedIn post linking S4</b> — LinkedIn (public guest view)<br>
+<span class="meta">发布：approx. 2026-11-15 (page shows relative &quot;21h&quot;, edited) · 访问：2026-11-16 · 类型：vendor (author&#x27;s own post)</span><br>
+<a href="https://www.linkedin.com/feed/update/urn:li:share:7527896018252681216/" rel="noopener">https://www.linkedin.com/feed/update/urn:li:share:7527896018252681216/</a>
+<div class="q">“On two real porphyry copper deposits, the model estimated held-out copper metal with about 89% less error than conventional geostatistics and around 40% less error than frontier Claude models.” <span class="tag">B3, B4</span></div></li>
+<li class="src" id="src-S6"><span class="id">S6</span><b>AI trained on ten million synthetic Earths outperforms conventional copper estimates at TSXV-listed ATEX&#x27;s Valeriano project</b> — Fleet Space Technologies via PR Newswire<br>
+<span class="meta">发布：2026-11-11 · 访问：2026-11-16 · 类型：vendor (press release)</span><br>
+<a href="https://www.prnewswire.com/apac/news-releases/ai-trained-on-ten-million-synthetic-earths-outperforms-conventional-copper-estimates-at-tsxv-listed-atexs-valeriano-project-302934698.html" rel="noopener">https://www.prnewswire.com/apac/news-releases/ai-trained-on-ten-million-synthetic-earths-outperforms-conventional-copper-estimates-at-tsxv-listed-atexs-valeriano-project-302934698.html</a>
+<div class="q">“Tested on drillholes held back from it, the model predicted copper grades with 38% less error than a conventional geostatistical estimate (kriging) built from the same drilling.” <span class="tag">T1–T3</span></div></li>
+<li class="src" id="src-S7"><span class="id">S7</span><b>FOCU issue #46 (paper intake note, quotes the OpenReview abstract)</b> — ialchemist-dev/focu on GitHub<br>
+<span class="meta">发布：2026-11-16 · 访问：2026-11-16 · 类型：secondary (issue author&#x27;s transcription; not independently verified)</span><br>
+<a href="https://github.com/ialchemist-dev/focu/issues/46" rel="noopener">https://github.com/ialchemist-dev/focu/issues/46</a>
+<div class="q">“On a matched 96-world synthetic subset, the reader&#x27;s mean absolute total-copper estimation error is ~75% lower than local ordinary kriging” <span class="tag">I1</span></div></li>
+</ol>
+<p class="meta">许可：OpenReview 页面标注该论文为 CC BY 4.0（据 S7，未能在 S2 核实）。本页只引用简短原文并注明出处，不转载全文。</p>
+
+<footer id="provenance">
+<p>应用偏好 ID：pa_editorial_intent, pa_topdown_overview, pa_citations_required, pa_visuals_preferred, pa_english_queries_chinese_report（本次手工选择的当前上下文，不是自动产品记忆）· 画像版本：<code>pv-2026-11-16-manual</code></p>
+<p>研究输入已冻结（frozen.sha256）；没有构建者补充（addenda 为空）。结构检查不证明语义支持；语义审阅：same_worker（研究员与构建者为同一 worker，没有独立审阅）；owner 验收：pending。渲染通过不代表内容质量合格。</p>
+</footer>
+</main>
+<script>
+(function(){
+var b=document.getElementById('theme'),r=document.documentElement;
+function cur(){return r.dataset.theme||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light')}
+function lab(){b.textContent=cur()==='dark'?'切换浅色':'切换深色'}
+b.addEventListener('click',function(){r.dataset.theme=cur()==='dark'?'light':'dark';lab()});lab();
+var NS='http://www.w3.org/2000/svg';
+function el(n,a,t){var e=document.createElementNS(NS,n);for(var k in a)e.setAttribute(k,a[k]);if(t!=null)e.textContent=t;return e}
+function fmt(v){return Number(v).toLocaleString('en-US')}
+document.querySelectorAll('script[data-chart]').forEach(function(s){
+  var spec;try{spec=JSON.parse(s.textContent)}catch(e){console.error('chart JSON',e);return}
+  if(spec.type!=='bar'||!spec.series||!spec.series.length)return;
+  var W=320,L=104,R=58,row=36,top=30,H=top+spec.series.length*row+8;
+  var max=Math.max.apply(null,spec.series.map(function(p){return Math.abs(p.value)}))||1;
+  var svg=el('svg',{'class':'chart',viewBox:'0 0 '+W+' '+H,role:'img','aria-label':spec.title+'（'+(spec.unit||'')+'）'});
+  svg.appendChild(el('title',{},spec.title));
+  var g=el('g',{'font-size':'14'});svg.appendChild(g);
+  g.appendChild(el('text',{x:0,y:16,'font-weight':'600'},spec.title+(spec.unit?'（'+spec.unit+'）':'')));
+  g.appendChild(el('line',{'class':'grid',x1:L,y1:top-4,x2:L,y2:H-4}));
+  spec.series.forEach(function(p,i){
+    var y=top+i*row,w=Math.max(1,(W-L-R)*Math.abs(p.value)/max);
+    g.appendChild(el('text',{x:0,y:y+18},p.label));
+    var rect=el('rect',{'class':'bar',x:L,y:y+4,width:w.toFixed(1),height:22,rx:4});
+    rect.appendChild(el('title',{},p.label+': '+fmt(p.value)+' '+(spec.unit||'')+' — '+p.claim));rect.setAttribute('data-claim-ref',p.claim);
+    g.appendChild(rect);g.appendChild(el('text',{x:(L+w+6).toFixed(1),y:y+20},fmt(p.value)));
+  });
+  s.parentNode.insertBefore(svg,s);
+});
+})();
+</script>
+</body></html>
