@@ -126,6 +126,8 @@ def main(argv: list[str] | None = None) -> int:
     ig_adapter_cmd.add_argument("instagram_adapter_args", nargs=argparse.REMAINDER)
     rn_adapter_cmd = sub.add_parser("rednote-adapter", help="RedNote (Xiaohongshu) export digest adapter (prototype)")
     rn_adapter_cmd.add_argument("rednote_adapter_args", nargs=argparse.REMAINDER)
+    fb_adapter_cmd = sub.add_parser("facebook-adapter", help="Facebook export digest adapter (prototype)")
+    fb_adapter_cmd.add_argument("facebook_adapter_args", nargs=argparse.REMAINDER)
     learn_cmd = sub.add_parser("learn", help="Owner-approved learning loop (proposals, preference record)")
     learn_cmd.add_argument("learn_args", nargs=argparse.REMAINDER)
     daily_cmd = sub.add_parser("daily", help="Persistent feed-to-podcast stages")
@@ -160,6 +162,9 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "rednote-adapter":
             from focu.adapters.rednote import main as rednote_adapter_main
             return rednote_adapter_main(args.rednote_adapter_args)
+        if args.command == "facebook-adapter":
+            from focu.adapters.facebook import main as facebook_adapter_main
+            return facebook_adapter_main(args.facebook_adapter_args)
         if args.command == "learn":
             from focu.learn import main as learn_main
             return learn_main(args.learn_args, db_path=args.db)
