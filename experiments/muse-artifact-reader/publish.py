@@ -236,6 +236,8 @@ def build(deliveries, output, template, limit, *, fetch_source_covers=False, gen
             if markdown:
                 item["title"] = info["title"]
                 item["summary"] = info["summary"]
+                if info.get("gist"):
+                    item["gist"] = info["gist"]
                 item["article_blocks"] = info["article_blocks"]
                 item["reading_minutes"] = info["reading_minutes"]
             else:
@@ -243,6 +245,8 @@ def build(deliveries, output, template, limit, *, fetch_source_covers=False, gen
                     item["title"] = metadata["title"].strip()
                 if isinstance(metadata.get("summary"), str):
                     item["summary"] = metadata["summary"].strip()
+                if info.get("gist"):
+                    item["gist"] = info["gist"]
             formats = {"audio": {"path": item["audio_url"], "mime_type": "audio/mpeg"}} if audio else {}
             if audio and episode_id in audio_audit:
                 formats["audio"]["duration_seconds"] = audio_audit[episode_id]["decoded_duration_seconds"]

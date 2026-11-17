@@ -39,6 +39,7 @@ main{max-width:760px;margin:0 auto;padding:25px 22px 70px}
 .cardmeta,.byline{font-size:12px;color:#968e85;letter-spacing:.02em}
 .feedtitle{font-size:20px;font-weight:690;letter-spacing:-.03em;line-height:1.35;margin:7px 0}
 .feedsummary{font-size:14px;color:#77716b;line-height:1.55;margin:7px 0 0;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+.feedgist{font-size:14px;color:#77716b;line-height:1.55;margin:7px 0 0}
 .cover{width:88px;height:88px;object-fit:cover;border-radius:10px;flex-shrink:0;background:#eeeae5}
 .empty{padding:60px 15px;text-align:center;color:#8e857b;line-height:1.7}
 #reader[hidden],#feed[hidden],#playerbar[hidden],#toolbar[hidden]{display:none!important}
@@ -203,7 +204,7 @@ function normalize(data){
  const seen=new Set();
  return a.filter(x=>{const id=x&&(x.content_id||x.id);if(typeof id!=='string'||!id.trim()||seen.has(id))return false;seen.add(id);return true}).slice(0,500).map(x=>{
  const id=x.content_id||x.id;
- return {id,title:x.title||'Untitled',summary:x.summary||'',date:x.published_at||x.date||'',source:typeof x.source==='string'?x.source:(x.source?.kind||'Focu'),cover_url:x.cover?.path||x.cover_url||'',cover_origin:x.cover?.origin||'',audio_url:x.formats?.audio?.path||x.audio_url||'',audio_duration:Number(x.formats?.audio?.duration_seconds)||null,podcast_mode:x.podcast_mode||null,origin:x.origin||null,covered_content_ids:Array.isArray(x.covered_content_ids)?x.covered_content_ids:[],article_url:x.formats?.article?.path||'',blocks:Array.isArray(x.article_blocks)?x.article_blocks:[],reading_minutes:Number(x.reading_minutes)||0};
+ return {id,title:x.title||'Untitled',summary:x.summary||'',gist:typeof x.gist==='string'?x.gist:'',date:x.published_at||x.date||'',source:typeof x.source==='string'?x.source:(x.source?.kind||'Focu'),cover_url:x.cover?.path||x.cover_url||'',cover_origin:x.cover?.origin||'',audio_url:x.formats?.audio?.path||x.audio_url||'',audio_duration:Number(x.formats?.audio?.duration_seconds)||null,podcast_mode:x.podcast_mode||null,origin:x.origin||null,covered_content_ids:Array.isArray(x.covered_content_ids)?x.covered_content_ids:[],article_url:x.formats?.article?.path||'',blocks:Array.isArray(x.article_blocks)?x.article_blocks:[],reading_minutes:Number(x.reading_minutes)||0};
  });
 }
 function setView(which){
@@ -251,7 +252,11 @@ function appendCard(item){
  const body=el('div',undefined,'cardbody');
  body.append(el('div',[item.source,item.date].filter(Boolean).join('  ·  '),'cardmeta'));
  body.append(el('h2',item.title,'feedtitle'));
- if(item.summary)body.append(el('p',item.summary,'feedsummary'));
+ // Glance layer: a complete-at-its-length gist when the pipeline emitted
+ // one; legacy bundles have no gist and keep the clamped summary exactly
+ // as before. The summary itself stays at scan level (top of the reader).
+ if(item.gist)body.append(el('p',item.gist,'feedgist'));
+ else if(item.summary)body.append(el('p',item.summary,'feedsummary'));
  const compiled=compilationFor(item.id);
  if(compiled)body.append(el('div','In '+(compiled.date||'daily')+' briefing','cardmeta'));
  const cardAudioUrl=safeUrl(item.audio_url);

@@ -1,8 +1,9 @@
 """Evidence-preserving editorial extraction for the static Focu reader.
 
-No model calls and no invented research: titles and summaries are extracted from
-existing research or explicit content.json. Structured article blocks are safe
-to render with textContent in an untrusted-source WebView.
+No model calls and no invented research: titles, summaries and glance gists
+are extracted from existing research or explicit content.json. Structured
+article blocks are safe to render with textContent in an untrusted-source
+WebView.
 """
 import re
 from html.parser import HTMLParser
@@ -103,6 +104,39 @@ def shorten(text, limit):
     if len(prefix) < limit // 2:
         prefix = text[:limit]
     return prefix.rstrip(" ,;:.") + "…"
+
+
+GIST_LIMIT = 90
+GIST_MIN = 15
+_SENTENCE_END = re.compile(r"[.!?。！？]")
+
+
+def _first_sentence(text):
+    match = _SENTENCE_END.search(text)
+    return text[:match.end()].strip() if match else text
+
+
+def make_gist(*sources):
+    """Extract the glance-layer gist from the item's own text.
+
+    Extractive only: every character comes from the supplied synopsis,
+    claim, or lead paragraph, cut at a sentence boundary when one fits and
+    at a word boundary otherwise (``shorten`` marks the trim with an
+    ellipsis). Nothing is generated or paraphrased. Returns "" when no
+    source yields an honest gist, so callers omit the field entirely
+    rather than publish a fragment or a repeat of the title.
+    """
+    for source in sources:
+        text = clean(source or "")
+        if len(text) < GIST_MIN:
+            continue
+        if len(text) <= GIST_LIMIT:
+            return text
+        first = _first_sentence(text)
+        if len(first) >= 10:
+            return first if len(first) <= GIST_LIMIT else shorten(first, GIST_LIMIT)
+        return shorten(text, GIST_LIMIT)
+    return ""
 
 
 def _pipe_cells(line):
@@ -267,12 +301,14 @@ def editorial(markdown, metadata=None):
     synopsis = metadata.get("summary")
     if not isinstance(synopsis, str) or not synopsis.strip():
         synopsis = summary or claim
+    gist = make_gist(synopsis, claim, summary)
     title = shorten(choice, 82) or "Untitled research"
     summary = shorten(synopsis, 270)
     if isinstance(synopsis, str) and len(clean(synopsis)) <= 270 and synopsis.rstrip().endswith((".", "!", "?")):
         summary += synopsis.rstrip()[-1]
     word_count = len(re.findall(r"\b[\w'-]+\b", markdown or ""))
-    return {"title": title, "summary": summary, "article_blocks": blocks,
+    return {"title": title, "summary": summary, "gist": gist,
+            "article_blocks": blocks,
             "reading_minutes": max(1, round(word_count / 220))}
 
 

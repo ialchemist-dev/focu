@@ -556,6 +556,54 @@ assert.match(html, /\.feedcard\[hidden\]\{display:none!important\}/);
   assert.equal(e.get('grid').children.length,2,'collapsing returns the tab to one line');
 }
 
+// Wave-4 (#5): the glance layer. A card whose payload carries a pipeline
+// gist shows the gist as its single text line — never the clamped summary —
+// while the summary stays available at scan level in the reader.
+{
+  assert.match(html, /gist:typeof x\.gist==='string'\?x\.gist:''/);
+  assert.match(html, /\.feedgist\{[^}]*\}/);
+  assert.doesNotMatch(html, /\.feedgist\{[^}]*line-clamp/);
+  const e=makeEnvironment();
+  e.run("render([{id:'gist-1',origin:'user_initiated',title:'Gisted report',summary:'A long scan summary that the card used to clamp at two lines mid-thought, hiding most of its meaning behind a silent cut.',gist:'Pando ships persistent memory for agents.',date:'2026-11-10',source:'Your research',audio_url:'',blocks:[{type:'paragraph',text:'Evidence'}],reading_minutes:3}],'')");
+  e.run("setView('research')");
+  const body=e.get('grid').children[0].children[0].children[0];
+  const gist=body.children.find(n=>n.className==='feedgist');
+  assert.ok(gist,'card renders the gist line');
+  assert.equal(gist.textContent,'Pando ships persistent memory for agents.');
+  assert.equal(body.children.find(n=>n.className==='feedsummary'),undefined,'clamped summary is not rendered next to a gist');
+  e.run("openItem('gist-1')");
+  assert.match(e.get('readersummary').textContent,/clamp at two lines/,'the summary remains the reader scan layer');
+}
+// Wave-4 (#5): legacy payloads without a gist render exactly as before —
+// the clamped summary, and no empty glance line.
+{
+  const e=makeEnvironment();
+  e.run("render([{id:'legacy-1',origin:'user_initiated',title:'Legacy report',summary:'The only text a legacy bundle carries for the card.',date:'2026-11-09',source:'Your research',audio_url:'',blocks:[{type:'paragraph',text:'Evidence'}],reading_minutes:2}],'')");
+  e.run("setView('research')");
+  const body=e.get('grid').children[0].children[0].children[0];
+  assert.equal(body.children.find(n=>n.className==='feedgist'),undefined,'no gist element for a legacy item');
+  const summary=body.children.find(n=>n.className==='feedsummary');
+  assert.ok(summary,'legacy card keeps its summary');
+  assert.equal(summary.textContent,'The only text a legacy bundle carries for the card.');
+}
+// Wave-4 (#5): normalize carries gist through from a published payload and
+// defaults it to empty for gist-less (pre-change) bundles, so old bundles
+// keep rendering their summaries and new ones lead with the gist.
+(async()=>{
+  const e=makeEnvironment();
+  e.get('embedded-episodes').textContent=JSON.stringify({items:[
+    {content_id:'new-1',title:'New bundle item',origin:'daily_compilation',date:'2026-11-10',source:'Focu',gist:'A complete glance line.',summary:'Scan text',article_blocks:[{type:'paragraph',text:'Body'}]},
+    {content_id:'old-1',title:'Old bundle item',origin:'daily_compilation',date:'2026-11-09',source:'Focu',summary:'Legacy scan text',article_blocks:[{type:'paragraph',text:'Body'}]}
+  ]});
+  await e.run('load()');
+  assert.equal(e.run("allItems.find(x=>x.id==='new-1').gist"),'A complete glance line.');
+  assert.equal(e.run("allItems.find(x=>x.id==='old-1').gist"),'','legacy payload normalizes to an empty gist');
+  const bodies=e.get('grid').children.map(c=>c.children[0].children[0]);
+  assert.ok(bodies[0].children.find(n=>n.className==='feedgist'),'new item card leads with its gist');
+  assert.ok(bodies[1].children.find(n=>n.className==='feedsummary'),'old item card falls back to its summary');
+  console.log('Focu reader wave-4 (#5): glance gist layer passed');
+})().catch(err=>{console.error(err);process.exit(1)});
+
 console.log('Focu reader behavior: article, local read-aloud, persistence and audio end passed');
 console.log('Focu reader wave-2: one-tap play, cost chips and persisted resume passed');
 console.log('Focu reader wave-3: contextual recovery, skip controls and briefing purity passed');

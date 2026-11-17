@@ -7,7 +7,7 @@ import subprocess
 from unittest.mock import patch
 import unittest
 from publish import build, sha256, episode_date
-from editorial import editorial, blocks_from_markdown, compose_article_with_openai
+from editorial import editorial, blocks_from_markdown, compose_article_with_openai, clean
 from cover_art import typographic_svg
 
 class PublisherTests(unittest.TestCase):
@@ -142,7 +142,7 @@ class PublisherTests(unittest.TestCase):
         html = Path(__file__).with_name("index.html").read_text()
         self.assertIn("const manifest=params.get('manifest')||'assets/episodes.json'", html)
         self.assertIn("try{const url=safeUrl(manifest);if(!url)throw Error('Invalid manifest URL');const response=", html)
-        self.assertIn("}catch(e){data=embedded;note='embedded snapshot (manifest unavailable)'", html)
+        self.assertIn("catch(e){data=embedded;note='embedded snapshot (manifest unavailable)';if(!data.length)", html)
         self.assertIn("return v}", html)
 
     def test_unified_item_with_article_and_editorial_metadata(self):
@@ -183,6 +183,79 @@ class PublisherTests(unittest.TestCase):
         self.assertTrue(any(block["type"] == "bullet" for block in info["article_blocks"]))
         self.assertIn("https://example.org/story", str(info["article_blocks"]))
         self.assertGreaterEqual(info["reading_minutes"], 1)
+
+    def test_gist_is_first_complete_sentence_when_it_fits(self):
+        info = editorial("# Briefing\n\nBody.\n", {"summary": (
+            "Jack Clark's Import AI covers the week's research. "
+            "This issue leads with a long essay on mesa-optimization and then "
+            "surveys robotaxis, chip export controls, and three new benchmarks.")})
+        self.assertEqual(info["gist"],
+                         "Jack Clark's Import AI covers the week's research.")
+        self.assertLessEqual(len(info["gist"]), 90)
+        # The scan layer is untouched by the glance extraction.
+        self.assertIn("mesa-optimization", info["summary"])
+
+    def test_gist_trims_at_word_boundary_and_stays_extractive(self):
+        source = ("The study reports that experienced developers using AI coding "
+                  "tools were measurably slower overall while believing that they "
+                  "had been faster by roughly the same amount in the trial.")
+        info = editorial("# Briefing\n\nBody.\n", {"summary": source})
+        gist = info["gist"]
+        self.assertTrue(gist.endswith("…"))
+        self.assertLessEqual(len(gist), 91)  # 90 chars of source + ellipsis
+        self.assertIn(gist.rstrip("…"), clean(source))
+        self.assertNotIn("  ", gist)
+
+    def test_gist_uses_whole_text_when_it_already_fits(self):
+        info = editorial(
+            "# Research\n\nOne source announced a new result in distributed inference.\n")
+        self.assertEqual(info["gist"],
+                         "One source announced a new result in distributed inference")
+
+    def test_gist_cjk_sentence_boundary(self):
+        lead = "蚂蚁灵光发布了新一代多模态模型，重点提升了长视频理解与生成能力。"
+        rest = ("节目还邀请了团队负责人讨论它与主流闭源模型的差距、中文场景下的实际表现、"
+                "定价策略，以及下一阶段的产品路线图和组织方式，整集信息量很大。")
+        self.assertGreater(len(clean(lead + rest)), 90)
+        info = editorial("# 硅谷101\n\n" + lead + rest + "\n")
+        self.assertEqual(info["gist"], lead)
+
+    def test_gist_ignores_abbreviation_fragments(self):
+        source = ("U.S. officials outlined the new export framework for advanced "
+                  "chips and the licensing process that now applies to three "
+                  "categories of accelerators sold overseas this year.")
+        gist = editorial("# Briefing\n\nBody.\n", {"summary": source})["gist"]
+        self.assertNotEqual(gist, "U.")
+        self.assertGreater(len(gist), 40)
+        self.assertIn(gist.rstrip("…"), clean(source))
+
+    def test_gist_omitted_when_nothing_honest_can_be_extracted(self):
+        self.assertEqual(editorial("# Title only\n")["gist"], "")
+        self.assertEqual(editorial("", {})["gist"], "")
+        self.assertEqual(editorial("", {"summary": "Too short"})["gist"], "")
+
+    def test_build_emits_gist_and_omits_it_when_unextractable(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            folder = root / "deliveries" / "story-20261110"
+            folder.mkdir(parents=True)
+            (folder / "article.md").write_text(
+                "# A grounded result\n\n"
+                "Pando releases a memory architecture for long-running agents. "
+                "The design keeps working state across sessions, tools, and days, "
+                "and the authors report large gains on multi-day tasks in their "
+                "internal evaluation harness.\n")
+            audio_only = root / "deliveries" / "audio-20261110"
+            audio_only.mkdir()
+            (audio_only / "podcast.mp3").write_bytes(b"audio-only")
+            output = root / "bundle"
+            build(root / "deliveries", output, Path(__file__).with_name("index.html"), 15)
+            items = {x["content_id"]: x for x in
+                     json.loads((output / "assets/episodes.json").read_text())["items"]}
+            self.assertEqual(items["story-20261110"]["gist"],
+                             "Pando releases a memory architecture for long-running agents.")
+            self.assertLessEqual(len(items["story-20261110"]["gist"]), 90)
+            self.assertNotIn("gist", items["audio-20261110"])
 
     def test_offline_covers_are_deterministic_and_distinct(self):
         first = typographic_svg("Pando memory architecture", "AI research")
