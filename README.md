@@ -6,6 +6,20 @@ Current integrated version: **0.4.0**. Research/evidence handoff, podcast delive
 
 Focu is evolving from the original feed-to-podcast prototype into an intent-led, evidence-backed information workflow. The current v0.2 code implements research-intent capture, evidence persistence and agent handoff; recurring Watches, change detection and silence-by-default delivery are **planned, not yet implemented**.
 
+## Design philosophy — Attention Sovereignty
+
+Focu is built on the owner's essay [Attention Sovereignty](https://aipraxislab.com/front/attention-sovereignty.html): attention sovereignty is meaningful control over **what is allowed to claim my attention, and how much attention a task is allowed to require from me**.
+
+- **De-recommendation.** Not no recommendation — recommendation subordinated to human intent. Platforms may rank; the user's own agent is the final filter, applying priorities the user defined. Focu has no engagement-ranked feed: sources are chosen by the user, items are compressed (most deserve half a second, a few ten seconds, one earns a full read), and the agent reduces the cost of *the user deciding* what matters — it does not decide for them.
+- **De-interface.** Interfaces are valuable as display surfaces (understanding at a glance) and costly as control surfaces (operating the system). Focu removes mechanical operation and keeps human judgment in the loop: *Look. Understand. Judge. Leave.*
+- **The metric is attention returned.** Not time-in-app or engagement: how much information the user did not need to process, and how many interfaces they did not need to operate.
+
+## Development — the `dev-main` branch and the multi-agent team
+
+Day-to-day development integrates on **`dev-main`**, not `main`. `main` stays the stable, production-running line; work lands on `dev-main` first.
+
+Since 2026-11-17, development is run by a multi-agent team whose SOP follows **MetaGPT** (the most-starred open-source multi-agent framework): a project-manager agent owns the backlog and acceptance criteria, an infra designer owns platform and tooling choices, backend and UI developers implement, and an integrator runs the tests, lands commits on `dev-main`, and keeps this README truthful about the philosophy, the architecture, and what is actually implemented. Current team focus: the reader UI (simplicity and delight), the source-pack marketplace (working name **Focu Exchange** — curated, one-step-importable packs of people and publications, e.g. Anthropic and OpenAI people with personal blogs, Silicon Valley startups, geothermal), broader own-feed platform adapters in the pattern of the existing LinkedIn reader, and the feedback loop that lets Focu learn its user over time.
+
 ## Agent-native installation (v0.2 preview)
 
 The v0.2 agent-installable workflow is available on `main`. Requires Python 3.10+ and Git.
