@@ -65,6 +65,18 @@ sustained zero completions (see PAUSE_MIN_DELIVERED / PAUSE_MIN_DAYS
 below) earns a source_pause proposal — never a silent pause. The
 pause class is demote-side only, yields to a same-batch demotion for
 the same source, and is vetoed by any useful mark in the window.
+
+Sparsity accounting and the stop rule (wave 25, Q7) make the
+engine's silence legible. Every batch result carries a sparsity
+block — per source, the delivered count and the attributed feedback
+counts beside the floor each gate applies, plus window totals — so
+"how far is this source from a proposal, and why" is answerable
+from the result alone. And below MIN_ATTRIBUTED_EVENTS attributed
+events in the window, the engine drafts no source_weight proposals
+at all and records the reason in the result: silence is explained,
+never silent. Review proposals and the pruning pause rest on other
+evidence (the record; delivered/completion accounting) and are not
+gated by the stop rule.
 """
 from __future__ import annotations
 
@@ -106,6 +118,20 @@ MIN_NEGATIVE_RATE = 0.2
 DEMOTE_WEIGHT = 0.7           # statistics may only demote (design §3.3 rule 2)
 MIN_USEFUL_EVENTS = 3
 PROMOTE_WEIGHT = 1.25         # promotion requires the owner's own useful marks
+# Stop rule (wave 25, Q7): source_weight proposals are drafted only
+# when the window carries at least this many attributed feedback
+# events in total. A source can pass its own floors on a bare minimum
+# — exactly 3 negative events, exactly 3 useful marks — while the
+# window around it is otherwise silent; the totals contradict the
+# per-source pass, so the engine drafts no weight proposal and the
+# batch result records the reason ("insufficient attributed signal:
+# N events in 30 days"). The value is 4 because 3 would be vacuous
+# (any passing source contributes >= 3 attributed events by itself)
+# and 5 would repeal the canonical demotion shape (4 negative events
+# on one source in an otherwise quiet window). Review proposals and
+# the pruning pause are NOT gated: their evidence is the record and
+# the delivered/completion accounting, not feedback-event volume.
+MIN_ATTRIBUTED_EVENTS = 4
 # Pruning proposals (PRD P2-1, design §1.2(1) + §6.2): a source_pause
 # proposal is drafted ONLY from completion-rate evidence — the Phase-2
 # transport's attributed completions (ledger kind "other"; via=manual
@@ -473,9 +499,49 @@ def compute_statistics(db_path, daily_dir, now: datetime | None = None) -> dict:
             "completion_rate": (kinds.get("other", 0) / slot["delivered"]
                                 if slot["delivered"] else 0.0),
         }
+    attributed_total = sum(slot["negative_total"] + slot["useful"]
+                           + slot["completed"] for slot in sources.values())
     return {"window": {"start": start.isoformat(), "end": end.isoformat(),
                        "days": WINDOW_DAYS},
-            "sources": sources, "unattributed_feedback": unattributed}
+            "sources": sources, "unattributed_feedback": unattributed,
+            "attributed_total": attributed_total}
+
+
+def _sparsity_block(stats):
+    """Distance-to-floor accounting for the current window (wave 25, Q7).
+
+    Per source: the delivered count and the attributed feedback counts
+    (negative / useful / completed), each beside the floor its gate
+    applies — including the pruning pause's delivered/days floors — so
+    "how far is this source from ever generating a proposal, and why"
+    is answerable from the proposals result alone, including when
+    nothing was proposed. Window level: total attributed events beside
+    the stop rule's floor, and the unattributed count the attribution
+    step already tracks. Pure accounting: no decision reads this block.
+    """
+    sources = {}
+    for source_id, slot in stats["sources"].items():
+        delivered = slot["delivered"]
+        negative = slot["negative_total"]
+        sources[source_id] = {
+            "name": slot["name"],
+            "delivered": delivered,
+            "delivered_floor": MIN_DELIVERED,
+            "days": slot["days"],
+            "negative": negative,
+            "negative_floor": MIN_NEGATIVE_EVENTS,
+            "negative_rate": round(negative / delivered, 3) if delivered else 0.0,
+            "negative_rate_floor": MIN_NEGATIVE_RATE,
+            "useful": slot["useful"],
+            "useful_floor": MIN_USEFUL_EVENTS,
+            "completed": slot["completed"],
+            "pause_delivered_floor": PAUSE_MIN_DELIVERED,
+            "pause_days_floor": PAUSE_MIN_DAYS,
+        }
+    return {"sources": sources,
+            "attributed_events": stats["attributed_total"],
+            "attributed_events_floor": MIN_ATTRIBUTED_EVENTS,
+            "unattributed_feedback": stats["unattributed_feedback"]}
 
 
 # --------------------------------------------------------------------------
@@ -578,6 +644,9 @@ def generate_proposals(db_path="data/focu.sqlite3", daily_dir="data",
     re-proposed even if its entry was superseded (the explicit 90-day
     step rule); review proposals for stale record entries compete in
     the same 3-proposal budget, ahead of new statistics proposals.
+    Below MIN_ATTRIBUTED_EVENTS total attributed events, no
+    source_weight proposals are drafted and the result's
+    signal_reason says so; every result carries the sparsity block.
     Empty history correctly produces an empty batch."""
     now = now or datetime.now(timezone.utc)
     today = now.date()
@@ -604,6 +673,18 @@ def generate_proposals(db_path="data/focu.sqlite3", daily_dir="data",
             last_accepted[key] = decided
 
     candidates = _review_candidates(record, history, db_path, daily_dir, today)
+    # Stop rule (wave 25, Q7): weight proposals are drafted only when
+    # the window's TOTAL attributed signal clears MIN_ATTRIBUTED_EVENTS.
+    # The accounting below always runs (sources_below_evidence_floor and
+    # the sparsity block stay truthful); only drafting is gated. Review
+    # candidates above and the pruning pause below rest on other
+    # evidence and are never gated by this rule.
+    signal_reason = None
+    if stats["attributed_total"] < MIN_ATTRIBUTED_EVENTS:
+        signal_reason = (f"insufficient attributed signal: "
+                         f"{stats['attributed_total']} events in "
+                         f"{WINDOW_DAYS} days")
+    statistics_open = signal_reason is None
     below_floor = 0
     for source_id, slot in stats["sources"].items():
         if slot["delivered"] < MIN_DELIVERED:
@@ -611,8 +692,9 @@ def generate_proposals(db_path="data/focu.sqlite3", daily_dir="data",
                 below_floor += 1
             continue
         negative = slot["negative_total"]
-        if (negative >= MIN_NEGATIVE_EVENTS
-                and negative / slot["delivered"] >= MIN_NEGATIVE_RATE):
+        demotes = (negative >= MIN_NEGATIVE_EVENTS
+                   and negative / slot["delivered"] >= MIN_NEGATIVE_RATE)
+        if statistics_open and demotes:
             breakdown = ", ".join(f"{k} ×{n}" for k, n in sorted(slot["negative"].items()))
             candidates.append({
                 "rank": (0, -negative, -slot["delivered"]),
@@ -622,7 +704,7 @@ def generate_proposals(db_path="data/focu.sqlite3", daily_dir="data",
                              f"feedback ({breakdown}), {WINDOW_DAYS}d window, "
                              f"n={slot['delivered']} delivered"),
             })
-        elif slot["useful"] >= MIN_USEFUL_EVENTS:
+        elif statistics_open and slot["useful"] >= MIN_USEFUL_EVENTS:
             candidates.append({
                 "rank": (2, -slot["useful"], -slot["delivered"]),
                 "kind": "source_weight", "target": source_id,
@@ -631,7 +713,8 @@ def generate_proposals(db_path="data/focu.sqlite3", daily_dir="data",
                              f"{slot['delivered']} delivered items, {WINDOW_DAYS}d "
                              f"window, n={slot['delivered']} delivered"),
             })
-        elif (slot["completed"] == 0 and slot["useful"] == 0
+        elif (not demotes
+                and slot["completed"] == 0 and slot["useful"] == 0
                 and slot["delivered"] >= PAUSE_MIN_DELIVERED
                 and slot["days"] >= PAUSE_MIN_DAYS):
             # Pruning (PRD P2-1): sustained zero completion at volume,
@@ -675,6 +758,9 @@ def generate_proposals(db_path="data/focu.sqlite3", daily_dir="data",
             "sources_considered": len(stats["sources"]),
             "sources_below_evidence_floor": below_floor,
             "unattributed_feedback": stats["unattributed_feedback"],
+            "attributed_events": stats["attributed_total"],
+            "signal_reason": signal_reason,
+            "sparsity": _sparsity_block(stats),
             "record_error": record_error}
 
 

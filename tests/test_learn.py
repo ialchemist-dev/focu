@@ -199,8 +199,14 @@ class ProposalEngineTests(unittest.TestCase):
             "src_beta": ("Beta", [(1, 4), (8, 4), (15, 4)]),
             "src_quiet": ("Quiet", [(1, 4), (8, 4), (15, 4)]),
         })
-        seed_feedback(self.db, [("observation", cid, "useful", 2)
-                                for cid in ids["src_beta"][:3]])
+        # One attributed completion on the quiet source brings the
+        # window total to MIN_ATTRIBUTED_EVENTS (wave 25 stop rule):
+        # the promotion below still rests on useful marks alone — a
+        # completion promotes nobody, and the quiet source gets none.
+        events = [("observation", cid, "useful", 2)
+                  for cid in ids["src_beta"][:3]]
+        events.append(("observation", ids["src_quiet"][0], "other", 2))
+        seed_feedback(self.db, events)
         result = self.generate()
         self.assertEqual(len(result["proposals"]), 1)
         proposal = result["proposals"][0]
