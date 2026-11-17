@@ -393,11 +393,11 @@ class FreshShelfTests(unittest.TestCase):
     def test_age_13_nothing_due(self):
         report = refresh_due(today=date(2026, 11, 30))
         self.assertEqual(report["due_count"], 0)
-        self.assertEqual(report["not_due_count"], 4)
+        self.assertEqual(report["not_due_count"], 5)
 
     def test_age_15_whole_shelf_due_via_pack_rule(self):
         report = refresh_due(today=date(2026, 12, 2))
-        self.assertEqual(report["due_count"], 4)
+        self.assertEqual(report["due_count"], 5)
         for entry in report["packs"]:
             self.assertEqual([r["constant"] for r in entry["reasons"]],
                              ["REFRESH_DUE_PACK_DAYS"])

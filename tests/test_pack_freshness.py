@@ -107,21 +107,21 @@ class RefreshDueTests(unittest.TestCase):
             return refresh_due(today=TODAY)
 
     def test_shipped_packs_none_due_on_verification_day(self):
-        # Acceptance 1: the four shipped packs were all verified
+        # Acceptance 1: the five shipped packs were all verified
         # 2026-11-17, so on that day nothing is due and the not-due
         # count is the whole shelf.
         report = refresh_due(today=TODAY)
         self.assertEqual(report["checked_at"], "2026-11-17")
         self.assertEqual(report["due_count"], 0)
-        self.assertEqual(report["not_due_count"], 4)
-        self.assertEqual(len(report["packs"]), 4)
+        self.assertEqual(report["not_due_count"], 5)
+        self.assertEqual(len(report["packs"]), 5)
         for entry in report["packs"]:
             self.assertNotIn("error", entry)
             self.assertFalse(entry["due"])
             self.assertEqual(entry["age_days"], 0)
             self.assertEqual(entry["reasons"], [])
         text = format_refresh_due(report)
-        self.assertIn("0 due; 4 not due", text)
+        self.assertIn("0 due; 5 not due", text)
         self.assertNotIn("DUE", text)
 
     def test_pack_age_trips_pack_constant(self):
@@ -326,7 +326,7 @@ class AttentionTotalsPinTests(unittest.TestCase):
 
     def test_accumulators_agree_for_every_shipped_pack(self):
         paths = sorted(PACKS_DIR.glob("*.json"))
-        self.assertEqual(len(paths), 4)
+        self.assertEqual(len(paths), 5)
         for path in paths:
             raw = json.loads(path.read_text(encoding="utf-8"))
             with self.subTest(pack=path.name):

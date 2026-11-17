@@ -28,6 +28,7 @@ from __future__ import annotations
 import argparse
 import copy
 import hashlib
+import http.client
 import ipaddress
 import json
 import os
@@ -768,7 +769,14 @@ def check_liveness(pack, *, fetch=None):
                 # not consume the feed — not proof the feed is dead.
                 result["feed"] = _qualified(
                     {"status": "not_a_feed", "error": str(ex)})
-            except (URLError, TimeoutError, OSError) as ex:
+            except (URLError, TimeoutError, OSError,
+                    http.client.HTTPException) as ex:
+                # HTTPException covers a connection dropped mid-body
+                # (IncompleteRead, RemoteDisconnected): the host was
+                # reached but the response never completed — a network
+                # outcome, recorded as data like every other outcome
+                # here, never raised (a host that truncates every
+                # response from this vantage must not crash liveness).
                 result["feed"] = {"status": "unreachable", "error": str(ex)}
         if src.get("homepage"):
             try:
@@ -1495,7 +1503,10 @@ def _probe_feed(url, fetch):
         result = fetch(url)
     except HTTPError as ex:
         return {"status": "http_error", "error": f"HTTP {ex.code}"}
-    except (URLError, TimeoutError, OSError) as ex:
+    except (URLError, TimeoutError, OSError,
+            http.client.HTTPException) as ex:
+        # IncompleteRead & friends: connection dropped mid-body is a
+        # network outcome (unreachable), not an exception worth raising.
         return {"status": "unreachable", "error": str(ex)}
     except ValueError as ex:
         # An injected fetch with _bounded_fetch's contract raises on
