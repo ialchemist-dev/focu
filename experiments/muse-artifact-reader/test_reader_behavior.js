@@ -1048,6 +1048,32 @@ assert.match(html, /\.feedcard\[hidden\]\{display:none!important\}/);
   console.log('Focu reader wave-10: the archive action is as quiet as its neighbours passed');
 }
 
+// Wave-11 (run wave 28): a bullet-shaped digest item — the LinkedIn
+// feed shape, whose body is a list of entries rather than prose — now
+// reaches the reader carrying a publisher gist extracted from its
+// first entry, and the card renders it through the same .feedgist
+// glance path as every other gist. No reader change was needed: this
+// pins the payload end of the publisher fix, in the Briefing tab's
+// collapsed source row where uncovered digests actually rest.
+{
+  const e=makeEnvironment();
+  e.run("render(["+
+    "{id:'daily-1',origin:'daily_compilation',title:'Today briefing',date:'2026-11-14',source:'Focu',covered_content_ids:[],blocks:[{type:'paragraph',text:'Compiled'}]},"+
+    "{id:'li-1',origin:'registered_source',title:'LinkedIn Feed — Friday, November 14, 2026',summary:'',gist:'Jane Doe — shipped a mapping tool for geothermal surveys',date:'2026-11-14',source:'LinkedIn Feed',blocks:[{type:'bullet',text:'Jane Doe — shipped a mapping tool for geothermal surveys'}],reading_minutes:2}"+
+  "],'')");
+  const kids=e.get('grid').children;
+  assert.equal(kids.length,2,'briefing card plus the collapsed source row');
+  kids[1].onclick();
+  const open=e.get('grid').children;
+  assert.equal(open.length,3,'expanding reveals the digest card in place');
+  const body=open[2].children[0].children[0];
+  const gist=body.children.find(n=>n.className==='feedgist');
+  assert.ok(gist,'digest card renders the glance line');
+  assert.equal(gist.textContent,'Jane Doe — shipped a mapping tool for geothermal surveys');
+  assert.equal(body.children.find(n=>n.className==='feedsummary'),undefined,'no clamped summary stands in for the gist');
+  console.log('Focu reader wave-11: bullet-digest gist renders on the card passed');
+}
+
 console.log('Focu reader behavior: article, local read-aloud, persistence and audio end passed');
 console.log('Focu reader wave-2: one-tap play, cost chips and persisted resume passed');
 console.log('Focu reader wave-3: contextual recovery, skip controls and briefing purity passed');
@@ -1057,3 +1083,4 @@ console.log('Focu reader wave-7: compilation covered ids — briefing marks can 
 console.log('Focu reader wave-8: the original door — the ladder top rung is reachable — passed');
 console.log('Focu reader wave-9: agenda-contents cards, real source names, export above the archive passed');
 console.log('Focu reader wave-10: automatic voice fallback, archive state labels, quiet archive action passed');
+console.log('Focu reader wave-11: bullet-digest gist — the glance layer covers the digest shape passed');

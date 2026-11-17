@@ -8,6 +8,7 @@ WebView.
 import re
 from html.parser import HTMLParser
 from focu.audience import writing_guidance, detect_domain
+from focu.briefing import strip_urls
 
 
 class _HTMLReader(HTMLParser):
@@ -188,6 +189,34 @@ def agenda_gist(blocks):
     return shorten(joined, GIST_LIMIT)
 
 
+BULLET_DIGEST_MIN = 3
+
+
+def bullet_fallback_text(blocks):
+    """The first bullet's own text for a bullet-shaped body, locator-free.
+
+    A digest unit (the LinkedIn feed shape) is a list of entries, not
+    prose: it carries no synopsis, no Findings claim and no lead
+    paragraph, so the ordinary glance/scan extraction publishes nothing
+    at all and the card renders title + price only. When the body is
+    bullet-shaped — at least three bullet blocks, which is what
+    blocks_from_markdown makes of ``-``/``*`` items and of the numbered
+    ``1.`` lines the digest units are written in — the first bullet is
+    the honest extractive fallback: its own words, URLs removed first
+    (locators are not content; focu.briefing.strip_urls keeps markdown
+    link labels and drops bare or parenthesised URLs), then cleaned
+    like any other gist source. Only the first bullet is ever used: if
+    it is unusable (a bare URL, a fragment under GIST_MIN), the
+    fallback yields "" rather than manufacturing a line from a later
+    entry.
+    """
+    bullets = [block for block in blocks if block["type"] == "bullet"]
+    if len(bullets) < BULLET_DIGEST_MIN:
+        return ""
+    text = clean(strip_urls(bullets[0]["text"]))
+    return text if len(text) >= GIST_MIN else ""
+
+
 def _pipe_cells(line):
     """Parse GFM table cells without splitting escaped or inline-code pipes.
 
@@ -365,6 +394,22 @@ def editorial(markdown, metadata=None):
     summary = shorten(synopsis, 270)
     if isinstance(synopsis, str) and len(clean(synopsis)) <= 270 and synopsis.rstrip().endswith((".", "!", "?")):
         summary += synopsis.rstrip()[-1]
+    # A bullet-shaped body (a digest unit) reaches here with no gist
+    # and no summary: there was no synopsis, claim, or lead paragraph
+    # to extract from. Fall back to the first bullet's own text for
+    # both fields — the gist through make_gist's ordinary rules, the
+    # summary through the ordinary shorten — so the item is never
+    # published with both fields empty. The gate is both-fields-empty,
+    # so any item the existing paths served keeps its exact output;
+    # and the gist is still omitted when it would merely repeat the
+    # item's title.
+    if not gist and not summary:
+        bullet = bullet_fallback_text(blocks)
+        if bullet:
+            gist = make_gist(bullet)
+            if gist == title or gist == heading:
+                gist = ""
+            summary = shorten(bullet, 270)
     word_count = len(re.findall(r"\b[\w'-]+\b", markdown or ""))
     return {"title": title, "summary": summary, "gist": gist,
             "article_blocks": blocks,

@@ -469,6 +469,133 @@ class PublisherTests(unittest.TestCase):
                          "An explicit synopsis supplied by the publisher for "
                          "this briefing")
 
+    # Wave 28: a bullet-shaped digest unit (the LinkedIn feed shape) has
+    # no synopsis, claim, or lead paragraph, so it used to publish with
+    # gist and summary both empty — title + price and no text at all.
+    LINKEDIN_DIGEST_ARTICLE = (
+        "# LinkedIn Feed — Friday, November 14, 2026\n\n"
+        "1. Jane Doe — shipped a mapping tool for geothermal surveys "
+        "(https://www.linkedin.com/feed/update/urn:li:ugcPost:7526714905299763201/)\n"
+        "2. John Roe — a new paper on reservoir simulation boundary "
+        "conditions is out today "
+        "(https://www.linkedin.com/feed/update/urn:li:ugcPost:7526714905299763202/)\n"
+        "3. Ana Lee — hiring two ML engineers for exploration work "
+        "(https://www.linkedin.com/feed/update/urn:li:ugcPost:7526714905299763203/)\n"
+        "4. Tom Poe — notes from the GEMS workshop on fault mapping "
+        "(https://www.linkedin.com/feed/update/urn:li:ugcPost:7526714905299763204/)\n"
+    )
+
+    def test_bullet_digest_gist_and_summary_come_from_the_first_bullet(self):
+        info = editorial(self.LINKEDIN_DIGEST_ARTICLE,
+                         {"title": "LinkedIn Feed — Friday, November 14, 2026"})
+        expected = "Jane Doe — shipped a mapping tool for geothermal surveys"
+        self.assertEqual(info["gist"], expected)
+        self.assertEqual(info["summary"], expected)
+        # Extractive only: both fields are the item's own words, and the
+        # entry's permalink — a locator, not content — never leaks in.
+        self.assertIn(info["gist"], self.LINKEDIN_DIGEST_ARTICLE)
+        self.assertIn(info["summary"], self.LINKEDIN_DIGEST_ARTICLE)
+        self.assertLessEqual(len(info["gist"]), 90)
+        self.assertNotIn("http", info["gist"])
+        self.assertNotIn("linkedin.com", info["gist"])
+        self.assertNotIn("7526714905299763201", info["gist"])
+
+    def test_build_bullet_digest_publishes_gist_and_summary(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            folder = root / "deliveries" / "linkedin-20261114"
+            folder.mkdir(parents=True)
+            (folder / "article.md").write_text(self.LINKEDIN_DIGEST_ARTICLE,
+                                               encoding="utf-8")
+            (folder / "content.json").write_text(json.dumps({
+                "content_id": "linkedin-2026-11-14",
+                "origin": "registered_source",
+                "podcast_mode": "daily_compilation",
+                "title": "LinkedIn Feed — Friday, November 14, 2026",
+                "published_at": "2026-11-14",
+            }), encoding="utf-8")
+            build(root / "deliveries", root / "bundle",
+                  Path(__file__).with_name("index.html"), 15)
+            data = json.loads((root / "bundle/assets/episodes.json").read_text())
+            by_id = {item["content_id"]: item for item in data["items"]}
+            item = by_id["linkedin-2026-11-14"]
+            self.assertTrue(item["gist"])
+            self.assertTrue(item["summary"])
+            self.assertIn(item["gist"], self.LINKEDIN_DIGEST_ARTICLE)
+            self.assertIn(item["summary"], self.LINKEDIN_DIGEST_ARTICLE)
+            self.assertLessEqual(len(item["gist"]), 90)
+            self.assertNotIn("http", item["gist"])
+
+    def test_bullet_fallback_never_overrides_a_prose_lead(self):
+        # Shape gate is both-fields-empty: an item the prose paths serve
+        # keeps its exact output even when its body also carries bullets,
+        # and a short explicit synopsis is likewise left alone.
+        prose = ("# Report\n\nA prose lead that honestly summarises the "
+                 "work in plain words for the reader.\n\n"
+                 "- First point\n- Second point\n- Third point\n")
+        info = editorial(prose)
+        self.assertEqual(info["gist"],
+                         "A prose lead that honestly summarises the work "
+                         "in plain words for the reader")
+        self.assertEqual(info["summary"], info["gist"])
+        info = editorial("# Report\n\nBody text here.\n\n"
+                         "- Alpha point\n- Beta point\n- Gamma point\n",
+                         {"summary": "Too short"})
+        self.assertEqual(info["gist"], "")
+        self.assertEqual(info["summary"], "Too short")
+
+    def test_bullet_digest_with_unusable_first_bullet_stays_empty(self):
+        # A bare-URL first bullet yields nothing, and the fallback never
+        # manufactures a line from a later bullet instead.
+        bare = ("# LinkedIn Feed — Saturday, November 15, 2026\n\n"
+                "1. https://www.linkedin.com/feed/update/urn:li:ugcPost:7526714905299763201/\n"
+                "2. John Roe — a new paper on reservoir simulation boundary "
+                "conditions is out today "
+                "(https://www.linkedin.com/feed/update/urn:li:ugcPost:7526714905299763202/)\n"
+                "3. Ana Lee — hiring two ML engineers for exploration work "
+                "(https://www.linkedin.com/feed/update/urn:li:ugcPost:7526714905299763203/)\n")
+        info = editorial(bare, {"title": "LinkedIn Feed — Saturday, "
+                                        "November 15, 2026"})
+        self.assertEqual(info["gist"], "")
+        self.assertEqual(info["summary"], "")
+        # A fragment first bullet is likewise unusable for both fields.
+        fragment = ("# Digest\n\n"
+                    "1. Hi (https://example.com/x)\n"
+                    "2. John Roe — a new paper on reservoir simulation "
+                    "boundary conditions is out today (https://example.com/y)\n"
+                    "3. Ana Lee — hiring two ML engineers for exploration "
+                    "work (https://example.com/z)\n")
+        info = editorial(fragment)
+        self.assertEqual(info["gist"], "")
+        self.assertEqual(info["summary"], "")
+        # Two bullets are not the digest shape: no fallback either.
+        info = editorial("# Digest\n\n- Alpha point worth reading\n"
+                         "- Beta point worth reading\n")
+        self.assertEqual(info["gist"], "")
+        self.assertEqual(info["summary"], "")
+
+    def test_build_bullet_digest_omits_gist_that_repeats_the_title(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            folder = root / "deliveries" / "notes-20261114"
+            folder.mkdir(parents=True)
+            (folder / "article.md").write_text(
+                "# Notes on reservoir simulation\n\n"
+                "- Notes on reservoir simulation\n"
+                "- Boundary conditions for the Cape field model\n"
+                "- Grid refinement results from the October run\n",
+                encoding="utf-8")
+            (folder / "content.json").write_text(json.dumps({
+                "content_id": "notes-2026-11-14",
+                "origin": "registered_source",
+                "podcast_mode": "daily_compilation",
+            }), encoding="utf-8")
+            build(root / "deliveries", root / "bundle",
+                  Path(__file__).with_name("index.html"), 15)
+            data = json.loads((root / "bundle/assets/episodes.json").read_text())
+            by_id = {item["content_id"]: item for item in data["items"]}
+            self.assertNotIn("gist", by_id["notes-2026-11-14"])
+
     def test_source_name_passes_through_from_content_json(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
