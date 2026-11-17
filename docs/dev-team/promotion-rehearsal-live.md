@@ -1,5 +1,14 @@
 # Promotion Rehearsal — the composed dev-main system, end to end (wave 32, 2026-11-17)
 
+> Status (2026-11-17, wave 37): point-in-time record of the wave-32 live-data rehearsal; the body below is unchanged. Two of its three open checklist decisions were overtaken within hours — D1 and D2 were resolved by fixing them (wave-33), and Q11 cold start was implemented (wave-34). Read the checklist at the end together with "Checklist status since the rehearsal" immediately below; items 3, 4, 5, 8, and 9 still stand as written.
+
+## Checklist status since the rehearsal (2026-11-17)
+
+- **Item 1 (D1) — RESOLVED by fixing (wave-33), no longer an owner decision.** The pack fetch guard now treats resolver answers in the benchmarking range (198.18.0.0/15) as *indeterminate*: the fetch proceeds and liveness records the verdict, instead of refusing every hostname behind proxied DNS. Literal private targets and private redirect hops are still refused, so installs with liveness no longer silently disable every feed source on this host.
+- **Item 2 (D2) — RESOLVED by fixing (wave-33), no longer an owner decision.** `focu/briefing.py` now applies one version-token rule (`VERSION_REF`) shared by the figure extractor and the presence checker, so names like "Kimi K3.1 Pro" no longer make the deterministic compose path unpassable; and a run that fails mid-pipeline still gets its day-status record, with the failing stage named — the Q5 surface now exists on failed days too.
+- **Item 11 (Q11) — IMPLEMENTED (wave-34).** Cold start shipped on dev-main: the first briefing's day-status names the installed starter pack and its removal command, backed by the design's acceptance battery (`tests/test_cold_start.py`). Wiring it into production remains part of the promotion itself.
+- **Still standing, exactly as written in the checklist below:** item 3 (port the production registry's comments into source notes before the first promoted install), item 4 (land dev-main in the production checkout and run the full suite against it), item 5 (dry-run the production config under the new loader), item 8 (the owner's iPhone listen-through — the one device check no rehearsal can do), and item 9 (assign the refresh-due cadence, Q2's open decision). Items 6, 7, and 10 stand as rehearsal-verified.
+
 Plan-4 direction 1 (pm-plan-3-closeout §4.1), executed by the integration-engineer agent. Everything ran on a scratch runtime under `~/workspace/focu-dev/rehearsal/` (own config, two daily data dirs, learn store, deliveries staging, bundle output) using the dev checkout's venv (`~/workspace/focu-dev-checkout/.venv/bin/focu`). Production was touched only as a read-only copy source for delivery folders (step 3); `~/focu-runtime` was never written, `~/workspace/focu-live` never touched, no artifact deployed, no cron changed, nothing pushed, and no product code was fixed — defects are recorded, not repaired.
 
 ## Verdicts

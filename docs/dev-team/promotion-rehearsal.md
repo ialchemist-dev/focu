@@ -1,5 +1,7 @@
 # Promotion rehearsal — the composed dev-main system, end to end
 
+> Status (2026-11-17, wave 37): this fixture-based rehearsal (no network, no production data) was followed the same day by a live-data rehearsal against real production delivery copies — see `promotion-rehearsal-live.md`. The live rehearsal found two blockers this one could not see: D1 (the pack fetch guard refuses every liveness probe behind this host's proxied DNS) and D2 (a briefing-QC extractor/checker asymmetry that aborts the deterministic daily path, leaving failed days with no day-status record). Both were fixed in wave-33, and Q11 cold start — listed below as a remaining promotion decision — was implemented in wave-34. This document's body is unchanged.
+
 - When: 2026-11-17 (plan-4 direction 1). Artifact: `tests/test_promotion_rehearsal.py` (2 tests).
 - Why: every wave of this run tested its own slice. Nothing had ever run the composed system — pack install, daily pipeline, day-status, publisher, learn ingest, proposals — as one exercise. A promotion decision made on slice tests alone is a leap; this rehearsal converts the in-repo part of it into a checklist with a green test behind it.
 

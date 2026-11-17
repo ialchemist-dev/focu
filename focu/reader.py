@@ -206,10 +206,23 @@ class ReaderStore:
         return [self.item(i) for i in ids]
 
     def packs(self):
-        packs = [json.loads(p.read_text()) for p in sorted(PACKS.glob('*.json'))]
+        # Mirror focu pack catalog: a file that cannot be read as a pack
+        # degrades to an error entry instead of failing the whole listing,
+        # so one malformed third-party pack cannot take down the reader.
+        packs = []
+        for path in sorted(PACKS.glob('*.json')):
+            try:
+                pack = json.loads(path.read_text(encoding='utf-8'))
+            except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+                packs.append({'file': path.name, 'error': 'unreadable'})
+                continue
+            if not isinstance(pack, dict):
+                packs.append({'file': path.name, 'error': 'pack must be a JSON object'})
+                continue
+            packs.append(pack)
         with self.db() as db:
             subscriptions = {r['pack_id']:json.loads(r['payload']) for r in db.execute('SELECT * FROM reader_subscriptions')}
-        return [{**p, 'subscribed_version': subscriptions.get(p['id'],{}).get('version')} for p in packs]
+        return [{**p, 'subscribed_version': subscriptions.get(p['id'],{}).get('version')} if 'id' in p else p for p in packs]
 
     def subscribe(self, pack_id, enabled, version=None):
         if type(enabled) is not bool:
@@ -219,7 +232,7 @@ class ReaderStore:
                 db.execute('DELETE FROM reader_subscriptions WHERE pack_id=?',(pack_id,))
                 sync_events.append(db,pack_id,'unsubscribe',{})
             return {'id':pack_id,'subscribed':False}
-        pack = next((p for p in self.packs() if p['id']==pack_id),None)
+        pack = next((p for p in self.packs() if p.get('id')==pack_id),None)
         if not pack or version != pack['version']:
             raise ValueError('Inspect and select a known pack version before subscribing')
         pack.pop('subscribed_version',None)
@@ -235,7 +248,10 @@ class ReaderStore:
         result = {}
         for pack in packs:
             for source in pack['sources']:
-                locator = canonical_url(source.get('feed_url') or source['site_url'])
+                # site_url is the legacy alias of the canonical homepage
+                # (packs.py folds one into the other); a canonically written
+                # pack may carry homepage only, so fall back to it.
+                locator = canonical_url(source.get('feed_url') or source.get('site_url') or source.get('homepage'))
                 if locator not in result:
                     result[locator] = {**source,'groups':[]}
                 result[locator]['groups'].append(pack['id'])

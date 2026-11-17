@@ -195,6 +195,91 @@ class FeedStatusTests(unittest.TestCase):
         self.assertEqual(report["verdict"], "unverifiable from here")
 
 
+class ProbeLimitedQualificationTests(unittest.TestCase):
+    """S3-F1: malformed / oversized verdicts name the judge that made
+    them. The pack probe (strict stdlib parser, 2 MB cap) and the
+    daily collector (lenient feedparser, 8 MB read) deliberately
+    differ; a probe-limited verdict is "this probe cannot consume
+    the feed", never "the feed is dead", and the summary groups it
+    apart from hard rot (http_error, unreachable)."""
+
+    def test_malformed_feed_carries_probe_discipline(self):
+        report = check(make_pack(), returning(("https://a/", MALFORMED)))
+        feed = report["sources"][0]["feed"]
+        self.assertEqual(feed["status"], "not_a_feed")
+        self.assertEqual(feed["probe"], "strict-xml/2mb")
+        self.assertIn("daily collector", feed["note"])
+        self.assertIn("not evidence the feed is dead", feed["note"])
+        self.assertEqual(report["probe_limited"],
+                         [{"id": "alice", "name": "Alice Example",
+                           "status": "not_a_feed"}])
+        self.assertEqual(report["hard_rot"], [])
+
+    def test_oversized_wellformed_feed_carries_probe_discipline(self):
+        big = FEED_PREFIX + b"x" * 2_100_000
+        report = check(make_pack(), returning(("https://a/", big)))
+        feed = report["sources"][0]["feed"]
+        self.assertEqual(feed["status"], "oversized")
+        self.assertEqual(feed["probe"], "strict-xml/2mb")
+        self.assertIn("2 MB fetch cap", feed["note"])
+        self.assertEqual(report["probe_limited"],
+                         [{"id": "alice", "name": "Alice Example",
+                           "status": "oversized"}])
+        self.assertEqual(report["hard_rot"], [])
+
+    def test_live_feed_carries_no_probe_qualification(self):
+        report = check(make_pack(), returning(("https://a/", RSS_OCT, False)))
+        feed = report["sources"][0]["feed"]
+        self.assertEqual(feed["status"], "live")
+        self.assertNotIn("probe", feed)
+        self.assertNotIn("note", feed)
+        self.assertEqual(report["probe_limited"], [])
+        self.assertEqual(report["hard_rot"], [])
+
+    def test_summary_groups_probe_limited_apart_from_hard_rot(self):
+        bob = make_source(id="bob", name="Bob Example",
+                          feed_url="https://bob.example.com/feed",
+                          homepage="https://bob.example.com/")
+        carol = make_source(id="carol", name="Carol Example",
+                            feed_url="https://carol.example.com/feed",
+                            homepage="https://carol.example.com/")
+        fetch = routed({
+            "https://alice.example.com/feed": ("https://a/", MALFORMED),
+            "https://bob.example.com/feed":
+                HTTPError("https://b/", 404, "Not Found", {}, None),
+            "https://carol.example.com/feed":
+                URLError("Connection reset by peer")})
+        report = check(make_pack([make_source(), bob, carol]), fetch)
+        self.assertEqual(report["probe_limited"],
+                         [{"id": "alice", "name": "Alice Example",
+                           "status": "not_a_feed"}])
+        self.assertEqual(report["hard_rot"],
+                         [{"id": "bob", "name": "Bob Example",
+                           "status": "http_error"},
+                          {"id": "carol", "name": "Carol Example",
+                           "status": "unreachable"}])
+        text = format_refresh(report)
+        probe_at = text.index("probe-limited")
+        rot_at = text.index("hard rot")
+        alice_at = text.index("Alice Example [not_a_feed]", probe_at)
+        self.assertLess(probe_at, alice_at)
+        self.assertLess(alice_at, rot_at)
+        self.assertIn("Bob Example [http_error]", text[rot_at:])
+        self.assertIn("Carol Example [unreachable]", text[rot_at:])
+        self.assertIn("not evidence the feed is dead", text)
+
+    def test_liveness_malformed_carries_probe_discipline(self):
+        from focu.packs import check_liveness
+        pack = {"sources": [{"id": "alice", "enabled": True,
+                             "feed_url": "https://a/feed"}]}
+        results = check_liveness(
+            pack, fetch=returning(("https://a/feed", MALFORMED)))
+        feed = results["alice"]["feed"]
+        self.assertEqual(feed["status"], "not_a_feed")
+        self.assertEqual(feed["probe"], "strict-xml/2mb")
+        self.assertIn("not evidence the feed is dead", feed["note"])
+
+
 class FreshnessSignalTests(unittest.TestCase):
     def test_newer_items_flagged(self):
         report = check(make_pack(), returning(("https://a/", RSS_NOV, False)))

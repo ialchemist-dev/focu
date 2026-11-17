@@ -691,6 +691,37 @@ def _parse_item_date(text):
     return parsed.date().isoformat()
 
 
+# ---------------------------------------------------------------------------
+# The probe's discipline (sweep finding S3-F1): pack liveness and
+# refresh-check judge feeds with the strict stdlib parser
+# (source_collection.parse_feed) under a 2 MB fetch cap — the right
+# trust posture for third-party data nobody has chosen yet. The daily
+# collector judges the owner's already-chosen sources with lenient
+# feedparser under an 8 MB read (focu/daily/collectors.py), where
+# recovery is worth more than strictness. The parsers are deliberately
+# NOT unified; what a probe-limited verdict must never do is claim
+# more than the probe knows. So results in the malformed / oversized
+# classes (statuses "not_a_feed" and "oversized") carry the producing
+# discipline in a "probe" field plus this standing note: the verdict
+# is "this probe cannot consume the feed", never "the feed is dead".
+
+PROBE_DISCIPLINE = "strict-xml/2mb"
+PROBE_LIMITED_STATUSES = ("not_a_feed", "oversized")
+PROBE_LIMITED_NOTE = (
+    "probe-limited verdict (strict-xml/2mb): the pack probe's strict "
+    "parser and 2 MB fetch cap cannot consume this feed; the daily "
+    "collector's lenient parser and 8 MB read may still read it — "
+    "this is not evidence the feed is dead")
+HARD_ROT_STATUSES = ("http_error", "unreachable")
+
+
+def _qualified(feed):
+    """Stamp a probe-limited feed result with its producing discipline."""
+    feed["probe"] = PROBE_DISCIPLINE
+    feed["note"] = PROBE_LIMITED_NOTE
+    return feed
+
+
 def check_liveness(pack, *, fetch=None):
     """Feed and homepage liveness for a normalized pack, keyed by source id.
 
@@ -700,6 +731,10 @@ def check_liveness(pack, *, fetch=None):
     when they resolved into the proxy benchmarking range instead —
     the result must not claim a verification that never happened.
     Injected fetches return (final_url, bytes) and record no verdict.
+
+    A "not_a_feed" result is probe-limited (see PROBE_DISCIPLINE): it
+    carries the probe field and the standing note, because the daily
+    collector's lenient parser may still read the same feed.
     """
     fetch = fetch or _bounded_fetch
     results = {}
@@ -728,7 +763,11 @@ def check_liveness(pack, *, fetch=None):
                 # parse_feed raises ET.ParseError (a SyntaxError, not a
                 # ValueError) when a feed URL answers with an HTML
                 # interstitial instead of XML; that is data, not a crash.
-                result["feed"] = {"status": "not_a_feed", "error": str(ex)}
+                # The verdict is probe-limited: the strict parser (or
+                # the 2 MB cap, via _bounded_fetch's ValueError) could
+                # not consume the feed — not proof the feed is dead.
+                result["feed"] = _qualified(
+                    {"status": "not_a_feed", "error": str(ex)})
             except (URLError, TimeoutError, OSError) as ex:
                 result["feed"] = {"status": "unreachable", "error": str(ex)}
         if src.get("homepage"):
@@ -1419,6 +1458,12 @@ def show_pack(raw_pack, config_path=None, *, check_feeds=True, fetch=None,
 #               2 MB fetch cap, so Focu cannot consume it (a Substack
 #               full-text feed measured ~2.87 MB live, 2026-11-17)
 #   no_feed     the source records no feed_url; nothing to probe
+#
+# The not_a_feed and oversized classes are probe-limited (see
+# PROBE_DISCIPLINE above): their results carry a "probe" field and the
+# standing note, and the report groups them separately from hard rot
+# (http_error, unreachable) — the daily collector's lenient parser and
+# 8 MB read may still read a feed this probe cannot consume.
 
 _FEED_ROOT = re.compile(rb"<(rss|feed|rdf:RDF)(?=[\s>])")
 
@@ -1457,9 +1502,10 @@ def _probe_feed(url, fetch):
         # oversize instead of returning the prefix; the cap is still
         # the finding, the prefix is just unavailable for sniffing.
         if "exceeds" in str(ex):
-            return {"status": "oversized",
-                    "error": "response exceeds the 2 MB fetch cap"}
-        return {"status": "not_a_feed", "error": str(ex)}
+            return _qualified(
+                {"status": "oversized",
+                 "error": "response exceeds the 2 MB fetch cap"})
+        return _qualified({"status": "not_a_feed", "error": str(ex)})
     if len(result) == 3:
         final_url, data, oversized = result
     else:  # check_liveness-style (final_url, bytes) fixtures
@@ -1467,15 +1513,17 @@ def _probe_feed(url, fetch):
         oversized = len(data) > 2_000_000
     if oversized:
         if _looks_like_feed_prefix(data):
-            return {"status": "oversized",
-                    "error": "feed document exceeds the 2 MB fetch cap"}
-        return {"status": "not_a_feed",
-                "error": "response exceeds the 2 MB fetch cap and does "
-                         "not begin as a feed document"}
+            return _qualified(
+                {"status": "oversized",
+                 "error": "feed document exceeds the 2 MB fetch cap"})
+        return _qualified(
+            {"status": "not_a_feed",
+             "error": "response exceeds the 2 MB fetch cap and does "
+                      "not begin as a feed document"})
     try:
         records = parse_feed(data, final_url)
     except (ValueError, ET.ParseError) as ex:
-        return {"status": "not_a_feed", "error": str(ex)}
+        return _qualified({"status": "not_a_feed", "error": str(ex)})
     dates = [d for d in (_parse_item_date(r.get("published_at"))
                          for r in records) if d]
     return {"status": "live", "items": len(records),
@@ -1557,6 +1605,10 @@ def refresh_check(raw_pack, config_path=None, *, fetch=None, today=None):
     ``(final_url, bytes, oversized)``). The verdict is one line:
     ``current``, ``N stale signal(s)``, or ``unverifiable from here``
     (no probe was answered, or the pack has no feeds to probe).
+    Probe-limited results (not_a_feed / oversized) carry the probe
+    discipline and standing note, and the report's ``probe_limited``
+    and ``hard_rot`` lists group those verdicts apart from http_error /
+    unreachable, so the summary never conflates them.
     Install state is read from the manifest beside ``config_path``
     when one is given, exactly as in :func:`show_pack`.
     """
@@ -1637,6 +1689,18 @@ def refresh_check(raw_pack, config_path=None, *, fetch=None, today=None):
                          "update_available":
                              record.get("version") != pack["version"],
                          "installed_at": record.get("installed_at")}
+    # Grouped verdicts for the summary: probe-limited outcomes (the
+    # strict probe cannot consume the feed) are a different judgment
+    # from hard rot (the host answered with an error, or not at all),
+    # and a curator's refresh decision must not conflate them.
+    probe_limited = [{"id": src["id"], "name": src["name"],
+                      "status": feed["status"]}
+                     for src, feed in probed
+                     if feed["status"] in PROBE_LIMITED_STATUSES]
+    hard_rot = [{"id": src["id"], "name": src["name"],
+                 "status": feed["status"]}
+                for src, feed in probed
+                if feed["status"] in HARD_ROT_STATUSES]
     return {"pack": {"id": pack["id"], "title": pack["title"],
                      "version": pack["version"],
                      "verified_at": pack["verified_at"],
@@ -1644,6 +1708,7 @@ def refresh_check(raw_pack, config_path=None, *, fetch=None, today=None):
             "checked_at": today.isoformat(),
             "sources": sources, "signals": pack_signals,
             "affiliation": affiliation,
+            "probe_limited": probe_limited, "hard_rot": hard_rot,
             "stale_signals": stale, "verdict": verdict,
             "installed": installed}
 
@@ -2337,12 +2402,25 @@ def format_refresh(report) -> str:
         elif feed.get("error"):
             detail += f" — {feed['error']}"
         lines.append(f"  - {src['name']} [{state}] feed: {detail}")
+        if feed.get("note"):
+            lines.append(f"      note: {feed['note']}")
         lines.append(f"      recorded last post: "
                      f"{src['recorded_last_post_at'] or 'none'}")
         for sig in src["signals"]:
             lines.append(f"      ! {sig['kind']}: {sig['detail']}")
     for sig in report["signals"]:
         lines.append(f"  ! {sig['kind']}: {sig['detail']}")
+    if report.get("probe_limited"):
+        lines.append("  probe-limited — the strict probe cannot "
+                     "consume these feeds; that is not rot, and the "
+                     "daily collector may still read them:")
+        for entry in report["probe_limited"]:
+            lines.append(f"    - {entry['name']} [{entry['status']}]")
+    if report.get("hard_rot"):
+        lines.append("  hard rot — the host answered with an error, "
+                     "or not at all:")
+        for entry in report["hard_rot"]:
+            lines.append(f"    - {entry['name']} [{entry['status']}]")
     if report.get("affiliation"):
         lines.append(f"  affiliation — evidence older than "
                      f"{AFFILIATION_STALE_DAYS} days; re-checking an "
