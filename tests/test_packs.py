@@ -36,6 +36,14 @@ def dead_fetch(url):
     raise HTTPError(url, 404, "Not Found", {}, None)
 
 
+def html_fetch(url):
+    # A feed URL answering with an HTML interstitial instead of XML
+    # (observed live from egec.org during the geothermal pack run).
+    if url.endswith("/feed"):
+        return url, b"<html><head><title>Interstitial</title></head></html>"
+    return url, RSS
+
+
 def make_source(**overrides):
     source = {"id": "alice", "name": "Alice Example", "type": "rss",
               "channel": "research", "platform": "Ghost",
@@ -319,6 +327,17 @@ class InstallTests(PackTestCase):
         self.assertTrue(add["enabled"])
         self.assertEqual(add["liveness"]["status"], "live")
         self.assertEqual(add["liveness"]["newest"], "2026-10-12")
+
+    def test_install_with_html_interstitial_feed_installs_disabled(self):
+        # Regression: parse_feed raises ET.ParseError (not ValueError)
+        # when a feed URL answers HTML; check_liveness must record it as
+        # not_a_feed data, never crash the install.
+        config = self.write_config()
+        result = install_pack(make_pack(), config, fetch=html_fetch)
+        self.assertTrue(result["applied"])
+        add = result["plan"]["adds"][0]
+        self.assertFalse(add["enabled"])
+        self.assertEqual(add["liveness"]["status"], "not_a_feed")
 
     def test_unverified_candidates_are_never_installed(self):
         config = self.write_config()

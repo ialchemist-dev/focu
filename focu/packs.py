@@ -45,6 +45,8 @@ from focu.daily import identity
 from focu.daily.config import KNOWN_TYPES, load_config
 from focu.daily.errors import FewError
 from focu.intents import utcnow
+from xml.etree import ElementTree as ET
+
 from focu.source_collection import parse_feed
 
 PACKS_DIR = Path(__file__).with_name("source_packs")
@@ -412,7 +414,10 @@ def check_liveness(pack, *, fetch=None):
                                   "newest": max(dates) if dates else None}
             except HTTPError as ex:
                 result["feed"] = {"status": "dead", "error": f"HTTP {ex.code}"}
-            except ValueError as ex:
+            except (ValueError, ET.ParseError) as ex:
+                # parse_feed raises ET.ParseError (a SyntaxError, not a
+                # ValueError) when a feed URL answers with an HTML
+                # interstitial instead of XML; that is data, not a crash.
                 result["feed"] = {"status": "not_a_feed", "error": str(ex)}
             except (URLError, TimeoutError, OSError) as ex:
                 result["feed"] = {"status": "unreachable", "error": str(ex)}
