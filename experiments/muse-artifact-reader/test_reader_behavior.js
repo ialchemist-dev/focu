@@ -384,8 +384,10 @@ assert.match(html, /\.feedcard\[hidden\]\{display:none!important\}/);
   const chip=body.children.find(n=>n.className==='cardmeta costchip');
   assert.ok(chip,'text card carries a cost chip');
   assert.equal(chip.textContent,'4 min read');
-  assert.equal(card.children[1].children.length,1,'no Play control without audio');
+  assert.equal(card.children[1].children.some(n=>String(n.className).includes('play-action')),false,'no Play control without audio');
+  assert.equal(card.children[1].children.length,2,'Archive plus the quiet Not for me action (wave 5)');
   assert.equal(card.children[1].children[0].textContent,'Archive');
+  assert.equal(card.children[1].children[1].textContent,'Not for me');
 }
 // Wave-2 (#3): a saved position turns the card button into Continue with the
 // remaining time, and playback resumes at that position after a reload.
@@ -604,6 +606,131 @@ assert.match(html, /\.feedcard\[hidden\]\{display:none!important\}/);
   console.log('Focu reader wave-4 (#5): glance gist layer passed');
 })().catch(err=>{console.error(err);process.exit(1)});
 
+// Wave-5 (Learning Phase 2): "Not for me" is a distinct negative act, not
+// a flavor of Archive. From a card it removes the item from the feed
+// WITHOUT a consumed status, records the mark with the item's source and
+// a timestamp in the same consumption store, rests in Archive, and is
+// fully reversed by Restore (which deletes the store entry, wave-2
+// semantics — positions and marks alike).
+{
+  assert.match(html, /id="readernotforme"/);
+  assert.match(html, /function markNotForMe\(id\)/);
+  const e=makeEnvironment();
+  e.run('render(['+article('nfm-card')+'],"")');
+  const card=e.get('grid').children[0];
+  const controls=card.children[1].children;
+  assert.equal(controls[0].textContent,'Archive');
+  const nfm=controls.find(n=>n.textContent==='Not for me');
+  assert.ok(nfm,'card carries the quiet Not for me action beside Archive');
+  assert.equal(nfm.className,'quiet-action','the action is visually quiet, not a gamified button');
+  let prevented=false,stopped=false;
+  nfm.onclick({preventDefault(){prevented=true},stopPropagation(){stopped=true}});
+  assert.equal(prevented,true,'tap should not bubble into the story opener');
+  assert.equal(stopped,true);
+  assert.equal(card.hidden,true,'card hides synchronously on tap');
+  assert.equal(e.run("isDone('nfm-card')"),false,'not for me is not consumption');
+  assert.equal(e.run("isNotForMe('nfm-card')"),true);
+  const entry=JSON.parse(e.storage['focu:content-consumption:v1'])['nfm-card'];
+  assert.equal(entry.status,undefined,'no consumed status is written');
+  assert.equal(entry.not_for_me.source,'Your research','the mark records the item source');
+  assert.ok(Number.isFinite(Date.parse(entry.not_for_me.at)),'the mark records a timestamp');
+  assert.equal(e.get('grid').children.length,1,'feed now shows only the empty state');
+  assert.equal(makeEnvironment(e.storage).run("isNotForMe('nfm-card')"),true,'the mark survives a reload');
+  e.run("setView('archive')");
+  assert.equal(e.get('grid').children.length,1,'the dismissed item rests in Archive');
+  const restore=e.get('grid').children[0].children[1].children[0];
+  assert.equal(restore.textContent,'Restore');
+  restore.onclick();
+  assert.equal(e.run("isNotForMe('nfm-card')"),false,'Restore clears the not-for-me mark');
+  assert.equal(JSON.parse(e.storage['focu:content-consumption:v1'])['nfm-card'],undefined,'Restore removes the whole store entry');
+  e.run("setView('briefing')");
+  assert.equal(e.get('grid').children[0].children[0].children[0].children[1].textContent,'A grounded research story','restored item returns to the feed');
+}
+// Wave-5 (Learning Phase 2): the same act inside the article view — it
+// closes the reader like Archive does, and a marked item opened from
+// Archive offers Restore instead of a second Archive / Not for me.
+{
+  const e=makeEnvironment();
+  e.run('render(['+article('nfm-reader')+'],"")');
+  e.run("openItem('nfm-reader')");
+  assert.equal(e.get('readernotforme').hidden,false,'article view offers Not for me');
+  assert.equal(e.get('readerarchive').hidden,false);
+  e.get('readernotforme').onclick();
+  assert.equal(e.run("isDone('nfm-reader')"),false,'reader Not for me does not consume');
+  assert.equal(e.run("isNotForMe('nfm-reader')"),true);
+  assert.equal(e.get('reader').hidden,true,'not for me closes the reader');
+  e.run("setView('archive')");
+  e.run("openItem('nfm-reader')");
+  assert.equal(e.get('restore').hidden,false,'a not-for-me item in the reader offers Restore');
+  assert.equal(e.get('readerarchive').hidden,true,'no Archive on a dismissed item');
+  assert.equal(e.get('readernotforme').hidden,true,'no second Not for me on a marked item');
+  assert.equal(e.get('readerstate').textContent,'Not for me · Saved in Archive');
+  e.get('restore').onclick();
+  assert.equal(e.run("isNotForMe('nfm-reader')"),false,'reader Restore clears the mark');
+  assert.equal(e.get('readerarchive').hidden,false,'unmarked item offers Archive again');
+}
+// Wave-5 (Learning Phase 2): the Archive view carries the one deliberate
+// export control, and only there — Today and Research gain no chrome.
+{
+  const e=makeEnvironment();
+  e.run('render(['+article('foot-1')+'],"")');
+  assert.equal(e.get('archivefoot').hidden,true,'no export control in the briefing view');
+  e.run("setView('research')");
+  assert.equal(e.get('archivefoot').hidden,true,'no export control in the research view');
+  e.run("setView('archive')");
+  assert.equal(e.get('archivefoot').hidden,false,'the export control rests in the Archive view');
+  assert.match(html, /id="exportsummary"[^>]*>Share reading summary</,'the control carries the design name for the action');
+}
+// Wave-5 (Learning Phase 2): the export itself. buildReadingSummary is a
+// pure shaping of the consumption store (plus each item's source from the
+// reader's item data); it runs in this environment whose fetch throws on
+// any call, and neither export function's source touches the network.
+{
+  assert.match(html, /id="exportsummary"/);
+  assert.match(html, /focu-reading-summary/);
+  const e=makeEnvironment();
+  e.run("render(["+
+    "{id:'exp-audio',origin:'daily_compilation',title:'Listened briefing',date:'2026-11-10',source:'Focu',audio_url:'assets/a.mp3',audio_duration:600,covered_content_ids:[],blocks:[{type:'paragraph',text:'A'}]},"+
+    "{id:'exp-manual',origin:'user_initiated',title:'Archived by hand',date:'2026-11-10',source:'Your research',blocks:[{type:'paragraph',text:'B'}]},"+
+    "{id:'exp-nfm',origin:'registered_source',title:'Dismissed source piece',date:'2026-11-10',source:'Anthropic',blocks:[{type:'paragraph',text:'C'}]},"+
+    "{id:'exp-partial',origin:'daily_compilation',title:'Half heard',date:'2026-11-10',source:'Focu',audio_url:'assets/d.mp3',audio_duration:900,covered_content_ids:[],blocks:[{type:'paragraph',text:'D'}]}"+
+  "],'')");
+  e.run("markDone('exp-audio','audio')");
+  e.run("markDone('exp-manual','manual')");
+  e.run("markNotForMe('exp-nfm')");
+  e.run("writePos('exp-partial',{audio_pos:275})");
+  const summary=JSON.parse(e.run('JSON.stringify(buildReadingSummary())'));
+  assert.equal(summary.format,'focu-reading-summary');
+  assert.equal(summary.version,1);
+  assert.ok(Number.isFinite(Date.parse(summary.exported_at)),'export carries its own timestamp');
+  assert.deepEqual(summary.items.map(x=>x.content_id),['exp-audio','exp-manual','exp-nfm','exp-partial'],'items sorted by content_id');
+  const byId={};for(const item of summary.items)byId[item.content_id]=item;
+  assert.deepEqual(Object.keys(byId['exp-audio']).sort(),['archived','article_pos_px','audio','audio_pos_seconds','content_id','not_for_me','source','status','updated_at','via'],'the per-item key set is exactly the documented format');
+  assert.equal(byId['exp-audio'].status,'consumed');
+  assert.equal(byId['exp-audio'].via,'audio');
+  assert.equal(byId['exp-audio'].audio,'completed','a finished listen summarizes as completed');
+  assert.equal(byId['exp-audio'].audio_pos_seconds,null,'a completed entry carries no stale position');
+  assert.equal(byId['exp-audio'].archived,true);
+  assert.equal(byId['exp-audio'].source,'Focu');
+  assert.equal(byId['exp-audio'].not_for_me,null);
+  assert.ok(Number.isFinite(Date.parse(byId['exp-audio'].updated_at)));
+  assert.equal(byId['exp-manual'].status,'consumed');
+  assert.equal(byId['exp-manual'].via,'manual','manual archive stays distinguishable from real consumption');
+  assert.equal(byId['exp-nfm'].status,'not_for_me');
+  assert.equal(byId['exp-nfm'].via,null,'a dismissal claims no consumption route');
+  assert.equal(byId['exp-nfm'].not_for_me.source,'Anthropic','the dismissal keeps its source attribution');
+  assert.ok(Number.isFinite(Date.parse(byId['exp-nfm'].not_for_me.at)));
+  assert.equal(byId['exp-nfm'].archived,true,'a dismissed item rests in Archive');
+  assert.equal(byId['exp-partial'].status,'in_progress','a positions-only entry is in progress, not consumed');
+  assert.equal(byId['exp-partial'].audio,'partial','a saved position summarizes as partial');
+  assert.equal(byId['exp-partial'].audio_pos_seconds,275);
+  assert.equal(byId['exp-partial'].archived,false);
+  assert.doesNotMatch(e.run('buildReadingSummary.toString()'),/fetch\(|XMLHttpRequest/,'the builder performs no network I/O');
+  assert.doesNotMatch(e.run('exportReadingSummary.toString()'),/fetch\(|XMLHttpRequest/,'the export trigger performs no network I/O');
+  console.log('Focu reader wave-5 (Learning Phase 2): not-for-me act and reading summary export passed');
+}
+
 console.log('Focu reader behavior: article, local read-aloud, persistence and audio end passed');
 console.log('Focu reader wave-2: one-tap play, cost chips and persisted resume passed');
 console.log('Focu reader wave-3: contextual recovery, skip controls and briefing purity passed');
+console.log('Focu reader wave-5: distinct negative act and owner-carried export passed');

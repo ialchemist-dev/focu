@@ -30,6 +30,10 @@ main{max-width:760px;margin:0 auto;padding:25px 22px 70px}
 .costchip{margin-top:7px;color:#716c65;font-weight:600}
 .play-action{background:#242424;color:#fff;border-color:#242424}
 .play-action:hover{background:#3a3733;color:#fff}
+.quiet-action{border:0;background:transparent;color:#999189;padding:7px 8px;font-size:12px;min-height:36px}
+.quiet-action:hover{color:#716c65;text-decoration:underline}
+.archivefoot{margin-top:26px;padding-top:16px;border-top:1px solid #e9e5df;text-align:center}
+#archivefoot[hidden]{display:none!important}
 .card-controls{display:flex;justify-content:flex-end;flex-shrink:0}
 .reader-archive{margin-left:auto}
 @media(max-width:480px){.feedcard{flex-wrap:wrap}.card-controls{width:100%;justify-content:flex-end}}
@@ -106,13 +110,13 @@ body:has(#playerbar:not([hidden])) main{padding-bottom:calc(160px + var(--muse-c
 <body>
 <header><div class="head"><div class="brand">focu<span class="dot">.</span></div><nav class="nav" aria-label="Library"><button id="briefingtab" class="active">Daily Briefing</button><button id="researchtab">Research</button><button id="archive">Archive</button></nav></div></header>
 <main>
-<section id="feed"><h1 class="sectiontitle" id="feedheading">Daily Briefing</h1><div id="status" aria-live="polite" hidden></div><div class="feed" id="grid"></div></section>
+<section id="feed"><h1 class="sectiontitle" id="feedheading">Daily Briefing</h1><div id="status" aria-live="polite" hidden></div><div class="feed" id="grid"></div><div id="archivefoot" class="archivefoot" hidden><button id="exportsummary" class="smallbutton" type="button">Share reading summary</button></div></section>
 <section id="reader" hidden>
 <button id="back" class="readerback">← Back to Inbox</button>
 <div class="byline" id="readerbyline"></div><button id="coveredby" class="smallbutton" type="button" hidden></button>
 <h1 id="readertitle"></h1>
 <p id="readersummary"></p>
-<div class="readeractions" id="toolbar"><button id="listen" class="listen" hidden>▶ Listen</button><button id="readaloud" class="listen" hidden>▶ Read aloud</button><span id="readtime" class="readtime"></span><button id="readerarchive" class="card-action reader-archive" type="button">Archive</button><button id="restore" class="card-action reader-archive" type="button" hidden>Restore</button></div>
+<div class="readeractions" id="toolbar"><button id="listen" class="listen" hidden>▶ Listen</button><button id="readaloud" class="listen" hidden>▶ Read aloud</button><span id="readtime" class="readtime"></span><button id="readerarchive" class="card-action reader-archive" type="button">Archive</button><button id="restore" class="card-action reader-archive" type="button" hidden>Restore</button><button id="readernotforme" class="card-action" type="button" hidden>Not for me</button></div>
 <img id="readercover" class="readercover" hidden alt="">
 <div id="articlebody"></div>
 <div id="coveredsection" class="coveredsection" hidden><h2>Articles covered in this briefing</h2><div id="coveredarticles"></div></div>
@@ -160,6 +164,32 @@ function manualArchive(id){
    setView('inbox');
  }
 }
+function isNotForMe(id){const s=savedEntry(id);return !!(s&&s.not_for_me&&typeof s.not_for_me==='object')}
+function markNotForMe(id){
+ // The unambiguous negative act (Learning Phase 2). Archive means "done"
+ // (via "manual" conflates finished, read-elsewhere and dismissed), so a
+ // manual archive is unusable as learning evidence. This act is separate:
+ // the item leaves every feed view WITHOUT a consumed status, rests in
+ // Archive where Restore can reverse it, and the mark carries its own
+ // timestamp plus the item's source so the signal survives export intact.
+ if(!id||isDone(id)||isNotForMe(id))return;
+ const item=allItems.find(x=>x.id===id);
+ const at=new Date().toISOString();
+ const entry=savedEntry(id)||{};
+ entry.not_for_me={at,source:item?String(item.source||''):''};
+ entry.updated_at=at;
+ states[id]=entry;
+ saveStates();render(allItems,lastNote);updateReaderState();
+}
+function readerNotForMe(id){
+ if(!id)return;
+ markNotForMe(id);
+ if(currentId===id){
+   if(speechRunning)stopNarration();
+   if(playingId===id){player.pause();playerbar.hidden=true}
+   setView(view);
+ }
+}
 function savedEntry(id){const s=states[id];return s&&typeof s==='object'?s:null}
 function audioPosOf(id){const s=savedEntry(id);const v=s?Number(s.audio_pos):NaN;return Number.isFinite(v)&&v>0?v:0}
 function articlePosOf(id){const s=savedEntry(id);const v=s?Number(s.article_pos):NaN;return Number.isFinite(v)&&v>0?v:0}
@@ -189,6 +219,89 @@ function noteArticlePosition(id,y){
  if(!id||!Number.isFinite(y))return;
  articlePositions[id]=y;
  if(Math.abs(y-articlePosOf(id))>=50||y===0)writePos(id,{article_pos:Math.floor(Math.max(0,y))});
+}
+// ---------------------------------------------------------------------------
+// Reading summary export — the Learning Phase 2 transport.
+//
+// The consumption store lives only in this device's localStorage; the
+// pipeline on the VM can see none of it. The ONLY path across is this
+// owner-initiated export: the owner taps "Share reading summary" in the
+// Archive view, receives one JSON file, and hands it to his agent, which
+// ingests it (`focu learn ingest`, idempotent by content_id + updated_at).
+// The app sends nothing anywhere: no network calls, no background sync —
+// the file moves only because the owner carries it. That is a sovereignty
+// property of the design, not a workaround.
+//
+// Format "focu-reading-summary", version 1:
+// {
+//   "format": "focu-reading-summary",
+//   "version": 1,
+//   "exported_at": "<ISO 8601 UTC timestamp>",
+//   "items": [
+//     {
+//       "content_id": "<store key>",
+//       "source": "<item source, from the reader's item data>",
+//       "status": "consumed" | "not_for_me" | "in_progress",
+//       "via": "audio" | "article" | "device_voice" | "manual" | null,
+//       "archived": true | false,
+//       "not_for_me": { "at": "<ISO 8601>", "source": "<source>" } | null,
+//       "audio": "completed" | "partial" | null,
+//       "audio_pos_seconds": <number> | null,
+//       "article_pos_px": <number> | null,
+//       "updated_at": "<ISO 8601>" | null
+//     }
+//   ]
+// }
+// "in_progress" means an entry exists only because a position was saved.
+// "archived" means the item rests in the Archive view (consumed, or marked
+// not-for-me). "audio" summarizes the listen position: "completed" when
+// the item was consumed via audio, "partial" when a position is saved on
+// an unfinished item. Positions travel raw; per the learning design the
+// pipeline may use article_pos only as a binary "started" fact, never as
+// a depth percentage. Items are sorted by content_id so exports diff
+// cleanly. The per-item fields extend the store's own fields with the
+// item's source (which the store does not carry) — nothing else is added.
+// ---------------------------------------------------------------------------
+const READING_SUMMARY_FORMAT='focu-reading-summary';
+function buildReadingSummary(){
+ const items=[];
+ for(const id of Object.keys(states).sort()){
+  const entry=savedEntry(id);if(!entry)continue;
+  const item=allItems.find(x=>x.id===id);
+  const nfm=entry.not_for_me&&typeof entry.not_for_me==='object'?entry.not_for_me:null;
+  const done=entry.status==='consumed';
+  const audioPos=Number(entry.audio_pos),articlePos=Number(entry.article_pos);
+  const hasAudioPos=Number.isFinite(audioPos)&&audioPos>0,hasArticlePos=Number.isFinite(articlePos)&&articlePos>0;
+  items.push({
+   content_id:id,
+   source:item?String(item.source||''):(nfm?String(nfm.source||''):''),
+   status:done?'consumed':(nfm?'not_for_me':'in_progress'),
+   via:done?(entry.via||null):null,
+   archived:done||!!nfm,
+   not_for_me:nfm?{at:String(nfm.at||''),source:String(nfm.source||'')}:null,
+   audio:done&&entry.via==='audio'?'completed':(hasAudioPos?'partial':null),
+   audio_pos_seconds:hasAudioPos?Math.floor(audioPos):null,
+   article_pos_px:hasArticlePos?Math.floor(articlePos):null,
+   updated_at:entry.updated_at||(nfm?nfm.at:null)||null
+  });
+ }
+ return {format:READING_SUMMARY_FORMAT,version:1,exported_at:new Date().toISOString(),items};
+}
+function exportReadingSummary(){
+ const text=JSON.stringify(buildReadingSummary(),null,2);
+ try{
+  const blob=new Blob([text],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const link=document.createElement('a');
+  link.href=url;link.download='focu-reading-summary.json';
+  if(document.body)document.body.append(link);
+  link.click();
+  if(document.body)link.remove();
+  if(typeof setTimeout==='function')setTimeout(()=>{try{URL.revokeObjectURL(url)}catch(e){}},1000);
+  status.hidden=false;status.className='';status.textContent='Reading summary downloaded — hand the file to your agent';scheduleStatusHide();
+ }catch(e){
+  status.hidden=false;status.className='error';status.textContent='Reading summary export is unavailable in this browser';
+ }
 }
 function durationLabel(seconds){
  const total=Number(seconds);
@@ -293,22 +406,40 @@ function appendCard(item){
    };
    controls.append(play);
  }
- controls.append(action);card.append(controls);grid.append(card);
+ controls.append(action);
+ if(view!=='archive'){
+   // A quiet text action beside Archive — no border, no badge, no count.
+   // It is the distinct negative act Archive cannot express (see
+   // markNotForMe): one tap, and the item rests in Archive, reversible.
+   const nfm=el('button','Not for me','quiet-action');nfm.type='button';
+   nfm.setAttribute('aria-label','Not for me: '+item.title);
+   nfm.onclick=event=>{
+     if(event){event.preventDefault();event.stopPropagation()}
+     card.hidden=true;
+     card.remove();
+     markNotForMe(item.id);
+   };
+   controls.append(nfm);
+ }
+ card.append(controls);grid.append(card);
 }
 function render(items,note){
  allItems=items;lastNote=note;grid.replaceChildren();
+ document.getElementById('archivefoot').hidden=view!=='archive';
  let visible=[],briefs=[],uncovered=[];
  if(view==='archive'){
-   visible=items.filter(x=>isDone(x.id)).sort(newestFirst);
+   // Archive holds both completions and not-for-me dismissals; Restore
+   // (markUnread) reverses either by deleting the store entry.
+   visible=items.filter(x=>isDone(x.id)||isNotForMe(x.id)).sort(newestFirst);
  }else if(view==='research'){
-   visible=items.filter(x=>!isDone(x.id)&&itemKind(x)==='research').sort(newestFirst);
+   visible=items.filter(x=>!isDone(x.id)&&!isNotForMe(x.id)&&itemKind(x)==='research').sort(newestFirst);
  }else{
-   briefs=items.filter(x=>!isDone(x.id)&&itemKind(x)==='briefing').sort(newestFirst);
+   briefs=items.filter(x=>!isDone(x.id)&&!isNotForMe(x.id)&&itemKind(x)==='briefing').sort(newestFirst);
    // Uncompiled registered-source articles remain reachable without mixing
    // commissioned research reports into the Daily Briefing stream, and
    // without competing with the compiled briefing at full weight: they rest
    // behind one collapsed row until the owner asks for them.
-   uncovered=items.filter(x=>!isDone(x.id)&&itemKind(x)==='source'&&!compilationFor(x.id)).sort(newestFirst);
+   uncovered=items.filter(x=>!isDone(x.id)&&!isNotForMe(x.id)&&itemKind(x)==='source'&&!compilationFor(x.id)).sort(newestFirst);
    visible=[...briefs,...uncovered];
  }
  if(!visible.length&&!(view==='research'&&allRequests.length)){
@@ -393,9 +524,11 @@ function renderArticle(blocks,legacyUrl){
 function updateReaderState(){
  if(!currentId)return;
  const done=isDone(currentId);
- document.getElementById('readerstate').textContent=done?'Finished · Saved in Archive':'';
- document.getElementById('restore').hidden=!done;
- document.getElementById('readerarchive').hidden=done;
+ const nfm=!done&&isNotForMe(currentId);
+ document.getElementById('readerstate').textContent=done?'Finished · Saved in Archive':(nfm?'Not for me · Saved in Archive':'');
+ document.getElementById('restore').hidden=!done&&!nfm;
+ document.getElementById('readerarchive').hidden=done||nfm;
+ document.getElementById('readernotforme').hidden=done||nfm;
 }
 function openItem(id,viaLink=false){
  const item=allItems.find(x=>x.id===id);if(!item)return;
@@ -450,6 +583,8 @@ document.getElementById('back').onclick=()=>{
 };
 document.getElementById('restore').onclick=()=>{if(currentId)markUnread(currentId)};
 document.getElementById('readerarchive').onclick=()=>manualArchive(currentId);
+document.getElementById('readernotforme').onclick=()=>readerNotForMe(currentId);
+document.getElementById('exportsummary').onclick=()=>exportReadingSummary();
 function stopNarration(){
  speechRunning=false;speechPaused=false;speechId=null;speechSegments=[];speechIndex=0;speechEpoch++;
  if(canNarrate())speechSynthesis.cancel();
