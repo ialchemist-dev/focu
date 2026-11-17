@@ -147,6 +147,256 @@ def digest(store, cfg, run, gate_priorities=None):
     return result
 
 
+def _stage_report(store, run_id, stage):
+    row = store.db.execute("SELECT report_json FROM stage_runs WHERE run_id=? AND stage=?",
+                           (run_id, stage)).fetchone()
+    if row and row[0]:
+        try:
+            return json.loads(row[0])
+        except ValueError:
+            return None
+    return None
+
+
+def _audio_outcome(outcome, run):
+    """Classify one episode's audio outcome from its finalize outcome.
+
+    Vocabulary: "synthesized" (an audited MP3 is in the manifest),
+    "text_only" (the episode finalized without audio — the reason is the
+    audio attempt's own recorded reason), "not_attempted" (the run never
+    tried: text_only mode, or the episode never reached finalization).
+    """
+    status = outcome["status"]
+    if status == "failed":
+        return {"outcome": "not_attempted",
+                "reason": "episode failed: " + str(outcome.get("error") or "unknown error")}
+    if status not in ("finalized", "reused"):
+        return {"outcome": "not_attempted",
+                "reason": f"episode not finalized (status: {status})"}
+    manifest = outcome.get("manifest") or {}
+    if manifest.get("audio"):
+        return {"outcome": "synthesized",
+                "duration_seconds": manifest.get("duration_seconds")}
+    attempt = manifest.get("audio_attempt")
+    if isinstance(attempt, dict):
+        reason = attempt.get("reason") or (
+            f"audio attempt {attempt.get('status')} at stage {attempt.get('stage')}")
+        return {"outcome": "text_only", "reason": reason}
+    if run["output_mode"] == "audio":
+        return {"outcome": "text_only",
+                "reason": "episode manifest carries no audio and no audio attempt record"}
+    return {"outcome": "not_attempted", "reason": "run output mode is text_only"}
+
+
+def assemble_day_status(store, cfg, run, fetch_report=None, outcomes=None):
+    """Q5: one honest status record for the day, assembled from the stage
+    reports the run actually produced — never from a stage's self-summary
+    alone.
+
+    Per enabled source the record accounts for the whole funnel:
+    collected (this run's fetch) -> considered (entered selection) ->
+    selected, with every gap named as withheld (paused_by_learning,
+    over_cap, over_budget, already_selected) or not_ready
+    (needs_enrichment, provisional, expired) counts taken from the
+    selection_accounting stage row selection itself wrote. Fetch
+    failures and episode failures are named with their error strings;
+    each episode's audio outcome is classified from its manifest.
+
+    Reconciliation is checked, not assumed: per source,
+    considered == selected + withheld; the accounting's selected total
+    must equal the select stage's selected count and the number of
+    units frozen into the run's episodes; the fetch report's per-source
+    items must sum to its discovered total. Any mismatch is listed in
+    "discrepancies" and downgrades the outcome to partial_failure —
+    the assembly never silently passes a day it cannot account for.
+    """
+    run_id = run["run_id"]
+    if fetch_report is None:
+        fetch_report = _stage_report(store, run_id, "ingest")
+    select_report = _stage_report(store, run_id, "select") or {}
+    accounting = _stage_report(store, run_id, "selection_accounting")
+    gate_report = _stage_report(store, run_id, "gate")
+    if outcomes is None:
+        outcomes = []
+        for ep in store.episodes(run_id):
+            if ep["status"] == "finalized":
+                manifest = (json.loads(ep["artifact_manifest"])
+                            if ep["artifact_manifest"] else {})
+                outcomes.append({"episode_id": ep["episode_id"],
+                                 "status": "reused", "manifest": manifest})
+            elif ep.get("last_error"):
+                outcomes.append({"episode_id": ep["episode_id"], "status": "failed",
+                                 "error": ep["last_error"]})
+            else:
+                outcomes.append({"episode_id": ep["episode_id"], "status": ep["status"]})
+
+    sources = {}
+
+    def _src(source_id, name=None):
+        entry = sources.setdefault(source_id, {
+            "source_id": source_id, "source": name, "fetch": None,
+            "collected": 0, "considered": 0, "selected": 0,
+            "withheld": [], "not_ready": []})
+        if name and not entry["source"]:
+            entry["source"] = name
+        return entry
+
+    failures = []
+    if fetch_report:
+        for s in fetch_report.get("sources", []):
+            entry = _src(s["source_id"], s["source"])
+            entry["fetch"] = {"status": s["status"],
+                              "completeness": s["completeness"],
+                              "error_code": s["error_code"],
+                              "message": s["message"]}
+            entry["collected"] = s["items"]
+            if s["status"] == "error":
+                failures.append({"stage": "ingest", "source_id": s["source_id"],
+                                 "source": s["source"], "status": s["status"],
+                                 "error_code": s["error_code"],
+                                 "message": s["message"]})
+    if accounting:
+        for a in accounting.get("sources", []):
+            entry = _src(a["source_id"], a["source"])
+            entry["considered"] = a["considered"]
+            entry["selected"] = a["selected"]
+            entry["withheld"] = a["withheld"]
+            entry["not_ready"] = a["not_ready"]
+    # Every enabled source gets a row even if no stage mentioned it, so a
+    # source can never vanish from the day's account entirely.
+    for s in enabled_sources(cfg):
+        _src(s["source_id"], s["name"])
+    source_list = [sources[sid] for sid in
+                   sorted(sources, key=lambda sid: (sources[sid]["source"] or sid, sid))]
+
+    episodes = []
+    audio = {"synthesized": [], "text_only": [], "not_attempted": []}
+    episode_failed = False
+    for outcome in outcomes:
+        entry = {"episode_id": outcome["episode_id"], "status": outcome["status"]}
+        if outcome["status"] == "failed":
+            episode_failed = True
+            failures.append({"stage": "finalize",
+                             "episode_id": outcome["episode_id"],
+                             "error": outcome.get("error")})
+        classified = _audio_outcome(outcome, run)
+        entry["audio"] = classified
+        if classified["outcome"] == "text_only":
+            audio["text_only"].append({"episode_id": outcome["episode_id"],
+                                       "reason": classified["reason"]})
+        else:
+            audio[classified["outcome"]].append(outcome["episode_id"])
+        episodes.append(entry)
+
+    notes = []
+    discrepancies = []
+    if accounting:
+        for a in accounting.get("sources", []):
+            withheld_total = sum(w["count"] for w in a["withheld"])
+            if a["considered"] != a["selected"] + withheld_total:
+                discrepancies.append(
+                    f"source {a['source']}: considered {a['considered']} != "
+                    f"selected {a['selected']} + withheld {withheld_total}")
+        accounting_selected = sum(a["selected"] for a in accounting.get("sources", []))
+        if "selected" in select_report and accounting_selected != select_report["selected"]:
+            discrepancies.append(
+                f"selection accounting selected {accounting_selected} != "
+                f"select stage selected {select_report['selected']}")
+        episode_units = sum(len(store.units(ep["episode_id"]))
+                            for ep in store.episodes(run_id))
+        if accounting_selected != episode_units:
+            discrepancies.append(
+                f"selection accounting selected {accounting_selected} != "
+                f"units frozen in episodes {episode_units}")
+    else:
+        notes.append("selection accounting was not recorded for this run; "
+                     "withheld counts cannot be reconciled")
+    if fetch_report and "discovered" in fetch_report:
+        collected_total = sum(s["items"] for s in fetch_report.get("sources", []))
+        if collected_total != fetch_report["discovered"]:
+            discrepancies.append(
+                f"fetch per-source items {collected_total} != "
+                f"discovered {fetch_report['discovered']}")
+
+    totals = {"collected": sum(e["collected"] for e in source_list),
+              "considered": sum(e["considered"] for e in source_list),
+              "selected": sum(e["selected"] for e in source_list),
+              "withheld": 0, "not_ready": 0,
+              "withheld_by_reason": {}, "not_ready_by_reason": {}}
+    for e in source_list:
+        for w in e["withheld"]:
+            totals["withheld"] += w["count"]
+            totals["withheld_by_reason"][w["reason"]] = (
+                totals["withheld_by_reason"].get(w["reason"], 0) + w["count"])
+        for w in e["not_ready"]:
+            totals["not_ready"] += w["count"]
+            totals["not_ready_by_reason"][w["reason"]] = (
+                totals["not_ready_by_reason"].get(w["reason"], 0) + w["count"])
+
+    fetch_not_clean = any(e["fetch"] and e["fetch"]["status"] not in {"success", "empty"}
+                          for e in source_list)
+    if episode_failed:
+        outcome_class = "failed"
+    elif failures or discrepancies:
+        outcome_class = "partial_failure"
+    elif totals["withheld"] or totals["not_ready"] or fetch_not_clean:
+        outcome_class = "success_with_withholdings"
+    else:
+        outcome_class = "success"
+
+    status = {"date": run["episode_date"], "run_id": run_id,
+              "outcome": outcome_class, "sources": source_list,
+              "totals": totals, "episodes": episodes, "audio": audio,
+              "failures": failures, "discrepancies": discrepancies}
+    if gate_report:
+        status["gate"] = {"mode": gate_report.get("mode"),
+                          "evaluated": gate_report.get("evaluated"),
+                          "errors": gate_report.get("errors") or []}
+    learned = select_report.get("learned") or {}
+    if learned.get("paused"):
+        status["learned_paused"] = [entry["announcement"] for entry in learned["paused"]]
+    if learned.get("record_error"):
+        status["learned_record_error"] = learned["record_error"]
+    if notes:
+        status["notes"] = notes
+    status["summary"] = _day_status_summary(status)
+    return status
+
+
+def _day_status_summary(status):
+    """One factual sentence assembled from the record's own counts — the
+    sweep's example shape: 'today is thin because LinkedIn stopped at a
+    checkpoint; two collectors failed; one source is paused by you'."""
+    totals = status["totals"]
+    clauses = []
+    failed_sources = [f for f in status["failures"] if f.get("stage") == "ingest"]
+    if failed_sources:
+        names = ", ".join(f["source"] for f in failed_sources)
+        clauses.append(f"{len(failed_sources)} collector(s) failed ({names})")
+    for announcement in status.get("learned_paused") or []:
+        clauses.append(announcement)
+    if totals["withheld"]:
+        breakdown = ", ".join(f"{n} {r}" for r, n in
+                              sorted(totals["withheld_by_reason"].items()))
+        clauses.append(f"{totals['withheld']} item(s) withheld ({breakdown})")
+    if totals["not_ready"]:
+        breakdown = ", ".join(f"{n} {r}" for r, n in
+                              sorted(totals["not_ready_by_reason"].items()))
+        clauses.append(f"{totals['not_ready']} item(s) not ready ({breakdown})")
+    if status["audio"]["text_only"]:
+        clauses.append("audio text-only: " + status["audio"]["text_only"][0]["reason"])
+    if status["discrepancies"]:
+        clauses.append(f"{len(status['discrepancies'])} accounting "
+                       "discrepancy(ies) flagged")
+    if totals["selected"]:
+        lead = f"{totals['selected']} item(s) selected for {status['date']}"
+    elif clauses:
+        lead = f"Today is thin: nothing was selected for {status['date']}"
+    else:
+        lead = f"Nothing new for {status['date']}: no source reported new items"
+    return "; ".join([lead] + clauses) + "."
+
+
 def render_skeleton(channel, units):
     """Compatibility entry point: read the authoritative briefing style on use."""
     return render_script(units, read_style())
@@ -445,7 +695,12 @@ def finalize_episodes(store, cfg, run, channel=None):
 def run_pipeline(store, cfg, date, mode, input_units=None, gate_options=None):
     run = store.ensure_run(date, cfg, mode)
     if run["status"] == "completed":
-        return {"status": "reused", "run_id": run["run_id"], "episodes": store.episodes(run["run_id"])}
+        result = {"status": "reused", "run_id": run["run_id"],
+                  "episodes": store.episodes(run["run_id"])}
+        stored_status = _stage_report(store, run["run_id"], "day_status")
+        if stored_status:
+            result["day_status"] = stored_status
+        return result
     selected = store.db.execute("SELECT 1 FROM stage_runs WHERE run_id=? AND stage='select' AND status='success'",
                                 (run["run_id"],)).fetchone()
     fetch_report = None
@@ -489,8 +744,15 @@ def run_pipeline(store, cfg, date, mode, input_units=None, gate_options=None):
         store.db.execute("UPDATE runs SET status=?,updated_at=? WHERE run_id=?",
                          ("failed" if failed else "completed", now_utc(), run["run_id"]))
     degraded = fetch_report and any(s["status"] not in {"success", "empty"} for s in fetch_report["sources"])
+    # Q5: the run's result carries one assembled, reconciled day status,
+    # also persisted as a stage row so a later resume (or the reused
+    # return above) reports the same account instead of re-deriving one.
+    day_status = assemble_day_status(store, cfg, run, fetch_report=fetch_report,
+                                     outcomes=outcomes)
+    store.stage(run["run_id"], "day_status", "failed" if failed else "success", day_status)
     return {"status": "failed" if failed else "degraded" if degraded else "completed",
             "run_id": run["run_id"], "fetch": fetch_report, "gate": gate_report,
             "selection": digest_report,
             "compose": compose_report, "episodes": outcomes,
+            "day_status": day_status,
             "warnings": ([] if outcomes else ["no eligible items fit this episode; check pending/enrichment counts with status"])}
