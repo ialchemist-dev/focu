@@ -120,6 +120,8 @@ def main(argv: list[str] | None = None) -> int:
     reader_cmd.add_argument("reader_args", nargs=argparse.REMAINDER)
     pack_cmd = sub.add_parser("pack", help="Curated source packs for sources.yaml")
     pack_cmd.add_argument("pack_args", nargs=argparse.REMAINDER)
+    yt_adapter_cmd = sub.add_parser("youtube-adapter", help="YouTube channel digest adapter (prototype)")
+    yt_adapter_cmd.add_argument("youtube_adapter_args", nargs=argparse.REMAINDER)
     daily_cmd = sub.add_parser("daily", help="Persistent feed-to-podcast stages")
     daily_cmd.add_argument("daily_args", nargs=argparse.REMAINDER)
     sync_cmd = sub.add_parser("sync", help="Durable Drive artifacts and private Git metadata")
@@ -143,6 +145,9 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "pack":
             from focu.packs import main as pack_main
             return pack_main(args.pack_args)
+        if args.command == "youtube-adapter":
+            from focu.adapters.youtube import main as youtube_adapter_main
+            return youtube_adapter_main(args.youtube_adapter_args)
         if args.command == "collect":
             if args.platform == "youtube":
                 _json(collect_youtube(args.url, args.db, args.scope, args.output,
