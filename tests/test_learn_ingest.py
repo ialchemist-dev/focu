@@ -205,6 +205,124 @@ class IngestTests(unittest.TestCase):
         self.assertEqual(record.read_bytes(), before)
 
 
+class CompilationAttributionTests(unittest.TestCase):
+    """PM sweep F1: marks on a compiled daily briefing must attribute to
+    the covered units' sources (fan-out), and research-item marks must
+    be reported out of scope — neither may leak into
+    unattributed_feedback."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.db = self.root / "focu.sqlite3"
+        self.now = datetime.now(timezone.utc)
+        self.daily_dir = self.root / "daily"
+        self.ids = seed_daily(self.daily_dir, {
+            "src_alpha": ("Alpha", [(1, 3)]),
+            "src_beta": ("Beta", [(1, 3)]),
+        }, now=self.now)
+
+    def events(self):
+        return FeedbackStore(self.db).list()
+
+    def compilation_item(self, covered, **overrides):
+        item = make_item(
+            "daily-2026-11-16", source="Focu", status="not_for_me",
+            archived=True,
+            not_for_me={"at": "2026-11-17T09:30:00+00:00", "source": "Focu"},
+            covered_content_ids=covered)
+        item.update(overrides)
+        return item
+
+    def test_briefing_not_for_me_fans_out_to_covered_sources(self):
+        covered = [self.ids["src_alpha"][0], self.ids["src_beta"][0]]
+        path = write_export(self.root, [self.compilation_item(covered)])
+        result = learn.ingest_reading_summary(path, self.db)
+        self.assertEqual(result["events_recorded"], 2)
+        self.assertEqual(result["events_by_kind"], {"not_useful": 2})
+        self.assertEqual(result["fanned_out_compilations"], 1)
+        events = self.events()
+        self.assertEqual(sorted(e["target_id"] for e in events), sorted(covered))
+        for event in events:
+            self.assertEqual(event["kind"], "not_useful")
+            self.assertIn("via compilation daily-2026-11-16", event["note"])
+        stats = learn.compute_statistics(self.db, self.daily_dir, now=self.now)
+        self.assertEqual(stats["sources"]["src_alpha"]["negative_total"], 1)
+        self.assertEqual(stats["sources"]["src_beta"]["negative_total"], 1)
+        self.assertEqual(stats["unattributed_feedback"], 0)
+
+    def test_briefing_useful_fans_out_to_covered_sources(self):
+        covered = self.ids["src_alpha"][:2]
+        item = self.compilation_item(
+            covered, status="in_progress", archived=False, not_for_me=None,
+            useful={"at": "2026-11-17T09:30:00+00:00", "source": "Focu"})
+        path = write_export(self.root, [item])
+        result = learn.ingest_reading_summary(path, self.db)
+        self.assertEqual(result["events_recorded"], 2)
+        self.assertEqual(result["events_by_kind"], {"useful": 2})
+        self.assertEqual(sorted(e["target_id"] for e in self.events()),
+                         sorted(covered))
+        stats = learn.compute_statistics(self.db, self.daily_dir, now=self.now)
+        self.assertEqual(stats["sources"]["src_alpha"]["useful"], 2)
+        self.assertEqual(stats["unattributed_feedback"], 0)
+
+    def test_fan_out_ingest_is_idempotent(self):
+        covered = [self.ids["src_alpha"][0], self.ids["src_beta"][0]]
+        path = write_export(self.root, [self.compilation_item(covered)])
+        first = learn.ingest_reading_summary(path, self.db)
+        self.assertEqual(first["events_recorded"], 2)
+        second = learn.ingest_reading_summary(path, self.db)
+        self.assertEqual(second["events_recorded"], 0)
+        self.assertEqual(second["events_already_recorded"], 2)
+        self.assertEqual(len(self.events()), 2)
+
+    def test_compilation_without_covered_ids_keeps_legacy_path(self):
+        # An export written before the covered-ids field existed: the
+        # signal records against the compilation id exactly as before
+        # (it will surface as unattributed in statistics — unavoidable
+        # without the coverage data, and now distinguishable from the
+        # research exclusion).
+        item = self.compilation_item([])
+        del item["covered_content_ids"]
+        path = write_export(self.root, [item])
+        result = learn.ingest_reading_summary(path, self.db)
+        self.assertEqual(result["events_recorded"], 1)
+        self.assertEqual(result["fanned_out_compilations"], 0)
+        self.assertEqual(self.events()[0]["target_id"], "daily-2026-11-16")
+
+    def test_research_marks_are_out_of_scope_not_unattributed(self):
+        item = make_item(
+            "int_abc123", source="Your research", status="not_for_me",
+            archived=True,
+            not_for_me={"at": "2026-11-17T09:30:00+00:00",
+                        "source": "Your research"},
+            useful={"at": "2026-11-17T09:31:00+00:00",
+                    "source": "Your research"})
+        path = write_export(self.root, [item])
+        result = learn.ingest_reading_summary(path, self.db)
+        self.assertEqual(result["events_recorded"], 0)
+        self.assertEqual(result["out_of_scope_research_items"], 1)
+        self.assertEqual(result["out_of_scope_research_signals"], 2)
+        self.assertTrue(any("out of scope" in note for note in result["notes"]))
+        self.assertEqual(self.events(), [])
+        stats = learn.compute_statistics(self.db, self.daily_dir, now=self.now)
+        self.assertEqual(stats["unattributed_feedback"], 0)
+
+    def test_malformed_covered_ids_rejected_before_any_write(self):
+        good = self.compilation_item([self.ids["src_alpha"][0]])
+        bad = self.compilation_item("not-a-list", content_id="daily-2026-11-15")
+        with self.assertRaises(ValueError):
+            learn.ingest_reading_summary(write_export(self.root, [good, bad]),
+                                         self.db)
+        self.assertEqual(self.events(), [])
+        bad2 = self.compilation_item([123], content_id="daily-2026-11-15")
+        with self.assertRaises(ValueError):
+            learn.ingest_reading_summary(
+                write_export(self.root, [bad2], name="bad2.json"), self.db)
+        self.assertEqual(self.events(), [])
+
+
 class EnvelopeValidationTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()

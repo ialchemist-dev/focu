@@ -15,7 +15,12 @@ Phase 2 transport lives here too: ingest_reading_summary imports the
 reader's owner-carried reading-summary export (format contract in the
 reader's index.html) into the feedback ledger, idempotently, so real
 reader signals — completions, not-for-me marks, useful marks — reach
-the Phase-1 statistics. It writes only to the ledger.
+the Phase-1 statistics. It writes only to the ledger. Compilation
+(daily briefing) signals fan out to the units the briefing covered —
+a compilation id is never a unit id, so without the fan-out every
+briefing mark fell into unattributed_feedback (PM sweep F1) — and
+research-item marks are reported as out of scope, never recorded:
+research lives in the research store, which the statistics never read.
 
 Phase 3 is the record's consumer: learned_adjustments() below is the
 ONLY path from the preference record to selection. It applies the
@@ -761,6 +766,12 @@ def _load_reading_summary(export_path):
         if item.get("status") not in READER_STATUSES:
             raise ValueError(f"Reading summary item {content_id}: unknown status "
                              f"{item.get('status')!r}")
+        covered = item.get("covered_content_ids")
+        if covered is not None and (
+                not isinstance(covered, list)
+                or not all(isinstance(x, str) and x.strip() for x in covered)):
+            raise ValueError(f"Reading summary item {content_id}: "
+                             "covered_content_ids must be a list of content IDs")
     return data
 
 
@@ -774,16 +785,47 @@ def _reader_source(item):
     return ""
 
 
-def _reader_event_id(item, signal):
-    """Deterministic ledger id for one reader signal.
+# The publisher assigns this source label to every user_initiated item in
+# the reader bundle (experiments/muse-artifact-reader/publish.py), and the
+# marks record it at mark time — it is how the export identifies research.
+RESEARCH_SOURCE_LABEL = "Your research"
 
-    Dedupe basis (the reader format contract): content_id + updated_at +
-    signal class. Re-ingesting an export whose item state has not changed
-    reproduces the same ids, so the second ingest records nothing new.
-    When updated_at is absent, a fingerprint of the item's signal-bearing
-    fields stands in, so identical state still dedupes. exported_at is
-    deliberately NOT part of the basis: a fresher export of an unchanged
-    state must not double-count.
+
+def _covered_unit_ids(item):
+    """The daily-unit content ids a compilation item covers, when the
+    export carries them (additive v1 field, present only on compilations;
+    absent or malformed yields no coverage)."""
+    covered = item.get("covered_content_ids")
+    if not isinstance(covered, list):
+        return []
+    return [x.strip() for x in covered if isinstance(x, str) and x.strip()]
+
+
+def _is_research_item(item):
+    """User-initiated research: no daily-unit coverage, and the publisher's
+    research label as its source. Research items are keyed by intent ids
+    in the research store, which the statistics never read, so their
+    marks are out of scope for the proposal engine — ingest reports them
+    (see ingest_reading_summary) and records nothing for them."""
+    return (not _covered_unit_ids(item)
+            and _reader_source(item) == RESEARCH_SOURCE_LABEL)
+
+
+def _reader_event_id(item, signal, target_id=None):
+    """Deterministic ledger id for one reader signal on one target.
+
+    Dedupe basis (the reader format contract): target content_id +
+    updated_at + signal class. Re-ingesting an export whose item state
+    has not changed reproduces the same ids, so the second ingest
+    records nothing new. When updated_at is absent, a fingerprint of the
+    item's signal-bearing fields stands in, so identical state still
+    dedupes. exported_at is deliberately NOT part of the basis: a
+    fresher export of an unchanged state must not double-count.
+
+    Fan-out events (a compilation's signal attributed to a covered unit)
+    key on the covered unit's id with the compilation item's state
+    basis, so re-ingesting an unchanged compilation reproduces the same
+    per-unit ids — and a compilation state change yields a fresh set.
     """
     basis = item.get("updated_at")
     if not isinstance(basis, str) or not basis.strip():
@@ -793,12 +835,15 @@ def _reader_event_id(item, signal):
             json.dumps(fingerprint, sort_keys=True, default=str).encode()).hexdigest()
     else:
         basis = basis.strip()
-    raw = f"{item['content_id']}|{basis}|{signal}"
+    raw = f"{target_id or item['content_id']}|{basis}|{signal}"
     return "rs_" + hashlib.sha256(raw.encode()).hexdigest()[:32]
 
 
 def _reader_events(item):
     """One export item -> (ledger candidates, disposition).
+
+    Each candidate carries "targets": the content ids its ledger events
+    are recorded against — normally just the item itself.
 
     Mapping (Phase 2, honest semantics):
       not_for_me            -> observation / not_useful: the unambiguous
@@ -816,6 +861,27 @@ def _reader_events(item):
       useful (any status)   -> observation / useful: the owner's own
                                mark, the only promotion evidence the
                                Phase-1 engine counts.
+
+    Compilation fan-out (PM sweep F1): an item with covered_content_ids
+    is a compiled daily briefing, and its candidates target the covered
+    units instead — one event per covered unit, the note recording the
+    compilation it came via. A mark on a briefing is weak evidence
+    about each covered source (the owner rejected or endorsed the
+    bundle, not necessarily every item in it), but it is real evidence,
+    and the proposal engine's floors (>=10 delivered, >=3 events,
+    >=20%) already gate weak signals, so attribution is full rather
+    than fractional. Without the fan-out the signal was lost entirely:
+    _attribute_feedback joins on unit content ids, and a compilation
+    id is never a unit id, so every briefing mark — the owner's main
+    surface — landed in unattributed_feedback.
+
+    Research items (user_initiated) are out of scope: their candidates
+    are still computed (so the ingest report can count the signals)
+    but returned with disposition "research_out_of_scope", and ingest
+    records nothing for them. Their content ids are intent ids in the
+    research store, which the statistics never read; recording them
+    would only pollute unattributed_feedback and make the real leak
+    indistinguishable from this deliberate exclusion.
     """
     source = _reader_source(item)
     status = item["status"]
@@ -853,6 +919,15 @@ def _reader_events(item):
             if isinstance(at, str) and at.strip():
                 note += f"; marked at {at.strip()}"
         candidates.append({"signal": "useful", "kind": "useful", "note": note})
+    covered = _covered_unit_ids(item)
+    for cand in candidates:
+        if covered:
+            cand["targets"] = covered
+            cand["note"] += f"; via compilation {item['content_id']}"
+        else:
+            cand["targets"] = [item["content_id"]]
+    if _is_research_item(item):
+        disposition = "research_out_of_scope"
     return candidates, disposition
 
 
@@ -864,6 +939,12 @@ def ingest_reading_summary(export_path, db_path="data/focu.sqlite3") -> dict:
     the preference record is never touched here. Idempotent by
     content_id + updated_at (see _reader_event_id): an item whose state
     has not changed since a previous ingest produces no new events.
+
+    Compilation items fan out: their signals are recorded once per
+    covered unit, so the statistics can attribute them to the covered
+    units' sources. Research items are out of scope and record nothing;
+    the report counts them (and their would-be signals) separately, so
+    the exclusion is visible rather than silent.
     """
     data = _load_reading_summary(export_path)
     store = FeedbackStore(db_path)
@@ -872,6 +953,9 @@ def ingest_reading_summary(export_path, db_path="data/focu.sqlite3") -> dict:
     by_kind: dict[str, int] = {}
     skipped_in_progress = 0
     excluded_manual = 0
+    fanned_out = 0
+    out_of_scope_items = 0
+    out_of_scope_signals = 0
     conflicts = []
     for item in data["items"]:
         candidates, disposition = _reader_events(item)
@@ -879,25 +963,32 @@ def ingest_reading_summary(export_path, db_path="data/focu.sqlite3") -> dict:
             skipped_in_progress += 1
         elif disposition == "manual_excluded":
             excluded_manual += 1
+        elif disposition == "research_out_of_scope":
+            out_of_scope_items += 1
+            out_of_scope_signals += len(candidates)
+            continue
+        if candidates and _covered_unit_ids(item):
+            fanned_out += 1
         for cand in candidates:
-            event_id = _reader_event_id(item, cand["signal"])
-            prior = existing.get(event_id)
-            if prior is not None:
-                if (prior["target_type"] == "observation"
-                        and prior["target_id"] == item["content_id"].strip()
-                        and prior["kind"] == cand["kind"]
-                        and prior["note"] == cand["note"]):
-                    already += 1
-                else:
-                    conflicts.append(item["content_id"])
-                continue
-            event = store.record(target_type="observation",
-                                 target_id=item["content_id"],
-                                 kind=cand["kind"], note=cand["note"],
-                                 event_id=event_id)
-            existing[event_id] = event
-            recorded += 1
-            by_kind[cand["kind"]] = by_kind.get(cand["kind"], 0) + 1
+            for target_id in cand["targets"]:
+                event_id = _reader_event_id(item, cand["signal"], target_id)
+                prior = existing.get(event_id)
+                if prior is not None:
+                    if (prior["target_type"] == "observation"
+                            and prior["target_id"] == target_id
+                            and prior["kind"] == cand["kind"]
+                            and prior["note"] == cand["note"]):
+                        already += 1
+                    else:
+                        conflicts.append(target_id)
+                    continue
+                event = store.record(target_type="observation",
+                                     target_id=target_id,
+                                     kind=cand["kind"], note=cand["note"],
+                                     event_id=event_id)
+                existing[event_id] = event
+                recorded += 1
+                by_kind[cand["kind"]] = by_kind.get(cand["kind"], 0) + 1
     return {
         "format": data["format"], "version": data["version"],
         "exported_at": data["exported_at"],
@@ -907,10 +998,15 @@ def ingest_reading_summary(export_path, db_path="data/focu.sqlite3") -> dict:
         "events_by_kind": by_kind,
         "skipped_in_progress": skipped_in_progress,
         "excluded_manual_archives": excluded_manual,
+        "fanned_out_compilations": fanned_out,
+        "out_of_scope_research_items": out_of_scope_items,
+        "out_of_scope_research_signals": out_of_scope_signals,
         "conflicts": conflicts,
         "notes": [
             "in_progress items record no events in Phase 2: a saved position is not evidence.",
             "Manual archives (via=manual) record no completion: the reader's Archive act conflates done and dismissed.",
+            "Compilation (daily briefing) signals are fanned out to the units the briefing covered, one event per covered unit, so they attribute to those units' sources; a briefing mark is weak per-source evidence, gated by the proposal floors.",
+            "Research-item marks are out of scope, not unattributed: research lives in the research store, which the learning statistics never read, so ingest records nothing for them and counts them above.",
             "Ingest writes only to the feedback ledger; the preference record is untouched.",
         ],
     }

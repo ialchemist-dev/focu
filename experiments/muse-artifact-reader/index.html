@@ -278,7 +278,8 @@ function noteArticlePosition(id,y){
 //       "audio": "completed" | "partial" | null,
 //       "audio_pos_seconds": <number> | null,
 //       "article_pos_px": <number> | null,
-//       "updated_at": "<ISO 8601>" | null
+//       "updated_at": "<ISO 8601>" | null,
+//       "covered_content_ids": ["<unit content_id>", ...]   // compilations only
 //     }
 //   ]
 // }
@@ -297,6 +298,15 @@ function noteArticlePosition(id,y){
 // consumed AND useful. The field is additive within version 1: exports
 // written before the Useful act existed carry no "useful" key at all,
 // and ingest must read a missing key as null, exactly as it reads null.
+// "covered_content_ids" is likewise additive within version 1, and is
+// present ONLY on compiled daily briefings: the unit content ids the
+// briefing compiled, taken from the reader item's own coverage list.
+// Every other item omits the key entirely, so its export is unchanged.
+// The field exists for attribution: a mark on a briefing is evidence
+// about the units inside it, so ingest fans a compilation's signals
+// out to one ledger event per covered unit (each noting the
+// compilation it came via). Without it, briefing marks could never be
+// attributed to a source — a compilation id is not a unit id.
 // ---------------------------------------------------------------------------
 const READING_SUMMARY_FORMAT='focu-reading-summary';
 function buildReadingSummary(){
@@ -309,7 +319,7 @@ function buildReadingSummary(){
   const done=entry.status==='consumed';
   const audioPos=Number(entry.audio_pos),articlePos=Number(entry.article_pos);
   const hasAudioPos=Number.isFinite(audioPos)&&audioPos>0,hasArticlePos=Number.isFinite(articlePos)&&articlePos>0;
-  items.push({
+  const row={
    content_id:id,
    source:item?String(item.source||''):(nfm?String(nfm.source||''):(use?String(use.source||''):'')),
    status:done?'consumed':(nfm?'not_for_me':'in_progress'),
@@ -321,7 +331,10 @@ function buildReadingSummary(){
    audio_pos_seconds:hasAudioPos?Math.floor(audioPos):null,
    article_pos_px:hasArticlePos?Math.floor(articlePos):null,
    updated_at:entry.updated_at||(nfm?nfm.at:null)||(use?use.at:null)||null
-  });
+  };
+  const covered=item&&Array.isArray(item.covered_content_ids)?item.covered_content_ids.filter(x=>typeof x==='string'&&x):[];
+  if(covered.length)row.covered_content_ids=covered;
+  items.push(row);
  }
  return {format:READING_SUMMARY_FORMAT,version:1,exported_at:new Date().toISOString(),items};
 }

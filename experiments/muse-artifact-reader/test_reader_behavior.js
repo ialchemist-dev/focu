@@ -837,8 +837,33 @@ assert.match(html, /\.feedcard\[hidden\]\{display:none!important\}/);
   console.log('Focu reader wave-6 (Learning Phase 2): useful act and export field passed');
 }
 
+// Wave-7 (PM sweep F1): the export carries a compilation's covered unit
+// ids so ingest can fan a briefing mark out to the covered sources —
+// without them, a mark on the daily briefing (the owner's main surface)
+// could never be attributed, since a compilation id is not a unit id.
+// The field is additive within version 1 and present ONLY on items that
+// actually cover units; every other item's export is byte-for-byte the
+// shape waves 5 and 6 pinned (the wave-5 exact key set above stands).
+{
+  const e=makeEnvironment();
+  e.run("render(["+
+    "{id:'exp-brief',origin:'daily_compilation',title:'Compiled briefing',date:'2026-11-10',source:'Focu',audio_url:'assets/b.mp3',audio_duration:900,covered_content_ids:['unit-a','unit-b','unit-c'],blocks:[{type:'paragraph',text:'G'}]},"+
+    "{id:'exp-plain',origin:'registered_source',title:'Standalone piece',date:'2026-11-10',source:'Anthropic',blocks:[{type:'paragraph',text:'H'}]}"+
+  "],'')");
+  e.run("markNotForMe('exp-brief')");
+  e.run("markUseful('exp-plain')");
+  const summary=JSON.parse(e.run('JSON.stringify(buildReadingSummary())'));
+  assert.equal(summary.version,1,'covered ids do not bump the format version');
+  const byId={};for(const item of summary.items)byId[item.content_id]=item;
+  assert.deepEqual(byId['exp-brief'].covered_content_ids,['unit-a','unit-b','unit-c'],'a compilation exports the units it covered');
+  assert.equal(byId['exp-brief'].status,'not_for_me','the mark itself travels as before');
+  assert.ok(!('covered_content_ids' in byId['exp-plain']),'a non-compilation item omits the key — its export is unchanged');
+  console.log('Focu reader wave-7 (F1): compilation covered ids in the export passed');
+}
+
 console.log('Focu reader behavior: article, local read-aloud, persistence and audio end passed');
 console.log('Focu reader wave-2: one-tap play, cost chips and persisted resume passed');
 console.log('Focu reader wave-3: contextual recovery, skip controls and briefing purity passed');
 console.log('Focu reader wave-5: distinct negative act and owner-carried export passed');
 console.log('Focu reader wave-6: the useful act — the one promotion signal — passed');
+console.log('Focu reader wave-7: compilation covered ids — briefing marks can be attributed — passed');
