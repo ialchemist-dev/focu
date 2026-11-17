@@ -1,0 +1,620 @@
+"""Learning loop, Phase 1: proposals over evidence, a record only the owner writes.
+
+Design: docs/dev-team/learning-design.md. The system computes statistics
+from the owner's own acts (the explicit feedback ledger in focu/feedback.py
+and the daily pipeline's frozen selection history), drafts a small number
+of fully-evidenced proposals, and applies NOTHING itself. The only thing
+that may ever influence selection is references/learned-preferences.md, a
+versioned, human-readable record in the focu/audience.py pattern, and in
+this phase its only programmatic writer is the accept path below
+(owner-stated entries are entered by hand — the file is the source of
+truth). Phase 1 deliberately does not touch selection or scoring:
+influence wiring, with its clamps and explain view, is Phase 3.
+"""
+from __future__ import annotations
+
+import hashlib
+import json
+import re
+import sqlite3
+from datetime import date, datetime, timedelta, timezone
+from pathlib import Path
+
+import yaml
+
+from focu.feedback import FeedbackStore
+
+RECORD_PATH = Path(__file__).resolve().parents[1] / "references" / "learned-preferences.md"
+
+ENTRY_KINDS = {"source_pause", "source_cap", "source_weight", "topic_weight", "standing_note"}
+PROVENANCES = {"owner-stated", "owner-accepted"}
+ENTRY_FIELDS = {"id", "kind", "target", "value", "statement", "provenance",
+                "evidence", "created_at", "review_after", "status"}
+# Dismissal snoozes (design §2.3): "not now" costs the engine 60 days for
+# pauses/caps, 30 days for weight changes.
+SNOOZE_DAYS = {"source_pause": 60, "source_cap": 60, "source_weight": 30,
+               "topic_weight": 30, "standing_note": 30}
+
+WINDOW_DAYS = 30
+MIN_DELIVERED = 10            # evidence floor (design §6.2): below this, silence
+NEGATIVE_KINDS = ("not_useful", "too_long", "incorrect")
+MIN_NEGATIVE_EVENTS = 3
+MIN_NEGATIVE_RATE = 0.2
+DEMOTE_WEIGHT = 0.7           # statistics may only demote (design §3.3 rule 2)
+MIN_USEFUL_EVENTS = 3
+PROMOTE_WEIGHT = 1.25         # promotion requires the owner's own useful marks
+MAX_OPEN_PROPOSALS = 3        # the weekly attention budget (design §2.2)
+REVIEW_AFTER_DAYS = 90
+
+
+# --------------------------------------------------------------------------
+# The preference record: provenance-enforced, fail-closed (audience.py style)
+# --------------------------------------------------------------------------
+
+def _as_date(value, field, entry_id):
+    if isinstance(value, datetime):
+        value = value.date()
+    if isinstance(value, date):
+        return value.isoformat()
+    try:
+        return date.fromisoformat(str(value)).isoformat()
+    except ValueError:
+        raise ValueError(f"Learned-preference entry {entry_id}: {field} is not a date: {value!r}")
+
+
+def _validate_entry(entry):
+    if not isinstance(entry, dict):
+        raise ValueError("Learned-preference entry must be a mapping")
+    unknown = set(entry) - ENTRY_FIELDS
+    if unknown:
+        raise ValueError(f"Learned-preference entry has unknown fields: {sorted(unknown)}")
+    entry_id = entry.get("id")
+    if not isinstance(entry_id, str) or not re.fullmatch(r"lp-\d+", entry_id):
+        raise ValueError(f"Learned-preference entry id must look like lp-007: {entry_id!r}")
+    kind = entry.get("kind")
+    if kind not in ENTRY_KINDS:
+        raise ValueError(f"Learned-preference entry {entry_id}: unknown kind {kind!r}")
+    if entry.get("provenance") not in PROVENANCES:
+        raise ValueError(
+            f"Learned-preference entry {entry_id}: provenance must be owner-stated "
+            f"or owner-accepted, got {entry.get('provenance')!r}")
+    target = entry.get("target")
+    if kind == "standing_note":
+        if not isinstance(entry.get("value"), str) or not entry["value"].strip():
+            raise ValueError(f"Learned-preference entry {entry_id}: standing_note value must be text")
+    else:
+        if not isinstance(target, str) or not target.strip():
+            raise ValueError(f"Learned-preference entry {entry_id}: target required")
+        value = entry.get("value")
+        if kind in {"source_weight", "topic_weight"}:
+            if not isinstance(value, (int, float)) or isinstance(value, bool) or value <= 0:
+                raise ValueError(f"Learned-preference entry {entry_id}: weight must be a positive number")
+        elif kind == "source_cap":
+            if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+                raise ValueError(f"Learned-preference entry {entry_id}: cap must be a positive integer")
+        elif kind == "source_pause":
+            if value is not True:
+                raise ValueError(f"Learned-preference entry {entry_id}: pause value must be true")
+    for field in ("statement", "evidence"):
+        if not isinstance(entry.get(field), str) or not entry[field].strip():
+            raise ValueError(f"Learned-preference entry {entry_id}: {field} required")
+    if entry.get("status") not in {"active", "superseded"}:
+        raise ValueError(f"Learned-preference entry {entry_id}: status must be active or superseded")
+    entry["created_at"] = _as_date(entry.get("created_at"), "created_at", entry_id)
+    entry["review_after"] = _as_date(entry.get("review_after"), "review_after", entry_id)
+    return entry
+
+
+def load_record(path=RECORD_PATH):
+    """Strict loader: any malformed or unprovenanced entry raises ValueError."""
+    source = Path(path).read_text(encoding="utf-8")
+    match = re.search(r"```yaml\s*\n(.*?)\n```", source, re.S)
+    if not match:
+        raise ValueError("Learned-preference record lacks YAML settings")
+    data = yaml.safe_load(match.group(1))
+    if not isinstance(data, dict):
+        raise ValueError("Learned-preference record must be a mapping")
+    unknown = set(data) - {"version", "entries"}
+    if unknown:
+        raise ValueError(f"Learned-preference record has unknown fields: {sorted(unknown)}")
+    if not isinstance(data.get("version"), str) or not data["version"]:
+        raise ValueError("Learned-preference record lacks a version")
+    if not isinstance(data.get("entries"), list):
+        raise ValueError("Learned-preference record entries must be a list")
+    seen = set()
+    for entry in data["entries"]:
+        _validate_entry(entry)
+        if entry["id"] in seen:
+            raise ValueError(f"Learned-preference entry id duplicated: {entry['id']}")
+        seen.add(entry["id"])
+    data["record_sha256"] = hashlib.sha256(source.encode()).hexdigest()
+    return data
+
+
+def safe_load_record(path=RECORD_PATH):
+    """Fail-closed variant: a corrupted record yields ZERO learned influence
+    plus the error, never a guess (design §3.1). Returns (record, error)."""
+    try:
+        return load_record(path), None
+    except (ValueError, OSError, yaml.YAMLError) as exc:
+        return {"version": None, "entries": [], "record_sha256": None}, str(exc)
+
+
+def _bump_version(version, today):
+    match = re.fullmatch(r"(\d{4}-\d{2}-\d{2})\.(\d+)", str(version))
+    if match and match.group(1) == today.isoformat():
+        return f"{today.isoformat()}.{int(match.group(2)) + 1}"
+    return f"{today.isoformat()}.1"
+
+
+def _write_record(path, data, changelog_line, today):
+    """The record's only writer. Called exclusively by accept_proposal."""
+    path = Path(path)
+    text = path.read_text(encoding="utf-8")
+    new_version = _bump_version(data["version"], today)
+    block = yaml.safe_dump({"version": new_version, "entries": data["entries"]},
+                           sort_keys=False, allow_unicode=True).rstrip("\n")
+    pattern = re.compile(r"```yaml\s*\n.*?\n```", re.S)
+    if not pattern.search(text):
+        raise ValueError("Learned-preference record lacks a YAML block to rewrite")
+    text = pattern.sub(lambda _m: "```yaml\n" + block + "\n```", text, count=1)
+    text, count = re.subn(r"\*\*Version:\*\* .*", f"**Version:** {new_version}", text, count=1)
+    if count == 0:
+        raise ValueError("Learned-preference record lacks a Version header")
+    idx = text.rfind("## Changelog")
+    if idx == -1:
+        raise ValueError("Learned-preference record lacks a Changelog section")
+    if "\n## " in text[idx + len("## Changelog"):]:
+        raise ValueError("Changelog is not the final section; refusing to guess where to append")
+    if not text.endswith("\n"):
+        text += "\n"
+    text += changelog_line + "\n"
+    path.write_text(text, encoding="utf-8")
+    return new_version
+
+
+def _statement_for(kind, target_name, value):
+    name = target_name or "the target"
+    if kind == "source_weight":
+        return f"Set selection weight to {value}× for {name}."
+    if kind == "topic_weight":
+        return f"Set topic weight to {value}× for {name}."
+    if kind == "source_cap":
+        return f"Cap {name} at {value} item(s) per day."
+    if kind == "source_pause":
+        return f"Pause {name}."
+    return str(value)
+
+
+# --------------------------------------------------------------------------
+# The proposals store: working state beside the feedback ledger (design §3.2)
+# --------------------------------------------------------------------------
+
+class ProposalStore:
+    def __init__(self, db_path: str | Path = "data/focu.sqlite3") -> None:
+        self.db_path = Path(db_path)
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        with self._connect() as db:
+            db.execute("""CREATE TABLE IF NOT EXISTS learn_proposals (
+                id TEXT PRIMARY KEY,
+                kind TEXT NOT NULL,
+                target TEXT NOT NULL,
+                target_name TEXT NOT NULL DEFAULT '',
+                value TEXT NOT NULL,
+                statement TEXT NOT NULL,
+                evidence TEXT NOT NULL,
+                state TEXT NOT NULL,
+                snooze_until TEXT,
+                never INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                decided_at TEXT
+            )""")
+
+    def _connect(self) -> sqlite3.Connection:
+        db = sqlite3.connect(self.db_path, timeout=30)
+        db.row_factory = sqlite3.Row
+        return db
+
+    @staticmethod
+    def _decode(row):
+        item = dict(row)
+        item["value"] = json.loads(item["value"])
+        item["never"] = bool(item["never"])
+        return item
+
+    def expire_open(self) -> None:
+        """Proposals die at the next batch; a dead proposal is not renewed."""
+        with self._connect() as db:
+            db.execute("UPDATE learn_proposals SET state='expired' WHERE state='proposed'")
+
+    def add(self, proposal: dict) -> dict:
+        with self._connect() as db:
+            db.execute("""INSERT INTO learn_proposals
+                (id, kind, target, target_name, value, statement, evidence,
+                 state, snooze_until, never, created_at, decided_at)
+                VALUES (?,?,?,?,?,?,?,'proposed',NULL,0,?,NULL)""",
+                       (proposal["id"], proposal["kind"], proposal["target"],
+                        proposal.get("target_name", ""), json.dumps(proposal["value"]),
+                        proposal["statement"], proposal["evidence"], proposal["created_at"]))
+        return self.get(proposal["id"])
+
+    def get(self, proposal_id: str) -> dict | None:
+        with self._connect() as db:
+            row = db.execute("SELECT * FROM learn_proposals WHERE id=?", (proposal_id,)).fetchone()
+        return self._decode(row) if row else None
+
+    def list_open(self) -> list[dict]:
+        with self._connect() as db:
+            rows = db.execute("""SELECT * FROM learn_proposals WHERE state='proposed'
+                ORDER BY created_at, id""").fetchall()
+        return [self._decode(row) for row in rows]
+
+    def decide(self, proposal_id: str, state: str, *, snooze_until: str | None = None,
+               never: bool = False, decided_at: str) -> dict:
+        with self._connect() as db:
+            db.execute("""UPDATE learn_proposals SET state=?, snooze_until=?,
+                never=?, decided_at=? WHERE id=?""",
+                       (state, snooze_until, int(never), decided_at, proposal_id))
+        return self.get(proposal_id)
+
+    def snoozes(self) -> dict:
+        """(kind, target) -> {'never': bool, 'until': date|None} from dismissals."""
+        result = {}
+        with self._connect() as db:
+            rows = db.execute("""SELECT kind, target, snooze_until, never
+                FROM learn_proposals WHERE state='dismissed'""").fetchall()
+        for row in rows:
+            entry = result.setdefault((row["kind"], row["target"]),
+                                      {"never": False, "until": None})
+            if row["never"]:
+                entry["never"] = True
+            if row["snooze_until"]:
+                until = date.fromisoformat(row["snooze_until"])
+                if entry["until"] is None or until > entry["until"]:
+                    entry["until"] = until
+        return result
+
+
+# --------------------------------------------------------------------------
+# Statistics: feedback ledger + frozen selection history (both already on-VM)
+# --------------------------------------------------------------------------
+
+def _selection_history(daily_dir, start: date, end: date):
+    """Per-source delivered counts from frozen episode items in the window.
+
+    Returns (delivered, content_source, episode_sources): delivered maps
+    source_id -> {"name", "delivered", "days"}; content_source maps an
+    in-window content_id to its source_id; episode_sources maps
+    (episode_date, channel_id) to the set of source_ids in that episode.
+    A missing daily database is a legitimate empty history, not an error.
+    """
+    delivered: dict[str, dict] = {}
+    content_source: dict[str, str] = {}
+    episode_sources: dict[tuple[str, str], set] = {}
+    db_file = Path(daily_dir) / "few.sqlite3"
+    if not db_file.is_file():
+        return delivered, content_source, episode_sources
+    db = sqlite3.connect(f"file:{db_file}?mode=ro", uri=True)
+    try:
+        rows = db.execute("""SELECT r.episode_date, e.channel_id, ei.content_id, ei.unit_json
+            FROM episode_items ei
+            JOIN episodes e USING(episode_id)
+            JOIN runs r USING(run_id)""").fetchall()
+    finally:
+        db.close()
+    for episode_date, channel_id, content_id, unit_json in rows:
+        if not (start.isoformat() <= str(episode_date) <= end.isoformat()):
+            continue
+        try:
+            unit = json.loads(unit_json)
+        except (TypeError, json.JSONDecodeError):
+            continue
+        source_id = unit.get("source_id")
+        if not source_id:
+            continue
+        slot = delivered.setdefault(source_id, {"name": unit.get("source") or source_id,
+                                                "delivered": 0, "days": set()})
+        slot["delivered"] += 1
+        slot["days"].add(str(episode_date))
+        content_source[content_id] = source_id
+        episode_sources.setdefault((str(episode_date), channel_id), set()).add(source_id)
+    for slot in delivered.values():
+        slot["days"] = len(slot["days"])
+    return delivered, content_source, episode_sources
+
+
+def _attribute_feedback(events, content_source, episode_sources, start: date, end: date):
+    """Attribute feedback events to sources, honestly or not at all.
+
+    observation events name a content_id; episode events name
+    '<episode_date>/<channel_id>' and are attributed only when every item
+    in that episode came from one source — mixed-source episode feedback is
+    counted as unattributed rather than smeared across sources.
+    """
+    per_source: dict[str, dict] = {}
+    unattributed = 0
+    for event in events:
+        try:
+            created = datetime.fromisoformat(str(event["created_at"])).date()
+        except ValueError:
+            unattributed += 1
+            continue
+        if not (start <= created <= end):
+            continue
+        source_id = None
+        if event["target_type"] == "observation":
+            source_id = content_source.get(event["target_id"])
+        elif event["target_type"] == "episode":
+            parts = str(event["target_id"]).split("/", 1)
+            if len(parts) == 2:
+                sources = episode_sources.get((parts[0], parts[1]), set())
+                if len(sources) == 1:
+                    source_id = next(iter(sources))
+        if source_id is None:
+            unattributed += 1
+            continue
+        kinds = per_source.setdefault(source_id, {})
+        kinds[event["kind"]] = kinds.get(event["kind"], 0) + 1
+    return per_source, unattributed
+
+
+def compute_statistics(db_path, daily_dir, now: datetime | None = None) -> dict:
+    now = now or datetime.now(timezone.utc)
+    end = now.date()
+    start = end - timedelta(days=WINDOW_DAYS - 1)
+    delivered, content_source, episode_sources = _selection_history(daily_dir, start, end)
+    events = FeedbackStore(db_path).list()
+    per_source, unattributed = _attribute_feedback(
+        events, content_source, episode_sources, start, end)
+    sources = {}
+    for source_id in set(delivered) | set(per_source):
+        slot = delivered.get(source_id, {"name": source_id, "delivered": 0, "days": 0})
+        kinds = per_source.get(source_id, {})
+        sources[source_id] = {
+            "name": slot["name"],
+            "delivered": slot["delivered"],
+            "days": slot["days"],
+            "negative": {k: kinds.get(k, 0) for k in NEGATIVE_KINDS if kinds.get(k, 0)},
+            "negative_total": sum(kinds.get(k, 0) for k in NEGATIVE_KINDS),
+            "useful": kinds.get("useful", 0),
+        }
+    return {"window": {"start": start.isoformat(), "end": end.isoformat(),
+                       "days": WINDOW_DAYS},
+            "sources": sources, "unattributed_feedback": unattributed}
+
+
+# --------------------------------------------------------------------------
+# The proposal engine: statistics in, at most 3 evidenced proposals out
+# --------------------------------------------------------------------------
+
+def generate_proposals(db_path="data/focu.sqlite3", daily_dir="data",
+                       record_path=RECORD_PATH, now: datetime | None = None) -> dict:
+    """Run one weekly batch. Prior open proposals expire; snoozes and
+    never-dismissals are honored; pairs already in the record are not
+    re-proposed. Empty history correctly produces an empty batch."""
+    now = now or datetime.now(timezone.utc)
+    today = now.date()
+    store = ProposalStore(db_path)
+    store.expire_open()
+    stats = compute_statistics(db_path, daily_dir, now)
+    snoozes = store.snoozes()
+    record, record_error = safe_load_record(record_path)
+    in_record = {(e["kind"], e["target"]) for e in record["entries"]
+                 if e.get("status") == "active"}
+
+    candidates = []
+    below_floor = 0
+    for source_id, slot in stats["sources"].items():
+        if slot["delivered"] < MIN_DELIVERED:
+            if slot["delivered"] or slot["negative_total"] or slot["useful"]:
+                below_floor += 1
+            continue
+        negative = slot["negative_total"]
+        if (negative >= MIN_NEGATIVE_EVENTS
+                and negative / slot["delivered"] >= MIN_NEGATIVE_RATE):
+            breakdown = ", ".join(f"{k} ×{n}" for k, n in sorted(slot["negative"].items()))
+            candidates.append({
+                "rank": (0, -negative, -slot["delivered"]),
+                "kind": "source_weight", "target": source_id,
+                "target_name": slot["name"], "value": DEMOTE_WEIGHT,
+                "evidence": (f"{negative} of {slot['delivered']} items drew negative "
+                             f"feedback ({breakdown}), {WINDOW_DAYS}d window, "
+                             f"n={slot['delivered']} delivered"),
+            })
+        elif slot["useful"] >= MIN_USEFUL_EVENTS:
+            candidates.append({
+                "rank": (1, -slot["useful"], -slot["delivered"]),
+                "kind": "source_weight", "target": source_id,
+                "target_name": slot["name"], "value": PROMOTE_WEIGHT,
+                "evidence": (f"{slot['useful']} owner 'useful' marks on "
+                             f"{slot['delivered']} delivered items, {WINDOW_DAYS}d "
+                             f"window, n={slot['delivered']} delivered"),
+            })
+
+    created = []
+    for cand in sorted(candidates, key=lambda c: c["rank"]):
+        if len(created) >= MAX_OPEN_PROPOSALS:
+            break
+        key = (cand["kind"], cand["target"])
+        if key in in_record:
+            continue
+        snooze = snoozes.get(key)
+        if snooze and (snooze["never"] or (snooze["until"] and today < snooze["until"])):
+            continue
+        proposal = {
+            "id": f"prop-{today.strftime('%Y%m%d')}-{len(created) + 1}",
+            "kind": cand["kind"], "target": cand["target"],
+            "target_name": cand["target_name"], "value": cand["value"],
+            "statement": _statement_for(cand["kind"], cand["target_name"], cand["value"]),
+            "evidence": cand["evidence"],
+            "created_at": now.isoformat(),
+        }
+        created.append(store.add(proposal))
+    return {"proposals": created, "window": stats["window"],
+            "sources_considered": len(stats["sources"]),
+            "sources_below_evidence_floor": below_floor,
+            "unattributed_feedback": stats["unattributed_feedback"],
+            "record_error": record_error}
+
+
+# --------------------------------------------------------------------------
+# Owner decisions: accept (the record's only writer) and dismiss (snooze)
+# --------------------------------------------------------------------------
+
+def accept_proposal(proposal_id, db_path="data/focu.sqlite3",
+                    record_path=RECORD_PATH, value=None,
+                    now: datetime | None = None) -> dict:
+    now = now or datetime.now(timezone.utc)
+    today = now.date()
+    store = ProposalStore(db_path)
+    proposal = store.get(proposal_id)
+    if proposal is None:
+        raise ValueError(f"Proposal not found: {proposal_id}")
+    if proposal["state"] != "proposed":
+        raise ValueError(f"Proposal {proposal_id} is not open (state: {proposal['state']})")
+    edited = value is not None and value != proposal["value"]
+    final_value = proposal["value"] if value is None else value
+    record = load_record(record_path)  # strict: never write into a broken record
+    numbers = [int(e["id"][3:]) for e in record["entries"]
+               if re.fullmatch(r"lp-\d+", str(e.get("id", "")))]
+    entry = {
+        "id": f"lp-{max(numbers, default=0) + 1:03d}",
+        "kind": proposal["kind"],
+        "target": proposal["target"],
+        "value": final_value,
+        "statement": _statement_for(proposal["kind"], proposal["target_name"], final_value),
+        "provenance": "owner-accepted",
+        "evidence": f"{proposal_id} · {proposal['evidence']}"
+                    + (" · value edited by owner at accept" if edited else ""),
+        "created_at": today.isoformat(),
+        "review_after": (today + timedelta(days=REVIEW_AFTER_DAYS)).isoformat(),
+        "status": "active",
+    }
+    _validate_entry(dict(entry))
+    record["entries"].append(entry)
+    changelog = (f"- **{today.isoformat()} — accepted {proposal_id}:** "
+                 f"{entry['statement']} Evidence: {entry['evidence']}")
+    new_version = _write_record(record_path, record, changelog, today)
+    decided = store.decide(proposal_id, "edited-accepted" if edited else "accepted",
+                           decided_at=now.isoformat())
+    return {"proposal": decided, "entry": entry, "record_version": new_version}
+
+
+def dismiss_proposal(proposal_id, db_path="data/focu.sqlite3", never: bool = False,
+                     now: datetime | None = None) -> dict:
+    """Dismissal writes nothing to the record; it only snoozes the engine."""
+    now = now or datetime.now(timezone.utc)
+    today = now.date()
+    store = ProposalStore(db_path)
+    proposal = store.get(proposal_id)
+    if proposal is None:
+        raise ValueError(f"Proposal not found: {proposal_id}")
+    if proposal["state"] != "proposed":
+        raise ValueError(f"Proposal {proposal_id} is not open (state: {proposal['state']})")
+    snooze_until = None
+    if not never:
+        days = SNOOZE_DAYS.get(proposal["kind"], 30)
+        snooze_until = (today + timedelta(days=days)).isoformat()
+    return store.decide(proposal_id, "dismissed", snooze_until=snooze_until,
+                        never=never, decided_at=now.isoformat())
+
+
+def show(db_path="data/focu.sqlite3", record_path=RECORD_PATH) -> dict:
+    record, error = safe_load_record(record_path)
+    result = {
+        "record_path": str(record_path),
+        "record_version": record["version"],
+        "record_sha256": record["record_sha256"],
+        "entries": [e for e in record["entries"] if e.get("status") == "active"],
+        "superseded_entries": sum(1 for e in record["entries"]
+                                  if e.get("status") == "superseded"),
+        "open_proposals": ProposalStore(db_path).list_open(),
+    }
+    if error:
+        result["record_error"] = error
+    return result
+
+
+def explain(content_id: str | None = None) -> dict:
+    """Phase-1 stub: no learned preference is wired into selection yet, so
+    the honest answer for every item is that none applied (design §3.3)."""
+    return {"content_id": content_id, "learned_factors": [],
+            "note": "Phase 1: learned preferences are not wired into selection "
+                    "yet (bounded influence arrives in Phase 3); no learned "
+                    "preference affected this item."}
+
+
+# --------------------------------------------------------------------------
+# CLI: focu learn show / proposals / accept / dismiss / explain
+# --------------------------------------------------------------------------
+
+def _parse_value(raw: str):
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        return raw
+
+
+def main(argv: list[str] | None = None, db_path: str | None = None) -> int:
+    import argparse
+    import sys
+    parser = argparse.ArgumentParser(
+        prog="focu learn",
+        description="Owner-approved learning loop: evidenced proposals, "
+                    "a preference record only owner acts can write")
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("--db", default=None,
+                        help="Feedback/proposals SQLite DB (default: focu --db)")
+    common.add_argument("--daily-dir", default="data",
+                        help="Daily pipeline data dir holding few.sqlite3")
+    common.add_argument("--record", default=str(RECORD_PATH),
+                        help="Learned-preference record (markdown)")
+    sub = parser.add_subparsers(dest="action", required=True)
+    sub.add_parser("show", parents=[common],
+                   help="Print the preference record and open proposals")
+    sub.add_parser("proposals", parents=[common],
+                   help="Run a proposal batch and list what it drafted")
+    accept = sub.add_parser("accept", parents=[common],
+                            help="Accept a proposal (writes one record entry)")
+    accept.add_argument("proposal_id")
+    accept.add_argument("--value", default=None,
+                        help="Edited value (JSON) to record instead of the proposed one")
+    dismiss = sub.add_parser("dismiss", parents=[common],
+                             help="Dismiss a proposal and snooze its class+target")
+    dismiss.add_argument("proposal_id")
+    dismiss.add_argument("--never", action="store_true",
+                         help="Exempt this target from this proposal class permanently")
+    explain_cmd = sub.add_parser("explain", parents=[common],
+                                 help="Why an item was selected (Phase-1 stub)")
+    explain_cmd.add_argument("content_id", nargs="?")
+    args = parser.parse_args(argv)
+    db = args.db or db_path or "data/focu.sqlite3"
+    try:
+        if args.action == "show":
+            result = show(db, args.record)
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            return 1 if "record_error" in result else 0
+        if args.action == "proposals":
+            result = generate_proposals(db, args.daily_dir, args.record)
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            return 0
+        if args.action == "accept":
+            value = _parse_value(args.value) if args.value is not None else None
+            result = accept_proposal(args.proposal_id, db, args.record, value=value)
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            return 0
+        if args.action == "dismiss":
+            result = dismiss_proposal(args.proposal_id, db, never=args.never)
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            return 0
+        if args.action == "explain":
+            print(json.dumps(explain(args.content_id), ensure_ascii=False, indent=2))
+            return 0
+        return 2
+    except (ValueError, OSError) as exc:
+        print(json.dumps({"error": str(exc)}), file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -124,6 +124,8 @@ def main(argv: list[str] | None = None) -> int:
     yt_adapter_cmd.add_argument("youtube_adapter_args", nargs=argparse.REMAINDER)
     ig_adapter_cmd = sub.add_parser("instagram-adapter", help="Instagram own-feed digest adapter (prototype)")
     ig_adapter_cmd.add_argument("instagram_adapter_args", nargs=argparse.REMAINDER)
+    learn_cmd = sub.add_parser("learn", help="Owner-approved learning loop (proposals, preference record)")
+    learn_cmd.add_argument("learn_args", nargs=argparse.REMAINDER)
     daily_cmd = sub.add_parser("daily", help="Persistent feed-to-podcast stages")
     daily_cmd.add_argument("daily_args", nargs=argparse.REMAINDER)
     sync_cmd = sub.add_parser("sync", help="Durable Drive artifacts and private Git metadata")
@@ -153,6 +155,9 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "instagram-adapter":
             from focu.adapters.instagram import main as instagram_adapter_main
             return instagram_adapter_main(args.instagram_adapter_args)
+        if args.command == "learn":
+            from focu.learn import main as learn_main
+            return learn_main(args.learn_args, db_path=args.db)
         if args.command == "collect":
             if args.platform == "youtube":
                 _json(collect_youtube(args.url, args.db, args.scope, args.output,
