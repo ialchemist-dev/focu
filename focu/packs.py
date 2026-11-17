@@ -1,5 +1,5 @@
 """Curated source packs: catalog, validation, preview, install, update,
-show, uninstall, restore, refresh-check.
+show, uninstall, restore, refresh-check, refresh-due.
 
 A source pack is a versioned, curator-signed list of sources (schema v1,
 ``schemas/source-pack.schema.json``). This module is the bridge between the
@@ -56,6 +56,24 @@ PACKS_DIR = Path(__file__).with_name("source_packs")
 MANIFEST_NAME = "packs-installed.json"
 SCHEMA_VERSION = 1
 STALE_DAYS = 180
+# Refresh-due policy (wave 29): the cadence mechanism that owns pack
+# freshness. STALE_DAYS above stays 180 — inside refresh-check the
+# feed-health signals carry the real weight, and lowering the age
+# threshold would only add warning noise to every validate/show run.
+# The due report is the separate, cheaper question an agent or cron can
+# ask at any time: a pack nobody has re-verified in a fortnight is due
+# a curator refresh act, and one member source whose own verification
+# is a month old can make the whole pack due by itself. Due is a
+# report, never a rewrite — refreshing stays a curator's research act.
+REFRESH_DUE_PACK_DAYS = 14
+REFRESH_DUE_SOURCE_DAYS = 30
+# Affiliation staleness (wave 29): a people pack's load-bearing claim
+# is "this person is at this org", and that is precisely the claim a
+# feed probe cannot check — a leaver's feed stays live. Past this age
+# the affiliation evidence is surfaced (refresh-check's affiliation
+# section, pack show's per-source date) so the re-check happens as a
+# human/agent act with the date in view, never as an automated guess.
+AFFILIATION_STALE_DAYS = 90
 # A pack is a curated shelf, not a directory (PM sweep F3, side
 # question): every source in it is a standing claim on the owner's
 # attention and a feed the liveness paths probe serially. The largest
@@ -1087,6 +1105,22 @@ def restore_backup(config_path, backup=None, *, dry_run=False, confirm=None):
 # Catalog and show (design section 4.1): read-only views over the bundled
 # packs and the install manifest.
 
+def _affiliation_as_of(src, pack_verified_at):
+    """(date, inherited): when this source's affiliation was verified.
+
+    The source's own ``verified_at`` when it carries a valid one;
+    otherwise the pack's, flagged inherited so no surface presents a
+    pack-level date as a per-source verification. Schema v1 validation
+    requires a per-source date, so the inherited branch is defensive —
+    it exists so a future schema relaxation degrades loudly instead of
+    silently dropping the date.
+    """
+    own = src.get("verified_at")
+    if _is_date(own):
+        return own, False
+    return pack_verified_at, True
+
+
 def _attention_total(pack):
     """Enabled sources' cadence sum, plus the names it cannot price."""
     total = 0.0
@@ -1219,6 +1253,8 @@ def show_pack(raw_pack, config_path=None, *, check_feeds=True, fetch=None,
         else:
             feed_status = "no_feed"
         cadence = src.get("cadence") if isinstance(src.get("cadence"), dict) else {}
+        affiliation_date, affiliation_inherited = _affiliation_as_of(
+            src, pack["verified_at"])
         sources.append(
             {"id": src["id"], "name": src["name"], "type": src["type"],
              "channel": src["channel"], "platform": src.get("platform"),
@@ -1231,6 +1267,8 @@ def show_pack(raw_pack, config_path=None, *, check_feeds=True, fetch=None,
              "cadence_basis": cadence.get("basis"),
              "last_post_at": src.get("last_post_at"),
              "verified_at": src.get("verified_at"),
+             "affiliation_as_of": affiliation_date,
+             "affiliation_inherited": affiliation_inherited,
              "readiness": src.get("readiness"), "notes": src.get("notes"),
              "max_items_per_day": src.get("max_items_per_day")})
     total, unknown = _attention_total(pack)
@@ -1468,6 +1506,22 @@ def refresh_check(raw_pack, config_path=None, *, fetch=None, today=None):
              "detail": f"pack verified_at {pack['verified_at']} is "
                        f"{pack_age} days old (stale after {STALE_DAYS})"})
         stale += 1
+    # Affiliation staleness (wave 29): computed from the pack's own
+    # recorded dates only — zero additional fetches. A feed probe
+    # cannot check "this person is still at this org" (a leaver's feed
+    # stays live), so this section is an advisory prompt for a
+    # human/agent re-check act, deliberately NOT a stale signal: it
+    # never moves the verdict, which stays the feed-health account.
+    affiliation = []
+    for src in pack["sources"]:
+        aff_date, aff_inherited = _affiliation_as_of(
+            src, pack["verified_at"])
+        aff_age = _age_days(aff_date, today)
+        if aff_age is not None and aff_age > AFFILIATION_STALE_DAYS:
+            affiliation.append(
+                {"id": src["id"], "name": src["name"],
+                 "verified_at": aff_date, "age_days": aff_age,
+                 "inherited": aff_inherited})
     if not vantage_ok:
         # Nothing answered (or nothing to probe): from here we cannot
         # tell a rotten pack from a healthy one, and the verdict must
@@ -1496,6 +1550,7 @@ def refresh_check(raw_pack, config_path=None, *, fetch=None, today=None):
                      "verified_age_days": pack_age},
             "checked_at": today.isoformat(),
             "sources": sources, "signals": pack_signals,
+            "affiliation": affiliation,
             "stale_signals": stale, "verdict": verdict,
             "installed": installed}
 
@@ -1525,6 +1580,83 @@ def refresh_check_bundled(config_path=None, *, fetch=None, today=None):
         report["file"] = path.name
         packs.append(report)
     return {"packs": packs, "checked_at": today.isoformat()}
+
+
+def refresh_due(today=None):
+    """Which bundled packs are due a curator refresh; report only.
+
+    Pure date arithmetic over the bundled pack files — no fetches, no
+    writes; this is the cadence owner for pack freshness (wave 29),
+    the cheap question an agent or cron asks between refresh-check's
+    expensive live probes. A pack is due when its own ``verified_at``
+    is older than REFRESH_DUE_PACK_DAYS, or when any member source's
+    own ``verified_at`` is older than REFRESH_DUE_SOURCE_DAYS (the
+    stalest such source is named in the reason). Each reason names the
+    policy constant that tripped. Not-due packs are counted, not
+    listed in the text output. Unreadable or invalid files are error
+    entries, never exceptions (the :func:`pack_catalog` precedent).
+    """
+    today = today or date.today()
+    entries = []
+    for path in sorted(PACKS_DIR.glob("*.json")):
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            entries.append({"file": path.name, "error": "unreadable"})
+            continue
+        if not isinstance(raw, dict):
+            entries.append({"file": path.name,
+                            "error": "pack must be a JSON object"})
+            continue
+        report = validate_pack(raw, today=today)
+        pack = report["pack"]
+        if pack is None:
+            entries.append({"file": path.name, "id": raw.get("id"),
+                            "error": "; ".join(report["errors"])})
+            continue
+        reasons = []
+        pack_age = _age_days(pack["verified_at"], today)
+        if pack_age is not None and pack_age > REFRESH_DUE_PACK_DAYS:
+            reasons.append(
+                {"kind": "pack_stale",
+                 "constant": "REFRESH_DUE_PACK_DAYS",
+                 "verified_at": pack["verified_at"],
+                 "age_days": pack_age,
+                 "detail": f"pack verified_at {pack['verified_at']} is "
+                           f"{pack_age} days old (due after "
+                           f"{REFRESH_DUE_PACK_DAYS})"})
+        stalest = None
+        for src in pack["sources"]:
+            age = _age_days(src.get("verified_at"), today)
+            if age is None:
+                continue
+            if stalest is None or age > stalest["age_days"]:
+                stalest = {"id": src["id"], "name": src["name"],
+                           "verified_at": src.get("verified_at"),
+                           "age_days": age}
+        if (stalest is not None
+                and stalest["age_days"] > REFRESH_DUE_SOURCE_DAYS):
+            reasons.append(
+                {"kind": "source_stale",
+                 "constant": "REFRESH_DUE_SOURCE_DAYS",
+                 "source_id": stalest["id"], "source": stalest["name"],
+                 "verified_at": stalest["verified_at"],
+                 "age_days": stalest["age_days"],
+                 "detail": f"source {stalest['name']!r} verified_at "
+                           f"{stalest['verified_at']} is "
+                           f"{stalest['age_days']} days old (due after "
+                           f"{REFRESH_DUE_SOURCE_DAYS})"})
+        entries.append(
+            {"id": pack["id"], "title": pack["title"],
+             "version": pack["version"], "file": path.name,
+             "verified_at": pack["verified_at"], "age_days": pack_age,
+             "stalest_source": stalest, "reasons": reasons,
+             "due": bool(reasons)})
+    return {"checked_at": today.isoformat(), "packs": entries,
+            "due_count": sum(1 for e in entries if e.get("due")),
+            "not_due_count": sum(1 for e in entries
+                                 if not e.get("error")
+                                 and not e.get("due"))}
 
 
 # ---------------------------------------------------------------------------
@@ -2054,9 +2186,13 @@ def format_show(report) -> str:
         ppm = src["cadence_posts_per_month"]
         cadence = (f"≈{ppm:g} posts/month" if ppm is not None
                    else "cadence unknown")
+        affiliation = src["affiliation_as_of"]
+        if src["affiliation_inherited"]:
+            affiliation += " (pack-level)"
         lines.append(f"    - {src['name']} [{src['type']}/"
                      f"{src['platform']}, {state}, "
-                     f"feed: {src['feed_status']}, {cadence}]")
+                     f"feed: {src['feed_status']}, {cadence}, "
+                     f"affiliation as of {affiliation}]")
         if src["feed_url"]:
             lines.append(f"        feed: {src['feed_url']}")
         if src["cadence_basis"]:
@@ -2100,6 +2236,16 @@ def format_refresh(report) -> str:
             lines.append(f"      ! {sig['kind']}: {sig['detail']}")
     for sig in report["signals"]:
         lines.append(f"  ! {sig['kind']}: {sig['detail']}")
+    if report.get("affiliation"):
+        lines.append(f"  affiliation — evidence older than "
+                     f"{AFFILIATION_STALE_DAYS} days; re-checking an "
+                     "affiliation is a human/agent research act, "
+                     "not an automated one:")
+        for entry in report["affiliation"]:
+            suffix = " (pack-level)" if entry["inherited"] else ""
+            lines.append(f"    - {entry['name']}: verified "
+                         f"{entry['verified_at']} "
+                         f"({entry['age_days']} days ago){suffix}")
     lines.append(f"  verdict: {report['verdict']}")
     return "\n".join(lines)
 
@@ -2113,6 +2259,24 @@ def format_refresh_all(report) -> str:
         else:
             blocks.append(format_refresh(item))
     return "\n".join(blocks)
+
+
+def format_refresh_due(report) -> str:
+    lines = []
+    for item in report["packs"]:
+        if item.get("error"):
+            lines.append(f"{item.get('id') or item['file']}: "
+                         f"error — {item['error']}")
+            continue
+        if not item["due"]:
+            continue
+        reasons = "; ".join(r["detail"] for r in item["reasons"])
+        lines.append(f"{item['id']} v{item['version']} — {item['title']}: "
+                     f"DUE — {reasons}")
+    lines.append(f"{report['due_count']} due; "
+                 f"{report['not_due_count']} not due "
+                 f"(checked {report['checked_at']})")
+    return "\n".join(lines)
 
 
 def format_update_plan(plan) -> str:
@@ -2236,6 +2400,11 @@ def main(argv=None) -> int:
                               "default: every bundled pack")
     refresh.add_argument("--config", default="sources.yaml")
     refresh.add_argument("--json", action="store_true")
+    refresh_due_cmd = sub.add_parser(
+        "refresh-due",
+        help="Bundled packs due a curator refresh under the age "
+             "policy; report only, writes nothing")
+    refresh_due_cmd.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
 
     if args.action == "validate":
@@ -2376,6 +2545,13 @@ def main(argv=None) -> int:
                 _print_json(result)
             else:
                 print(format_refresh_all(result))
+        return 0
+    if args.action == "refresh-due":
+        result = refresh_due()
+        if args.json:
+            _print_json(result)
+        else:
+            print(format_refresh_due(result))
         return 0
     if args.action == "update":
         raw, sha, _origin = _load_pack_argument(args.pack)
