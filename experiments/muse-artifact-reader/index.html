@@ -416,7 +416,12 @@ function appendCard(item){
  const card=el('div',undefined,'feedcard');
  const open=el('button',undefined,'feed-open');open.type='button';open.setAttribute('aria-label','Read '+item.title);open.onclick=()=>openItem(item.id);
  const body=el('div',undefined,'cardbody');
- body.append(el('div',[item.source,item.date].filter(Boolean).join('  ·  '),'cardmeta'));
+ const metaParts=[item.source,item.date].filter(Boolean);
+ // Archive holds two different kinds of done and the card says which:
+ // the predicates are already evaluated for the view's filter, so the
+ // label costs no new state — it only names what render() acted on.
+ if(view==='archive'){if(isDone(item.id))metaParts.push('Finished');else if(isNotForMe(item.id))metaParts.push('Not for me')}
+ body.append(el('div',metaParts.join('  ·  '),'cardmeta'));
  body.append(el('h2',item.title,'feedtitle'));
  // Glance layer: a complete-at-its-length gist when the pipeline emitted
  // one; legacy bundles have no gist and keep the clamped summary exactly
@@ -441,7 +446,7 @@ function appendCard(item){
  if(cover&&item.cover_origin!=='offline_art'){const img=el('img',undefined,'cover');img.src=cover;img.alt='';img.loading='lazy';img.onerror=()=>img.remove();open.append(img)}
  card.append(open);
  const controls=el('div',undefined,'card-controls');
- const action=el('button',view==='archive'?'Restore':'Archive','card-action');action.type='button';
+ const action=el('button',view==='archive'?'Restore':'Archive','quiet-action');action.type='button';
  action.setAttribute('aria-label',(view==='archive'?'Restore ':'Archive ')+item.title);
  action.onclick=event=>{
    if(event){event.preventDefault();event.stopPropagation()}
@@ -880,10 +885,18 @@ player.addEventListener('error',()=>{
  pendingRecoveryTime=null;
  failedAudioId=playingId;
  document.getElementById('nowplaying').textContent='Podcast audio unavailable. You can still read the article.';
- if(currentId===playingId&&allItems.some(x=>x.id===currentId&&x.blocks.length)){
+ const failedItem=allItems.find(x=>x.id===playingId);
+ if(currentId===playingId&&failedItem&&failedItem.blocks.length){
+    // The card path never asks the owner to pick an engine: playItem
+    // falls back to device voice on its own for a failed item. The
+    // reader does the same — narration starts by itself, the one
+    // remaining listen control is the narration's own pause button,
+    // and the state line states the fact without an instruction.
     document.getElementById('listen').hidden=true;
     document.getElementById('readaloud').hidden=false;
-    document.getElementById('readerstate').textContent='Cached audio could not load. Try device read-aloud instead.';
+    readAloud(failedItem);
+    if(speechRunning&&speechId===failedItem.id)
+      document.getElementById('readerstate').textContent='Playing with device voice — the recorded audio could not load.';
  }
 });
 function updateScroll(){

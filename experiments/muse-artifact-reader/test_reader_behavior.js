@@ -970,6 +970,84 @@ assert.match(html, /\.feedcard\[hidden\]\{display:none!important\}/);
   console.log('Focu reader wave-9 (N3): export control above the archive grid passed');
 }
 
+// Wave-10 (PM plan-3 wave 27, F8 residual): the reader's audio-failure
+// path joins the card path. When cached audio fails for the item open
+// in the reader, device narration starts by itself — the owner is never
+// handed a second button and an instruction — and the state line states
+// the fact in plain language. Exactly one primary listen control
+// remains: the narration's own pause button. (The harness's fake speech
+// completes synchronously, so this block holds narration in flight to
+// observe the failure moment itself.)
+{
+  assert.equal(html.includes('Try device read-aloud'),false,'no instruction to operate a second control survives anywhere in the reader');
+  const e=makeEnvironment();
+  e.run("render([{id:'fail-1',origin:'daily_compilation',title:'Briefing with broken audio',summary:'',date:'2026-11-17',source:'Focu',audio_url:'assets/broken.mp3',audio_duration:600,covered_content_ids:[],blocks:[{type:'paragraph',text:'The evidence in this briefing matters.'}],reading_minutes:2}],'')");
+  e.run("openItem('fail-1')");
+  assert.equal(e.get('listen').hidden,false,'Listen is the one control before any failure');
+  assert.equal(e.get('readaloud').hidden,true,'no second engine is offered alongside it');
+  e.run("speechSynthesis.speak=function(u){speechSynthesis.spoken.push(u.text)}");
+  e.get('listen').onclick();
+  assert.equal(e.run('playingId'),'fail-1');
+  e.get('player').events.error();
+  assert.equal(e.run('failedAudioId'),'fail-1','the failure is recorded against the item');
+  assert.equal(e.speech.spoken.length,1,'device narration starts on its own — no second tap');
+  assert.match(e.speech.spoken[0],/evidence in this briefing/, 'the narration is the article itself');
+  assert.equal(e.run('speechRunning'),true,'narration is in flight');
+  assert.equal(e.run('speechId'),'fail-1');
+  assert.equal(e.run("isDone('fail-1')"),false,'a narration still in flight has not archived anything');
+  assert.equal(e.get('readerstate').textContent,'Playing with device voice — the recorded audio could not load.','the state line states the fact, with no instruction');
+  const visible=[e.get('listen'),e.get('readaloud')].filter(n=>!n.hidden);
+  assert.equal(visible.length,1,'exactly one primary listen control remains after the failure');
+  assert.equal(visible[0],e.get('readaloud'),'the remaining control is the narration control');
+  assert.equal(e.get('readaloud').textContent,'Ⅱ Pause reading','the remaining control pauses the narration that started itself');
+  assert.equal(e.get('playerbar').hidden,true,'the dead player bar leaves the screen');
+  console.log('Focu reader wave-10 (F8): audio failure falls back to device voice on its own passed');
+}
+// Wave-10 (PM plan-3 wave 27): Archive cards say which kind of done
+// they are. The label rides the card's existing meta line, from the
+// predicates render() already evaluates — no new state, no store
+// change — and appears in no other view.
+{
+  const e=makeEnvironment();
+  e.run("render(["+
+    "{id:'arc-done',origin:'user_initiated',title:'Finished piece',summary:'',date:'2026-11-16',source:'Your research',audio_url:'',blocks:[{type:'paragraph',text:'Read'}],reading_minutes:2},"+
+    "{id:'arc-nfm',origin:'registered_source',title:'Dismissed piece',summary:'',date:'2026-11-16',source:'Anthropic',audio_url:'',blocks:[{type:'paragraph',text:'Skipped'}],reading_minutes:2}"+
+  "],'')");
+  e.run("markDone('arc-done','article')");
+  e.run("markNotForMe('arc-nfm')");
+  e.run("setView('archive')");
+  const cards=e.get('grid').children;
+  assert.equal(cards.length,2,'both kinds of done rest in Archive');
+  const metaByTitle={};
+  for(const card of cards){const body=card.children[0].children[0];metaByTitle[body.children[1].textContent]=body.children[0].textContent}
+  assert.match(metaByTitle['Finished piece'],/·  Finished$/,'a consumed card is labelled Finished in its meta line');
+  assert.match(metaByTitle['Dismissed piece'],/·  Not for me$/,'a dismissed card is labelled Not for me in its meta line');
+  const live=makeEnvironment();
+  live.run('render(['+article('arc-live')+'],"")');
+  const liveMeta=live.get('grid').children[0].children[0].children[0].children[0].textContent;
+  assert.doesNotMatch(liveMeta,/Finished|Not for me/,'no archive state label appears on a live feed card');
+  console.log('Focu reader wave-10: archive cards name their kind of done passed');
+}
+// Wave-10 (PM plan-3 wave 27): the card-level Archive action takes the
+// same borderless quiet styling as its Not-for-me and Useful neighbours
+// (audit §2.3's unimplemented line) — styling only; Archive and Restore
+// do exactly what they did.
+{
+  const e=makeEnvironment();
+  e.run('render(['+article('quiet-1')+'],"")');
+  const controls=e.get('grid').children[0].children[1].children;
+  assert.deepEqual(controls.map(n=>n.textContent),['Archive','Not for me','Useful']);
+  assert.ok(controls.every(n=>n.className==='quiet-action'),'every card act shares the quiet register — Archive included');
+  e.run("markDone('quiet-1','manual')");
+  e.run("setView('archive')");
+  const restore=e.get('grid').children[0].children[1].children[0];
+  assert.equal(restore.textContent,'Restore');
+  assert.equal(restore.className,'quiet-action','Restore carries the same quiet styling in Archive');
+  restore.onclick();
+  assert.equal(e.run("isDone('quiet-1')"),false,'Restore still restores — only its styling changed');
+  console.log('Focu reader wave-10: the archive action is as quiet as its neighbours passed');
+}
+
 console.log('Focu reader behavior: article, local read-aloud, persistence and audio end passed');
 console.log('Focu reader wave-2: one-tap play, cost chips and persisted resume passed');
 console.log('Focu reader wave-3: contextual recovery, skip controls and briefing purity passed');
@@ -978,3 +1056,4 @@ console.log('Focu reader wave-6: the useful act — the one promotion signal —
 console.log('Focu reader wave-7: compilation covered ids — briefing marks can be attributed — passed');
 console.log('Focu reader wave-8: the original door — the ladder top rung is reachable — passed');
 console.log('Focu reader wave-9: agenda-contents cards, real source names, export above the archive passed');
+console.log('Focu reader wave-10: automatic voice fallback, archive state labels, quiet archive action passed');
