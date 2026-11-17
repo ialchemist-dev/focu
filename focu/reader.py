@@ -4,8 +4,8 @@ import argparse
 import json
 import sqlite3
 from pathlib import Path
-from urllib.parse import urlsplit, urlunsplit
 from focu.delivery import DeliveryArchive
+from focu.daily.identity import canonical_url as _identity_canonical_url
 from focu.evidence import EvidenceStore
 from focu.intents import IntentStore
 from focu.covers import source_cover, image_url
@@ -20,10 +20,22 @@ PACKS = Path(__file__).with_name('source_packs')
 
 
 def canonical_url(value):
-    p = urlsplit(value)
-    if p.scheme not in ('http', 'https') or not p.hostname or p.username or p.password:
-        raise ValueError('Expected a public HTTP(S) source URL')
-    return urlunsplit((p.scheme.lower(), p.netloc.lower(), p.path.rstrip('/') or '/', p.query, ''))
+    """The one canonical URL identity, shared with the daily registry.
+
+    Delegates to ``focu.daily.identity.canonical_url`` (backend-design §5
+    follow-up, self-iteration Q6). The reader previously had its own
+    canonicalizer that stripped trailing slashes but kept tracking
+    parameters, so the same publication could dedupe in the reader and
+    not in ``sources.yaml`` — or the reverse. Identity semantics are the
+    registry's: tracking parameters stripped, twitter.com normalized to
+    x.com, YouTube URLs normalized to the watch form, and trailing
+    slashes / path case / unknown query parameters preserved, because
+    none of those equivalences is guaranteed for arbitrary publishers.
+    """
+    try:
+        return _identity_canonical_url(value)
+    except (AttributeError, TypeError) as exc:
+        raise ValueError('Expected a public HTTP(S) source URL') from exc
 
 
 class ReaderStore:

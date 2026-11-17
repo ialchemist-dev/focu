@@ -130,7 +130,7 @@ MIT — see [LICENSE](LICENSE).
 
 ## Finite mobile reader and source marketplace
 
-Run `python -m focu.cli reader serve` to read explicitly published research batches, save/complete items, and inspect/subscribe to versioned source groups. See [Reader App](docs/READER_APP.md), [product design](docs/READER_MARKETPLACE_PLAN.md), and [Anthropic source validation](docs/ANTHROPIC_SOURCE_DISCOVERY.md). Local-only server; authenticated HTTPS hosting and iOS installation acceptance remain outstanding.
+Run `python -m focu.cli reader serve` to read explicitly published research batches, save/complete items, and inspect/subscribe to versioned source groups. See [Reader App](docs/READER_APP.md), [product design](docs/READER_MARKETPLACE_PLAN.md), and [Anthropic source validation](docs/ANTHROPIC_SOURCE_DISCOVERY.md). Local-only server; authenticated HTTPS hosting and iOS installation acceptance remain outstanding. Reader subscriptions and the daily pipeline's `sources.yaml` registry dedupe sources by one shared canonical URL identity (`focu.daily.identity.canonical_url`): tracking parameters are stripped and platform URL forms are normalized, while trailing slashes, path case, and unknown query parameters stay significant — a source is the same source in both registries, and never silently merged in one but not the other.
 
 ## Recoverable daily pipeline
 
