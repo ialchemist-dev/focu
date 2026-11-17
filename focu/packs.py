@@ -1,4 +1,5 @@
-"""Curated source packs: validation, preview, install, uninstall, restore.
+"""Curated source packs: catalog, validation, preview, install, update,
+show, uninstall, restore.
 
 A source pack is a versioned, curator-signed list of sources (schema v1,
 ``schemas/source-pack.schema.json``). This module is the bridge between the
@@ -896,6 +897,569 @@ def restore_backup(config_path, backup=None, *, dry_run=False, confirm=None):
 
 
 # ---------------------------------------------------------------------------
+# Catalog and show (design section 4.1): read-only views over the bundled
+# packs and the install manifest.
+
+def _attention_total(pack):
+    """Enabled sources' cadence sum, plus the names it cannot price."""
+    total = 0.0
+    unknown = []
+    for src in pack.get("sources", []):
+        if src.get("enabled") is not True:
+            continue
+        cadence = src.get("cadence")
+        ppm = cadence.get("posts_per_month") if isinstance(cadence, dict) else None
+        if _is_nonneg_number(ppm):
+            total += ppm
+        else:
+            unknown.append(src.get("name"))
+    return round(total, 4), unknown
+
+
+def pack_catalog(config_path=None):
+    """Every bundled pack, with install state from the manifest.
+
+    Read-only. ``config_path`` locates the manifest beside the registry;
+    without one (or without a manifest) every pack reports uninstalled.
+    The latest manifest record per pack is its installed state.
+    """
+    manifest = (load_manifest(config_path) if config_path is not None
+                else {"packs": []})
+    installed = {}
+    for record in manifest["packs"]:
+        if record.get("pack_id"):
+            installed[record["pack_id"]] = record
+    packs = []
+    for path in sorted(PACKS_DIR.glob("*.json")):
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            packs.append({"file": path.name, "error": "unreadable"})
+            continue
+        if not isinstance(raw, dict):
+            packs.append({"file": path.name, "error": "pack must be a JSON object"})
+            continue
+        report = validate_pack(raw)
+        pack = report["pack"]
+        if pack is None:
+            packs.append({"file": path.name, "id": raw.get("id"),
+                          "error": "; ".join(report["errors"])})
+            continue
+        total, unknown = _attention_total(pack)
+        record = installed.get(pack["id"])
+        packs.append(
+            {"id": pack["id"], "title": pack["title"],
+             "version": pack["version"], "verified_at": pack["verified_at"],
+             "file": path.name, "sources": len(pack["sources"]),
+             "enabled_sources": sum(1 for s in pack["sources"]
+                                    if s.get("enabled") is True),
+             "attention_posts_per_month": total,
+             "attention_unknown": unknown,
+             "valid": report["valid"], "errors": report["errors"],
+             "warnings": report["warnings"],
+             "installed": record is not None,
+             "installed_version": record.get("version") if record else None,
+             "installed_at": record.get("installed_at") if record else None,
+             "update_available": bool(
+                 record and record.get("version") != pack["version"])})
+    return {"packs": packs,
+            "manifest": (str(manifest_path(config_path))
+                         if config_path is not None else None)}
+
+
+def show_pack(raw_pack, config_path=None, *, check_feeds=True, fetch=None,
+              pack_sha256=None, today=None):
+    """Full detail for one pack: membership, cadence, unverified, state.
+
+    Feed status comes from a live check when ``check_feeds`` (the same
+    bounded fetch as install); otherwise each source reports ``unchecked``
+    (has a feed) or ``no_feed``. Install state is read from the manifest
+    beside ``config_path`` when one is given.
+    """
+    report = validate_pack(raw_pack, today=today)
+    if not report["valid"]:
+        raise ValueError("pack validation failed: "
+                         + "; ".join(report["errors"]))
+    pack = report["pack"]
+    liveness = check_liveness(pack, fetch=fetch) if check_feeds else {}
+    sources = []
+    for src in pack["sources"]:
+        live = liveness.get(src["id"], {})
+        feed = live.get("feed")
+        if feed:
+            feed_status = feed["status"]
+        elif src.get("feed_url"):
+            feed_status = "unchecked"
+        else:
+            feed_status = "no_feed"
+        cadence = src.get("cadence") if isinstance(src.get("cadence"), dict) else {}
+        sources.append(
+            {"id": src["id"], "name": src["name"], "type": src["type"],
+             "channel": src["channel"], "platform": src.get("platform"),
+             "person": src.get("person"), "org": src.get("org"),
+             "role": src.get("role"),
+             "homepage": src.get("homepage"), "feed_url": src.get("feed_url"),
+             "enabled": bool(src.get("enabled", True)),
+             "feed_status": feed_status, "liveness": live or None,
+             "cadence_posts_per_month": cadence.get("posts_per_month"),
+             "cadence_basis": cadence.get("basis"),
+             "last_post_at": src.get("last_post_at"),
+             "verified_at": src.get("verified_at"),
+             "readiness": src.get("readiness"), "notes": src.get("notes"),
+             "max_items_per_day": src.get("max_items_per_day")})
+    total, unknown = _attention_total(pack)
+    installed = {"installed": False}
+    if config_path is not None:
+        manifest = load_manifest(config_path)
+        records = [r for r in manifest["packs"]
+                   if r.get("pack_id") == pack["id"]]
+        if records:
+            record = records[-1]
+            installed = {"installed": True,
+                         "installed_version": record.get("version"),
+                         "available_version": pack["version"],
+                         "update_available":
+                             record.get("version") != pack["version"],
+                         "installed_at": record.get("installed_at")}
+    return {"pack": {"id": pack["id"], "title": pack["title"],
+                     "version": pack["version"],
+                     "description": pack["description"],
+                     "tags": pack["tags"], "curator": pack["curator"],
+                     "coverage": pack["coverage"],
+                     "verified_at": pack["verified_at"],
+                     "sha256": pack_sha256,
+                     "attention_estimate": pack.get("attention_estimate")},
+            "sources": sources,
+            "unverified": [{"name": c.get("name"), "reason": c.get("reason"),
+                            "checked_at": c.get("checked_at"),
+                            "homepage": c.get("homepage")}
+                           for c in pack.get("unverified", [])],
+            "attention_posts_per_month": total,
+            "attention_unknown": unknown,
+            "warnings": report["warnings"],
+            "installed": installed}
+
+
+# ---------------------------------------------------------------------------
+# Update (design section 7): explicit, pinned, previewed. The diff is
+# computed against the manifest snapshot (the latest install record for
+# the pack); removed sources are detached only when this pack solely
+# provides them — the same ReaderStore rule uninstall applies.
+
+def _planned_entry(src, channel, liveness):
+    """The registry entry install/update would write for a pack source.
+
+    Mirrors plan_install: an enabled source whose feed fails its
+    liveness check is planned disabled with the failure in its notes.
+    Returns (entry, enabled, live_feed_result).
+    """
+    live = (liveness or {}).get(src["id"], {}).get("feed")
+    enabled = bool(src.get("enabled", True))
+    suffix = None
+    if enabled and live is not None and live.get("status") != "live":
+        enabled = False
+        suffix = (f"Installed disabled: feed liveness check at install "
+                  f"time returned {live['status']} "
+                  f"({live.get('error', 'no detail')}).")
+    entry = source_to_yaml_entry(src, notes_suffix=suffix)
+    entry["channel"] = channel
+    entry["enabled"] = enabled
+    return entry, enabled, live
+
+
+def plan_update(pack, config_path, *, liveness=None, records=None):
+    """Pure update plan: diff the installed snapshot against a new pack.
+
+    ``pack`` must be normalized (see validate_pack). ``records`` is the
+    manifest history for this pack; the latest record is the installed
+    snapshot. Snapshot entries match new sources by loader identity
+    first, then by name (a name match with a new identity is a locator
+    change). Writes nothing.
+    """
+    cfg, _raw_doc, existing = _load_registry(config_path)
+    channels = {ch["id"] for ch in cfg.get("channels", [])}
+    manifest = load_manifest(config_path)
+    if records is None:
+        records = [r for r in manifest["packs"]
+                   if r.get("pack_id") == pack["id"]]
+    if not records:
+        raise ValueError(f"pack is not installed: {pack['id']}")
+    snapshot = records[-1]
+    installed_version = snapshot.get("version")
+    old_entries = list(snapshot.get("entries", []))
+    first_preexisting = set(records[0].get("preexisting_source_ids", []))
+    other_providers: dict = {}
+    for record in manifest["packs"]:
+        if record.get("pack_id") == pack["id"]:
+            continue
+        for entry in record.get("entries", []):
+            key = entry.get("source_id") or ("name", entry.get("name"))
+            other_providers.setdefault(key, set()).add(record["pack_id"])
+    providers: dict[str, set[str]] = {}
+    for record in manifest["packs"]:
+        for entry in record.get("entries", []):
+            if entry.get("source_id"):
+                providers.setdefault(entry["source_id"], set()).add(
+                    record["pack_id"])
+    existing_by_id = {e["source_id"]: e for e in existing if e["source_id"]}
+    existing_names = {e["name"]: e for e in existing if e["name"]}
+
+    def registry_match(old):
+        for e in existing:
+            if _manifest_entry_matches(old, e["entry"], e["source_id"]):
+                return e
+        return None
+
+    plan = {"pack": {"id": pack["id"], "title": pack["title"],
+                     "version": pack["version"]},
+            "installed_version": installed_version,
+            "already_current": installed_version == pack["version"],
+            "adds": [], "removes": [], "keeps": [], "changed": [],
+            "unchanged": [], "duplicates": [],
+            "unverified": [{"name": c.get("name"), "reason": c.get("reason")}
+                           for c in pack.get("unverified", [])],
+            "errors": [], "warnings": [],
+            "attention_posts_per_month": 0.0, "attention_unknown": [],
+            "preexisting_source_ids": sorted(existing_by_id)}
+    if plan["already_current"]:
+        return plan
+
+    def note_attention(src, enabled):
+        if not enabled:
+            return
+        cadence = src.get("cadence") if isinstance(src.get("cadence"), dict) else None
+        ppm = cadence.get("posts_per_month") if cadence else None
+        if ppm is None:
+            plan["attention_unknown"].append(src["name"])
+        else:
+            plan["attention_posts_per_month"] = round(
+                plan["attention_posts_per_month"] + ppm, 4)
+
+    old_by_identity = {}
+    old_by_name = {}
+    for old in old_entries:
+        if old.get("source_id"):
+            old_by_identity.setdefault(old["source_id"], old)
+        if old.get("name"):
+            old_by_name.setdefault(old["name"], old)
+    matched_old: set[int] = set()
+    pending = []
+    for src in pack["sources"]:
+        channel = src["channel"]
+        if channel not in channels:
+            plan["errors"].append(
+                f"source {src['id']!r}: channel {channel!r} does not exist "
+                f"in {Path(config_path).name} (channels: "
+                f"{', '.join(sorted(channels))}); create it or pass --channel")
+            continue
+        entry, enabled, live = _planned_entry(src, channel, liveness)
+        sid = _entry_identity(entry)
+        old = None
+        identity_changed = False
+        candidate = old_by_identity.get(sid) if sid is not None else None
+        if candidate is not None and id(candidate) not in matched_old:
+            old = candidate
+        else:
+            candidate = old_by_name.get(src["name"])
+            if candidate is not None and id(candidate) not in matched_old:
+                old = candidate
+                identity_changed = True
+        if old is None:
+            pending.append((src, entry, enabled, live, sid))
+            continue
+        matched_old.add(id(old))
+        if registry_match(old) is None:
+            plan["keeps"].append(
+                {"name": old.get("name"),
+                 "reason": "installed entry no longer present in the registry"})
+            pending.append((src, entry, enabled, live, sid))
+            continue
+        if identity_changed:
+            if old.get("added"):
+                plan["changed"].append(
+                    {"pack_source_id": src["id"], "name": src["name"],
+                     "old_source_id": old.get("source_id"),
+                     "new_source_id": sid, "identity_changed": True,
+                     "replace": True,
+                     "old_locator": old.get("locator"),
+                     "locator": _entry_locator(entry), "entry": entry,
+                     "old_manifest_entry": old,
+                     "cadence_posts_per_month":
+                         (src.get("cadence") or {}).get("posts_per_month"),
+                     "last_post_at": src.get("last_post_at"),
+                     "liveness": live})
+                note_attention(src, enabled)
+            else:
+                plan["keeps"].append(
+                    {"name": src["name"],
+                     "reason": "locator changed in the pack, but this pack "
+                               "only listed the installed entry; left "
+                               "unchanged"})
+                plan["unchanged"].append(
+                    {"pack_source_id": src["id"], "name": src["name"],
+                     "source_id": old.get("source_id"),
+                     "locator": old.get("locator"),
+                     "enabled": old.get("enabled", True)})
+            continue
+        old_entry = old.get("entry")
+        if old_entry is not None:
+            if old_entry == entry:
+                plan["unchanged"].append(
+                    {"pack_source_id": src["id"], "name": src["name"],
+                     "source_id": sid, "locator": _entry_locator(entry),
+                     "enabled": enabled})
+                note_attention(src, enabled)
+            elif old.get("added"):
+                plan["changed"].append(
+                    {"pack_source_id": src["id"], "name": src["name"],
+                     "old_source_id": old.get("source_id"),
+                     "new_source_id": sid, "identity_changed": False,
+                     "replace": True,
+                     "old_locator": old.get("locator"),
+                     "locator": _entry_locator(entry), "entry": entry,
+                     "old_manifest_entry": old,
+                     "cadence_posts_per_month":
+                         (src.get("cadence") or {}).get("posts_per_month"),
+                     "last_post_at": src.get("last_post_at"),
+                     "liveness": live})
+                note_attention(src, enabled)
+            else:
+                plan["keeps"].append(
+                    {"name": src["name"],
+                     "reason": "changed in the pack, but this pack only "
+                               "listed the installed entry; left unchanged"})
+                plan["unchanged"].append(
+                    {"pack_source_id": src["id"], "name": src["name"],
+                     "source_id": old.get("source_id"),
+                     "locator": old.get("locator"),
+                     "enabled": old.get("enabled", True)})
+            continue
+        # Snapshot entry without a written dict: it was a duplicate at
+        # install time, so this pack never owned the registry entry.
+        if (_entry_locator(entry) == old.get("locator")
+                and enabled == old.get("enabled", True)):
+            plan["unchanged"].append(
+                {"pack_source_id": src["id"], "name": src["name"],
+                 "source_id": old.get("source_id"),
+                 "locator": old.get("locator"),
+                 "enabled": old.get("enabled", True)})
+            note_attention(src, enabled)
+        else:
+            plan["keeps"].append(
+                {"name": src["name"],
+                 "reason": "changed in the pack, but this pack only "
+                           "listed the installed entry; left unchanged"})
+            plan["unchanged"].append(
+                {"pack_source_id": src["id"], "name": src["name"],
+                 "source_id": old.get("source_id"),
+                 "locator": old.get("locator"),
+                 "enabled": old.get("enabled", True)})
+
+    # Snapshot entries no new source claims: removals or keeps.
+    freed_names = set()
+    for old in old_entries:
+        if id(old) in matched_old:
+            continue
+        name = old.get("name")
+        sid = old.get("source_id")
+        if registry_match(old) is None:
+            plan["keeps"].append(
+                {"name": name,
+                 "reason": "no longer present in the registry"})
+            continue
+        if not old.get("added"):
+            reason = ("was present before this pack was installed"
+                      if sid is not None and sid in first_preexisting
+                      else "provided by another entry; this pack only "
+                           "listed it")
+            plan["keeps"].append({"name": name, "reason": reason})
+            continue
+        if sid is not None and sid in first_preexisting:
+            plan["keeps"].append(
+                {"name": name,
+                 "reason": "was present before this pack was installed"})
+            continue
+        shared = other_providers.get(
+            sid if sid is not None else ("name", name))
+        if shared:
+            plan["keeps"].append(
+                {"name": name,
+                 "reason": "also provided by " + ", ".join(sorted(shared))})
+            continue
+        plan["removes"].append({"name": name, "source_id": sid,
+                                "manifest_entry": old})
+        freed_names.add(name)
+
+    # New sources with no snapshot counterpart: adds, with install's
+    # dedupe and name-collision rules against the surviving registry.
+    planned_names: dict[str, str] = {}
+    for src, entry, enabled, live, sid in pending:
+        if sid is not None and sid in existing_by_id:
+            plan["duplicates"].append(
+                {"pack_source_id": src["id"], "name": src["name"],
+                 "source_id": sid,
+                 "existing_name": existing_by_id[sid]["name"],
+                 "locator": existing_by_id[sid]["locator"],
+                 "existing_enabled": existing_by_id[sid]["enabled"],
+                 "provided_by": sorted(providers.get(sid, set())) or ["manual"]})
+            continue
+        name = src["name"]
+        if name in existing_names and name not in freed_names:
+            other = existing_names[name]
+            if enabled or other["enabled"]:
+                plan["errors"].append(
+                    f"source {src['id']!r}: name {name!r} already exists in "
+                    "the registry with a different identity; rename one of "
+                    "them (the loader requires enabled names to be unique)")
+                continue
+            plan["warnings"].append(
+                f"source {src['id']!r}: disabled entry shares the name "
+                f"{name!r} with a disabled registry entry")
+        if name in planned_names:
+            plan["errors"].append(
+                f"source {src['id']!r}: name {name!r} collides with pack "
+                f"source {planned_names[name]!r}")
+            continue
+        planned_names[name] = src["id"]
+        cadence = src.get("cadence") if isinstance(src.get("cadence"), dict) else None
+        ppm = cadence.get("posts_per_month") if cadence else None
+        plan["adds"].append(
+            {"pack_source_id": src["id"], "name": name, "source_id": sid,
+             "locator": _entry_locator(entry), "enabled": enabled,
+             "entry": entry, "cadence_posts_per_month": ppm,
+             "last_post_at": src.get("last_post_at"), "liveness": live})
+        note_attention(src, enabled)
+    return plan
+
+
+def update_pack(raw_pack, config_path, *, dry_run=False, check_feeds=True,
+                fetch=None, pack_sha256=None, confirm=None, today=None):
+    """Validate, diff and (unless dry_run or confirm declines) update.
+
+    The installed version is the latest manifest record for the pack.
+    An equal available version is reported ``already_current`` and
+    changes nothing — no backup, no manifest write. Apply goes through
+    the same backup -> temp write -> load_config gate -> atomic rename
+    as install, and appends a manifest record for the new version, so
+    history stays auditable and uninstall keeps working.
+    """
+    report = validate_pack(raw_pack, today=today)
+    if not report["valid"]:
+        raise ValueError("pack validation failed: "
+                         + "; ".join(report["errors"]))
+    pack = report["pack"]
+    manifest = load_manifest(config_path)
+    records = [r for r in manifest["packs"]
+               if r.get("pack_id") == pack["id"]]
+    if not records:
+        raise ValueError(f"pack is not installed: {pack['id']}")
+    installed_version = records[-1].get("version")
+    if installed_version == pack["version"]:
+        return {"already_current": True, "applied": False,
+                "dry_run": dry_run,
+                "pack": {"id": pack["id"], "title": pack["title"],
+                         "version": pack["version"]},
+                "installed_version": installed_version}
+    liveness = check_liveness(pack, fetch=fetch) if check_feeds else None
+    plan = plan_update(pack, config_path, liveness=liveness, records=records)
+    plan["warnings"] = report["warnings"] + plan["warnings"]
+    if plan["errors"]:
+        raise ValueError("update plan failed: " + "; ".join(plan["errors"]))
+    result = {"plan": plan, "dry_run": dry_run, "applied": False,
+              "already_current": False}
+    if dry_run:
+        return result
+    if confirm is not None and not confirm(plan):
+        result["aborted"] = True
+        return result
+    config_path = Path(config_path)
+    _cfg, raw_doc, existing = _load_registry(config_path)
+    existing_by_entry = {id(e["entry"]): e for e in existing}
+    raw_sources = list(raw_doc.get("sources") or [])
+
+    def find_raw(manifest_entry):
+        for raw_src in raw_sources:
+            if not isinstance(raw_src, dict):
+                continue
+            info = existing_by_entry.get(id(raw_src), {})
+            if _manifest_entry_matches(manifest_entry, raw_src,
+                                       info.get("source_id")):
+                return raw_src
+        return None
+
+    remove_ids = set()
+    for item in plan["removes"]:
+        target = find_raw(item["manifest_entry"])
+        if target is not None:
+            remove_ids.add(id(target))
+    replacements = {}
+    replaced = set()
+    for index, item in enumerate(plan["changed"]):
+        if not item["replace"]:
+            continue
+        target = find_raw(item["old_manifest_entry"])
+        if target is not None:
+            replacements[id(target)] = item["entry"]
+            replaced.add(index)
+    new_sources = []
+    for raw_src in raw_sources:
+        if id(raw_src) in remove_ids:
+            continue
+        new_sources.append(replacements.get(id(raw_src), raw_src))
+    present_ids = {_entry_identity(s) for s in new_sources
+                   if isinstance(s, dict)} - {None}
+    for index, item in enumerate(plan["changed"]):
+        # A changed source whose installed entry vanished between plan
+        # and apply is appended like an add rather than dropped.
+        if (item["replace"] and index not in replaced
+                and item["new_source_id"] not in present_ids):
+            new_sources.append(item["entry"])
+            present_ids.add(item["new_source_id"])
+    for add in plan["adds"]:
+        if add["source_id"] is not None and add["source_id"] in present_ids:
+            continue
+        new_sources.append(add["entry"])
+        present_ids.add(add["source_id"])
+    raw_doc["sources"] = new_sources
+    backup = _apply_config(config_path, raw_doc, backup_stamp=_backup_stamp())
+    entries = []
+    for add in plan["adds"]:
+        entries.append({"source_id": add["source_id"], "name": add["name"],
+                        "locator": add["locator"], "enabled": add["enabled"],
+                        "added": True, "entry": add["entry"]})
+    for item in plan["changed"]:
+        if item["replace"]:
+            entries.append({"source_id": item["new_source_id"],
+                            "name": item["name"],
+                            "locator": item["locator"],
+                            "enabled": item["entry"].get("enabled", True),
+                            "added": True, "entry": item["entry"]})
+        # Changed-but-not-replaced sources are recorded below as
+        # unchanged: the plan lists them in both "keeps" and "unchanged",
+        # and the registry still holds the old entry.
+    for item in plan["unchanged"]:
+        entries.append({"source_id": item["source_id"], "name": item["name"],
+                        "locator": item["locator"],
+                        "enabled": item["enabled"], "added": False})
+    for dup in plan["duplicates"]:
+        entries.append({"source_id": dup["source_id"], "name": dup["name"],
+                        "locator": dup.get("locator"),
+                        "enabled": dup.get("existing_enabled", True),
+                        "added": False})
+    manifest = load_manifest(config_path)
+    manifest["packs"].append(
+        {"pack_id": pack["id"], "version": pack["version"],
+         "sha256": pack_sha256, "installed_at": utcnow(),
+         "backup": backup.name,
+         "preexisting_source_ids": plan["preexisting_source_ids"],
+         "entries": entries})
+    _write_manifest(config_path, manifest)
+    result.update({"applied": True, "backup": str(backup),
+                   "manifest": str(manifest_path(config_path))})
+    return result
+
+
+# ---------------------------------------------------------------------------
 # CLI: `focu pack ...` (thin argparse wrappers, like focu.reader / focu.daily).
 
 def _load_pack_argument(argument):
@@ -938,6 +1502,116 @@ def format_plan(plan) -> str:
         lines.append(f"  ! excluded, unverified: {cand['name']} — {cand['reason']}")
     total = plan["attention_posts_per_month"]
     attention = f"Attention: adds ≈{total:g} posts/month"
+    if plan["attention_unknown"]:
+        attention += ("; cadence unknown for "
+                      + ", ".join(plan["attention_unknown"]))
+    lines.append(attention)
+    for warning in plan["warnings"]:
+        lines.append(f"  warning: {warning}")
+    return "\n".join(lines)
+
+
+def format_catalog(catalog) -> str:
+    lines = []
+    for item in catalog["packs"]:
+        if item.get("error"):
+            lines.append(f"{item.get('id') or item['file']}: "
+                         f"error — {item['error']}")
+            continue
+        attention = f"≈{item['attention_posts_per_month']:g} posts/month"
+        if item["attention_unknown"]:
+            attention += ("; cadence unknown for "
+                          + ", ".join(item["attention_unknown"]))
+        state = "not installed"
+        if item["installed"]:
+            state = f"installed v{item['installed_version']}"
+            if item["update_available"]:
+                state += f"; update available → v{item['version']}"
+        lines.append(f"{item['id']} v{item['version']} — {item['title']} "
+                     f"(verified {item['verified_at']}; "
+                     f"{item['sources']} sources; {attention}) [{state}]")
+    return "\n".join(lines)
+
+
+def format_show(report) -> str:
+    pack = report["pack"]
+    lines = [f"Pack {pack['id']} v{pack['version']} — {pack['title']}",
+             f"  {pack['description']}",
+             f"  curator: {pack['curator']['name']}; "
+             f"verified {pack['verified_at']}; "
+             f"tags: {', '.join(pack['tags'])}",
+             f"  coverage: {pack['coverage']}"]
+    installed = report["installed"]
+    if installed.get("installed"):
+        state = (f"  installed: v{installed['installed_version']} "
+                 f"(at {installed['installed_at']})")
+        if installed["update_available"]:
+            state += f"; update available → v{installed['available_version']}"
+        lines.append(state)
+    else:
+        lines.append("  installed: no")
+    attention = f"  attention: ≈{report['attention_posts_per_month']:g} posts/month"
+    if report["attention_unknown"]:
+        attention += ("; cadence unknown for "
+                      + ", ".join(report["attention_unknown"]))
+    lines.append(attention)
+    lines.append("  sources:")
+    for src in report["sources"]:
+        state = "enabled" if src["enabled"] else "disabled"
+        ppm = src["cadence_posts_per_month"]
+        cadence = (f"≈{ppm:g} posts/month" if ppm is not None
+                   else "cadence unknown")
+        lines.append(f"    - {src['name']} [{src['type']}/"
+                     f"{src['platform']}, {state}, "
+                     f"feed: {src['feed_status']}, {cadence}]")
+        if src["feed_url"]:
+            lines.append(f"        feed: {src['feed_url']}")
+        if src["cadence_basis"]:
+            lines.append(f"        cadence basis: {src['cadence_basis']}")
+        if src["readiness"]:
+            lines.append(f"        readiness: {src['readiness']}")
+    if report["unverified"]:
+        lines.append("  unverified (never installed):")
+        for cand in report["unverified"]:
+            lines.append(f"    ! {cand['name']} — {cand['reason']}")
+    for warning in report["warnings"]:
+        lines.append(f"  warning: {warning}")
+    return "\n".join(lines)
+
+
+def format_update_plan(plan) -> str:
+    pack = plan["pack"]
+    lines = [f"Pack {pack['id']} v{plan['installed_version']} → "
+             f"v{pack['version']} — {pack['title']}"]
+    for add in plan["adds"]:
+        state = "enabled" if add["enabled"] else "disabled"
+        ppm = add["cadence_posts_per_month"]
+        cadence = (f"≈{ppm:g} posts/month" if ppm is not None
+                   else "cadence unknown")
+        lines.append(f"  + {add['name']} ({state}, {cadence})")
+    for item in plan["changed"]:
+        if item["identity_changed"]:
+            detail = (f"locator changed: {item['old_locator']} → "
+                      f"{item['locator']}")
+        else:
+            detail = "entry updated"
+        lines.append(f"  ~ {item['name']} ({detail})")
+    for item in plan["removes"]:
+        lines.append(f"  - {item['name']} (removed from the pack; "
+                     "will be detached)")
+    for item in plan["keeps"]:
+        lines.append(f"  = keep {item['name']} ({item['reason']})")
+    for dup in plan["duplicates"]:
+        lines.append(f"  = {dup['name']} already present as "
+                     f"{dup['existing_name']!r} (provided by "
+                     f"{', '.join(dup['provided_by'])}); skipped")
+    for cand in plan["unverified"]:
+        lines.append(f"  ! excluded, unverified: {cand['name']} — "
+                     f"{cand['reason']}")
+    if plan["unchanged"]:
+        lines.append(f"  ({len(plan['unchanged'])} unchanged)")
+    total = plan["attention_posts_per_month"]
+    attention = f"Attention after update: ≈{total:g} posts/month"
     if plan["attention_unknown"]:
         attention += ("; cadence unknown for "
                       + ", ".join(plan["attention_unknown"]))
@@ -998,6 +1672,25 @@ def main(argv=None) -> int:
     listing = sub.add_parser("list", help="Bundled packs and installed packs")
     listing.add_argument("--config", default="sources.yaml")
     listing.add_argument("--json", action="store_true")
+    catalog = sub.add_parser(
+        "catalog", help="Bundled packs with attention cost and install state")
+    catalog.add_argument("--config", default="sources.yaml")
+    catalog.add_argument("--json", action="store_true")
+    show = sub.add_parser(
+        "show", help="One pack in full: sources, cadence, unverified, state")
+    show.add_argument("pack")
+    show.add_argument("--config", default="sources.yaml")
+    show.add_argument("--no-liveness", action="store_true")
+    show.add_argument("--json", action="store_true")
+    update = sub.add_parser(
+        "update", help="Update an installed pack to the available version")
+    update.add_argument("pack")
+    update.add_argument("--config", default="sources.yaml")
+    update.add_argument("--no-liveness", action="store_true")
+    update.add_argument("--dry-run", action="store_true")
+    update.add_argument("--yes", action="store_true",
+                        help="Apply without the interactive confirmation")
+    update.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
 
     if args.action == "validate":
@@ -1106,6 +1799,48 @@ def main(argv=None) -> int:
             for item in installed:
                 print(f"installed: {item['pack_id']} v{item['version']} "
                       f"(at {item['installed_at']})")
+        return 0
+    if args.action == "catalog":
+        result = pack_catalog(args.config)
+        if args.json:
+            _print_json(result)
+        else:
+            print(format_catalog(result))
+        return 0
+    if args.action == "show":
+        raw, sha, _origin = _load_pack_argument(args.pack)
+        result = show_pack(raw, args.config,
+                           check_feeds=not args.no_liveness,
+                           pack_sha256=sha)
+        if args.json:
+            _print_json(result)
+        else:
+            print(format_show(result))
+        return 0
+    if args.action == "update":
+        raw, sha, _origin = _load_pack_argument(args.pack)
+        confirm = None
+        if not args.dry_run and not args.yes:
+            confirm = lambda plan: _confirm(format_update_plan(plan))  # noqa: E731
+        result = update_pack(raw, args.config, dry_run=args.dry_run,
+                             check_feeds=not args.no_liveness,
+                             pack_sha256=sha, confirm=confirm)
+        if args.json:
+            _print_json(result)
+        elif result.get("already_current"):
+            print(f"Pack {result['pack']['id']} is already current "
+                  f"(v{result['installed_version']}); nothing changed.")
+        else:
+            print(format_update_plan(result["plan"]))
+            if result.get("applied"):
+                print(f"Updated. Backup: {result['backup']}")
+                print(f"Undo: focu pack uninstall "
+                      f"{result['plan']['pack']['id']} "
+                      f"--config {args.config}")
+            elif result.get("aborted"):
+                print("Aborted; nothing written.")
+            elif args.dry_run:
+                print("Preview only; nothing written.")
         return 0
     return 0
 
