@@ -861,9 +861,53 @@ assert.match(html, /\.feedcard\[hidden\]\{display:none!important\}/);
   console.log('Focu reader wave-7 (F1): compilation covered ids in the export passed');
 }
 
+// Wave-8 (PM sweep F4): the ladder's top rung. Every lower rung is served
+// by the reader — gist, summary, clean article — but the original itself
+// was unreachable: normalize dropped the origin URL and no surface linked
+// out. Now publish passes the delivery's source_url through as
+// original_url, normalize carries it, and the ARTICLE VIEW shows exactly
+// one quiet "Original" door when the item's data carries one. Cards gain
+// nothing — the door lives at the point of the full read, not in triage.
+(async()=>{
+  assert.match(html, /<a id="readeroriginal" class="card-action"[^>]*>Original<\/a>/,'the toolbar carries exactly one Original door, labelled as such');
+  const e=makeEnvironment();
+  e.get('embedded-episodes').textContent=JSON.stringify({items:[
+    {content_id:'orig-1',title:'Source piece',origin:'registered_source',date:'2026-11-10',source:'OpenAI',original_url:'https://example.org/the-original',article_blocks:[{type:'paragraph',text:'Body'}]},
+    {content_id:'orig-2',title:'Research piece',origin:'user_initiated',date:'2026-11-10',source:'Your research',article_blocks:[{type:'paragraph',text:'Body'}]}
+  ]});
+  await e.run('load()');
+  assert.equal(e.run("allItems.find(x=>x.id==='orig-1').original_url"),'https://example.org/the-original','normalize carries the origin URL through');
+  assert.equal(e.run("allItems.find(x=>x.id==='orig-2').original_url"),'','a payload without the field normalizes to empty');
+  e.run("openItem('orig-1')");
+  const door=e.get('readeroriginal');
+  assert.equal(door.hidden,false,'the article view shows the Original door when the item carries a URL');
+  assert.equal(door.href,'https://example.org/the-original','the door points at the item origin URL');
+  e.run("openItem('orig-2')");
+  assert.equal(e.get('readeroriginal').hidden,true,'no door for an item whose data carries no origin URL');
+  console.log('Focu reader wave-8 (F4): the original door in the article view passed');
+})().catch(err=>{console.error(err);process.exit(1)});
+// Wave-8 (F4): cards are unchanged — an item carrying an origin URL gets
+// no new triage control — while a research item whose data carries one
+// still gets the door in the article view (the field follows the data,
+// not the item class).
+{
+  const e=makeEnvironment();
+  e.run("render([{id:'orig-card',origin:'user_initiated',title:'Research with a source link',summary:'',date:'2026-11-10',source:'Your research',audio_url:'',original_url:'https://example.org/source-thread',blocks:[{type:'paragraph',text:'Evidence'}],reading_minutes:3}],'')");
+  e.run("setView('research')");
+  const card=e.get('grid').children[0];
+  const texts=[];(function walk(n){if(!n||typeof n!=='object')return;if(typeof n.textContent==='string'&&n.textContent)texts.push(n.textContent);(n.children||[]).forEach(walk)})(card);
+  assert.ok(!texts.includes('Original'),'no Original control appears on a card');
+  assert.deepEqual(card.children[1].children.map(n=>n.textContent),['Archive','Not for me','Useful'],'card actions are exactly the pre-existing three');
+  e.run("openItem('orig-card')");
+  assert.equal(e.get('readeroriginal').hidden,false,'a research item with a data-carried URL gets the door');
+  assert.equal(e.get('readeroriginal').href,'https://example.org/source-thread');
+  console.log('Focu reader wave-8 (F4): cards unchanged, data-driven door passed');
+}
+
 console.log('Focu reader behavior: article, local read-aloud, persistence and audio end passed');
 console.log('Focu reader wave-2: one-tap play, cost chips and persisted resume passed');
 console.log('Focu reader wave-3: contextual recovery, skip controls and briefing purity passed');
 console.log('Focu reader wave-5: distinct negative act and owner-carried export passed');
 console.log('Focu reader wave-6: the useful act — the one promotion signal — passed');
 console.log('Focu reader wave-7: compilation covered ids — briefing marks can be attributed — passed');
+console.log('Focu reader wave-8: the original door — the ladder top rung is reachable — passed');

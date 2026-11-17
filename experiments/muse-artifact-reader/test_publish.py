@@ -342,6 +342,45 @@ class PublisherTests(unittest.TestCase):
             self.assertIn("audio", updated["formats"])
             self.assertEqual(len(json.loads((root / "podcast/assets/episodes.json").read_text())["episodes"]), 1)
 
+    def test_original_url_passes_through_from_content_json_source_url(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            def delivery(name, content_id, metadata_extra):
+                folder = root / "deliveries" / name
+                folder.mkdir(parents=True)
+                (folder / "article.md").write_text("# Piece\n\nBody.", encoding="utf-8")
+                metadata = {"content_id": content_id, "origin": "registered_source",
+                            "podcast_mode": "daily_compilation"}
+                metadata.update(metadata_extra)
+                (folder / "content.json").write_text(json.dumps(metadata), encoding="utf-8")
+            delivery("with-url-20261110", "piece-with-url",
+                     {"source_url": "https://example.org/the-original-post"})
+            delivery("no-url-20261110", "piece-without-url", {})
+            delivery("bad-url-20261110", "piece-with-bad-url",
+                     {"source_url": "javascript:alert(1)"})
+            research = root / "deliveries" / "research-url-20261110"
+            research.mkdir(parents=True)
+            (research / "article.md").write_text("# Investigation\n\nFindings.", encoding="utf-8")
+            (research / "content.json").write_text(json.dumps({
+                "content_id": "piece-research-url", "origin": "user_initiated",
+                "podcast_mode": "none",
+                "source_url": "https://example.org/source-thread"
+            }), encoding="utf-8")
+            # A research item whose delivery data carries an origin URL
+            # gets the field too: the pass-through follows the data, not
+            # the item class.
+            build(root / "deliveries", root / "bundle", Path(__file__).with_name("index.html"), 15)
+            data = json.loads((root / "bundle/assets/episodes.json").read_text())
+            by_id = {item["content_id"]: item for item in data["items"]}
+            self.assertEqual(by_id["piece-with-url"]["original_url"],
+                             "https://example.org/the-original-post")
+            self.assertEqual(by_id["piece-research-url"]["original_url"],
+                             "https://example.org/source-thread")
+            # Absent or non-HTTP(S) source_url emits nothing at all: the
+            # item shape is exactly what pre-change bundles carried.
+            self.assertNotIn("original_url", by_id["piece-without-url"])
+            self.assertNotIn("original_url", by_id["piece-with-bad-url"])
+
     def test_daily_article_rejects_missing_visual_even_without_audio(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

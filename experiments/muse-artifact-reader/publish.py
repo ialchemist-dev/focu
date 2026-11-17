@@ -162,6 +162,15 @@ def build(deliveries, output, template, limit, *, fetch_source_covers=False, gen
             # blocks a bad MP3. No audio format or Listen is invented.
             if covered:
                 item["covered_content_ids"] = covered
+            # The compression ladder's top rung: when the delivery itself
+            # records where the item came from (content.json source_url,
+            # carried by registered-source deliveries), pass it through so
+            # the reader can offer the original. Purely additive and
+            # data-driven — a missing or non-HTTP(S) value emits nothing,
+            # never an invented URL, and items without one are unchanged.
+            origin_url = metadata.get("source_url")
+            if isinstance(origin_url, str) and origin_url.strip().lower().startswith(("http://", "https://")):
+                item["original_url"] = origin_url.strip()
             # Markdown is the canonical reading format; never evaluate untrusted HTML
             # inside the reader WebView. Existing article.html remains a legacy asset.
             markdown_path = folder / "article.md"

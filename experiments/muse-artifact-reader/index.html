@@ -27,6 +27,8 @@ main{max-width:760px;margin:0 auto;padding:25px 22px 70px}
 .feed-open{display:flex;align-items:flex-start;gap:14px;flex:1;min-width:0;border:0;background:transparent;color:inherit;text-align:left;padding:0;width:100%;font:inherit}
 .card-action{border:1px solid #e4e0db;border-radius:12px;background:transparent;color:#716c65;padding:7px 12px;font-size:12px;font-weight:600;min-height:36px}
 .card-action:hover{background:#f0ece7;color:#332d28}
+#readeroriginal{text-decoration:none}
+#readeroriginal:not([hidden]){display:inline-flex;align-items:center}
 .costchip{margin-top:7px;color:#716c65;font-weight:600}
 .play-action{background:#242424;color:#fff;border-color:#242424}
 .play-action:hover{background:#3a3733;color:#fff}
@@ -116,7 +118,7 @@ body:has(#playerbar:not([hidden])) main{padding-bottom:calc(160px + var(--muse-c
 <div class="byline" id="readerbyline"></div><button id="coveredby" class="smallbutton" type="button" hidden></button>
 <h1 id="readertitle"></h1>
 <p id="readersummary"></p>
-<div class="readeractions" id="toolbar"><button id="listen" class="listen" hidden>▶ Listen</button><button id="readaloud" class="listen" hidden>▶ Read aloud</button><span id="readtime" class="readtime"></span><button id="readerarchive" class="card-action reader-archive" type="button">Archive</button><button id="restore" class="card-action reader-archive" type="button" hidden>Restore</button><button id="readernotforme" class="card-action" type="button" hidden>Not for me</button><button id="readeruseful" class="card-action" type="button" hidden>Useful</button></div>
+<div class="readeractions" id="toolbar"><button id="listen" class="listen" hidden>▶ Listen</button><button id="readaloud" class="listen" hidden>▶ Read aloud</button><span id="readtime" class="readtime"></span><button id="readerarchive" class="card-action reader-archive" type="button">Archive</button><button id="restore" class="card-action reader-archive" type="button" hidden>Restore</button><button id="readernotforme" class="card-action" type="button" hidden>Not for me</button><button id="readeruseful" class="card-action" type="button" hidden>Useful</button><a id="readeroriginal" class="card-action" target="_blank" rel="noopener" hidden>Original</a></div>
 <img id="readercover" class="readercover" hidden alt="">
 <div id="articlebody"></div>
 <div id="coveredsection" class="coveredsection" hidden><h2>Articles covered in this briefing</h2><div id="coveredarticles"></div></div>
@@ -368,7 +370,7 @@ function normalize(data){
  const seen=new Set();
  return a.filter(x=>{const id=x&&(x.content_id||x.id);if(typeof id!=='string'||!id.trim()||seen.has(id))return false;seen.add(id);return true}).slice(0,500).map(x=>{
  const id=x.content_id||x.id;
- return {id,title:x.title||'Untitled',summary:x.summary||'',gist:typeof x.gist==='string'?x.gist:'',date:x.published_at||x.date||'',source:typeof x.source==='string'?x.source:(x.source?.kind||'Focu'),cover_url:x.cover?.path||x.cover_url||'',cover_origin:x.cover?.origin||'',audio_url:x.formats?.audio?.path||x.audio_url||'',audio_duration:Number(x.formats?.audio?.duration_seconds)||null,podcast_mode:x.podcast_mode||null,origin:x.origin||null,covered_content_ids:Array.isArray(x.covered_content_ids)?x.covered_content_ids:[],article_url:x.formats?.article?.path||'',blocks:Array.isArray(x.article_blocks)?x.article_blocks:[],reading_minutes:Number(x.reading_minutes)||0};
+ return {id,title:x.title||'Untitled',summary:x.summary||'',gist:typeof x.gist==='string'?x.gist:'',date:x.published_at||x.date||'',source:typeof x.source==='string'?x.source:(x.source?.kind||'Focu'),cover_url:x.cover?.path||x.cover_url||'',cover_origin:x.cover?.origin||'',audio_url:x.formats?.audio?.path||x.audio_url||'',audio_duration:Number(x.formats?.audio?.duration_seconds)||null,podcast_mode:x.podcast_mode||null,origin:x.origin||null,covered_content_ids:Array.isArray(x.covered_content_ids)?x.covered_content_ids:[],original_url:typeof x.original_url==='string'?x.original_url:'',article_url:x.formats?.article?.path||'',blocks:Array.isArray(x.article_blocks)?x.article_blocks:[],reading_minutes:Number(x.reading_minutes)||0};
  });
 }
 function setView(which){
@@ -621,6 +623,12 @@ function openItem(id,viaLink=false){
  if(linked){coveredButton.textContent='In the '+(linked.date||'daily')+' briefing';
  coveredButton.onclick=()=>openItem(linked.id,true)}
  document.getElementById('readtime').textContent=item.reading_minutes?item.reading_minutes+' min read':'';
+ // The ladder's top rung lives here, at the point of the full read: one
+ // quiet door to the original, only when the item's data carries one.
+ const original=document.getElementById('readeroriginal'),originalUrl=safeUrl(item.original_url);
+ const door=originalUrl&&/^https?:\/\//i.test(originalUrl)?originalUrl:null;
+ original.hidden=!door;
+ if(door)original.href=door;else original.removeAttribute('href');
  const cover=item.cover_origin==='offline_art'?null:safeUrl(item.cover_url),img=document.getElementById('readercover');img.hidden=!cover;
  if(cover){img.src=cover;img.onerror=()=>{img.hidden=true}}else img.removeAttribute('src');
  const listen=document.getElementById('listen'),readaloud=document.getElementById('readaloud');

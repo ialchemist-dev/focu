@@ -28,17 +28,19 @@ from __future__ import annotations
 import argparse
 import copy
 import hashlib
+import ipaddress
 import json
 import os
 import re
+import socket
 import sys
 import tempfile
 from datetime import date, datetime, timezone
 from email.utils import parsedate_to_datetime
 from pathlib import Path
 from urllib.error import HTTPError, URLError
-from urllib.parse import parse_qsl, urlsplit
-from urllib.request import Request, urlopen
+from urllib.parse import parse_qsl, urljoin, urlsplit
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 import yaml
 
@@ -54,6 +56,14 @@ PACKS_DIR = Path(__file__).with_name("source_packs")
 MANIFEST_NAME = "packs-installed.json"
 SCHEMA_VERSION = 1
 STALE_DAYS = 180
+# A pack is a curated shelf, not a directory (PM sweep F3, side
+# question): every source in it is a standing claim on the owner's
+# attention and a feed the liveness paths probe serially. The largest
+# shipped pack lists 18 sources; 50 leaves generous headroom for a
+# people-of-one-field shelf while keeping "one pack" a reviewable,
+# nameable set — anything bigger is a catalog, and belongs in several
+# packs. Validation error, not a warning: the bound is about shape.
+MAX_SOURCES_PER_PACK = 50
 # Cadence-vs-value flags (self-iteration Q4). A source at or above
 # HIGH_VOLUME_POSTS_PER_MONTH publishes roughly five times a week: in a
 # daily briefing that is a near-daily attention tax, not an occasional
@@ -109,6 +119,13 @@ def _tracking_params(url: str) -> list[str]:
             if k.lower().startswith("utm_") or k.lower() in identity.TRACKING]
 
 
+def _is_public_ip(ip) -> bool:
+    """Publicly addressed? ``is_global`` alone is not sufficient:
+    ipaddress reports multicast addresses as global, and no pack fetch
+    has any business contacting one."""
+    return ip.is_global and not ip.is_multicast
+
+
 def _url_error(url) -> str | None:
     """Hygiene verdict for one pack URL (design section 6, rules 3-4)."""
     if not isinstance(url, str) or not url.strip():
@@ -118,6 +135,15 @@ def _url_error(url) -> str | None:
         return "must use HTTPS"
     if not parts.hostname:
         return "must name a host"
+    try:
+        literal = ipaddress.ip_address(parts.hostname)
+    except ValueError:
+        literal = None
+    if literal is not None and not _is_public_ip(literal):
+        # A literal non-public address is refused offline, at validate
+        # time (PM sweep F3): validation stays deterministic and never
+        # resolves DNS — hostname targets are the fetch guard's job.
+        return f"names a non-public address ({parts.hostname})"
     if parts.username or parts.password:
         return "must not contain credentials"
     bad = _tracking_params(url)
@@ -289,6 +315,10 @@ def validate_pack(raw, *, today=None):
     if not isinstance(sources, list) or not sources:
         errors.append("sources must be a non-empty list")
         sources = []
+    if len(sources) > MAX_SOURCES_PER_PACK:
+        errors.append(f"sources lists {len(sources)} entries; a pack "
+                      f"holds at most {MAX_SOURCES_PER_PACK} — a pack "
+                      "is a curated shelf, not a directory, so split it")
     # Packs carrying a curator field are held to the full bar (cadence with
     # basis required); older packs get warnings instead (design section 3.4).
     new_pack = isinstance(raw, dict) and "curator" in raw
@@ -417,16 +447,142 @@ def _host_set(locators):
 # Liveness (design section 6, rules 8-9). Network results are recorded,
 # never raised: a dead feed is data for the plan, not an exception.
 
-def _bounded_fetch_prefix(url):
+# ---------------------------------------------------------------------------
+# Fetch target guard (PM sweep F3). The validator's HTTPS-only rule
+# covers a pack's entry URL; it says nothing about where that URL's
+# redirects land, and plain urlopen follows them blind. Once packs
+# circulate beyond the owner's own curation, a feed URL — or a
+# compromised host redirecting — could make the owner's machine fetch
+# internal addresses during validate / install / refresh-check. So the
+# one fetch every pack path shares refuses, before every hop: a
+# non-HTTPS target, or a host that resolves to ANY non-public address
+# (loopback, private, link-local, reserved, multicast). Redirects are
+# followed manually, one hop at a time, at most MAX_REDIRECTS of them,
+# so each hop's target is checked before it is fetched. The check is
+# resolve-then-connect, so a DNS answer that changes between the check
+# and the connection is a known residual window; the guard's boundary
+# is the one the sweep named — the targets the pack itself names,
+# directly or by redirect.
+#
+# The guard lives in the DEFAULT fetch only. Callers that inject a
+# ``fetch`` (tests, fixtures) own that fetch's behavior; the guard's
+# own logic takes an injectable resolver and opener for its tests.
+
+MAX_REDIRECTS = 3
+_REDIRECT_CODES = (301, 302, 303, 307, 308)
+
+
+class FetchRefused(URLError):
+    """A fetch target the guard refuses. Subclasses URLError so every
+    existing caller records it in the vocabulary it already uses for an
+    unanswered host — "unreachable" in liveness and refresh-check —
+    with the refusal reason attached. A refusal is data, never a
+    traceback and never a silent fetch."""
+
+
+def _default_resolver(host):
+    """System DNS: every address the host resolves to, as strings."""
+    infos = socket.getaddrinfo(host, 443, proto=socket.IPPROTO_TCP)
+    return sorted({info[4][0] for info in infos})
+
+
+def _assert_public_target(url, resolver):
+    """Refuse a fetch target that is not HTTPS or not publicly
+    addressed. A literal-IP host is checked directly; a hostname is
+    resolved and refused when ANY of its addresses is non-public — a
+    name that points both ways is not a public target."""
+    parts = urlsplit(url)
+    if parts.scheme != "https":
+        raise FetchRefused(f"fetch refused: {url} does not use HTTPS")
+    host = parts.hostname
+    if not host:
+        raise FetchRefused(f"fetch refused: {url} names no host")
+    try:
+        literal = ipaddress.ip_address(host)
+    except ValueError:
+        literal = None
+    if literal is not None:
+        addresses = [literal]
+    else:
+        try:
+            addresses = [ipaddress.ip_address(text)
+                         for text in resolver(host)]
+        except (OSError, ValueError) as ex:
+            raise FetchRefused(
+                f"fetch refused: cannot resolve host {host}: {ex}"
+            ) from ex
+        if not addresses:
+            raise FetchRefused(
+                f"fetch refused: host {host} resolves to no addresses")
+    for ip in addresses:
+        if not _is_public_ip(ip):
+            raise FetchRefused(
+                f"fetch refused: host {host} resolves to non-public "
+                f"address {ip}")
+
+
+class _NoRedirect(HTTPRedirectHandler):
+    """Decline every redirect so the guarded fetch can check each
+    hop's target itself before following it manually."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+_GUARDED_OPENER = build_opener(_NoRedirect())
+
+
+def _guarded_fetch_prefix(url, *, opener=None, resolver=None):
+    """The default pack fetch: source_collection's discipline (same UA,
+    15 s timeout, 2 MB read bound) behind the target guard above.
+    Returns (final_url, bytes, oversized) like ``_bounded_fetch_prefix``,
+    which see for the oversized contract."""
+    opener = opener if opener is not None else _GUARDED_OPENER
+    resolver = resolver if resolver is not None else _default_resolver
+    current = url
+    seen = set()
+    hops = 0
+    while True:
+        _assert_public_target(current, resolver)
+        if current in seen:
+            raise FetchRefused(
+                f"fetch refused: redirect loop at {current}")
+        seen.add(current)
+        req = Request(current, headers={
+            "User-Agent": "Focu/0.2 (+explicit source collection)"})
+        try:
+            with opener.open(req, timeout=15) as response:
+                data = response.read(2_000_001)
+                return response.geturl(), data, len(data) > 2_000_000
+        except HTTPError as ex:
+            headers = (getattr(ex, "headers", None)
+                       or getattr(ex, "hdrs", None))
+            location = headers.get("Location") if headers else None
+            if ex.code not in _REDIRECT_CODES or not location:
+                raise
+            try:
+                ex.close()
+            except Exception:
+                pass
+            hops += 1
+            if hops > MAX_REDIRECTS:
+                raise FetchRefused(
+                    f"fetch refused: more than {MAX_REDIRECTS} "
+                    f"redirects from {url}") from ex
+            current = urljoin(current, location)
+
+
+def _bounded_fetch_prefix(url, *, opener=None, resolver=None):
     """Fetch with source_collection's discipline; return (final_url, bytes,
     oversized). Same UA, timeout and 2 MB read bound as ``_bounded_fetch``,
     but an over-cap response is returned (truncated at the cap) with
     ``oversized`` set instead of raised: refresh-check needs to tell a
-    valid feed that outgrew the cap apart from a dead one."""
-    req = Request(url, headers={"User-Agent": "Focu/0.2 (+explicit source collection)"})
-    with urlopen(req, timeout=15) as response:
-        data = response.read(2_000_001)
-        return response.geturl(), data, len(data) > 2_000_000
+    valid feed that outgrew the cap apart from a dead one. The network
+    path is the guarded fetch above: this is the single fetch behind
+    validate, install liveness, show and refresh-check, so no pack
+    path bypasses the guard. ``opener``/``resolver`` exist for the
+    guard's own tests."""
+    return _guarded_fetch_prefix(url, opener=opener, resolver=resolver)
 
 
 def _bounded_fetch(url):
