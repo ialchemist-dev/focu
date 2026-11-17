@@ -148,6 +148,18 @@ def build(deliveries, output, template, limit, *, fetch_source_covers=False, gen
                 raise ValueError("Registered-source article cannot receive its own daily podcast")
             if content_origin == "user_initiated":
                 item["source"] = "Your research"
+            # Sweep N2: when a delivery records its source's name
+            # (content.json source_name), pass it through so cards and
+            # bylines can name the actual source — triage by source is
+            # impossible while every registered item is labelled "Focu".
+            # Purely additive: the name must be plain text (a URL or any
+            # non-string value is ignored), and when it is absent the
+            # item keeps exactly the source label it carries today.
+            recorded_name = metadata.get("source_name")
+            if (isinstance(recorded_name, str) and recorded_name.strip()
+                    and "http" not in recorded_name.lower()
+                    and "://" not in recorded_name):
+                item["source"] = recorded_name.strip()
             item["origin"] = content_origin
             item["podcast_mode"] = mode
             if metadata.get("podcast_requested_at"):

@@ -139,6 +139,55 @@ def make_gist(*sources):
     return ""
 
 
+AGENDA_LEAD = re.compile(r"^here(?:'s| is) what came in$", re.IGNORECASE)
+AGENDA_COUNT = re.compile(r"^(?:\w+|\d+) items? today$", re.IGNORECASE)
+
+
+def agenda_gist(blocks):
+    """Build a daily briefing's gist from its own agenda, never the lead.
+
+    Since the agenda opening was adopted, a briefing's lead paragraph is
+    the formula "Here's what came in" — and the ordinary extractive
+    pipeline published exactly that as the gist, a glance line that says
+    nothing about the day. The agenda that follows it is the article's
+    own words: a count paragraph ("Four items today") and one bullet per
+    covered item ("Title — Source"). Join the count phrase and the item
+    titles (each bullet's title part, before its source suffix) and trim
+    with shorten(), so every character still comes from the article
+    itself. Returns "" when the blocks are not the agenda shape, so the
+    caller keeps the ordinary gist.
+    """
+    lead_seen = False
+    count = ""
+    titles = []
+    for block in blocks:
+        if block["type"] == "heading":
+            if block.get("level") == 1 and not lead_seen and not titles:
+                continue  # the article's own title, not a section
+            break
+        if not lead_seen:
+            if block["type"] == "paragraph" and AGENDA_LEAD.match(clean(block["text"])):
+                lead_seen = True
+            continue
+        if block["type"] == "paragraph" and not count and not titles:
+            text = clean(block["text"])
+            if AGENDA_COUNT.match(text):
+                count = text
+            continue
+        if block["type"] == "bullet":
+            text = clean(block["text"])
+            if " — " in text:
+                text = text.rsplit(" — ", 1)[0]
+            if text:
+                titles.append(text)
+    if not lead_seen or not titles:
+        return ""
+    joined = "; ".join(titles)
+    if count:
+        joined = count + ": " + joined
+    return shorten(joined, GIST_LIMIT)
+
+
 def _pipe_cells(line):
     """Parse GFM table cells without splitting escaped or inline-code pipes.
 
@@ -302,6 +351,16 @@ def editorial(markdown, metadata=None):
     if not isinstance(synopsis, str) or not synopsis.strip():
         synopsis = summary or claim
     gist = make_gist(synopsis, claim, summary)
+    # A compiled briefing whose lead is the agenda formula would publish
+    # that formula as its gist (see agenda_gist). Prefer the agenda's own
+    # contents — but only for compilations, and only when the publisher
+    # was not given an explicit synopsis to extract from instead, so
+    # every other item's gist stays exactly as before.
+    explicit_synopsis = isinstance(metadata.get("summary"), str) and metadata["summary"].strip()
+    if metadata.get("origin") == "daily_compilation" and not explicit_synopsis:
+        agenda = agenda_gist(blocks)
+        if agenda:
+            gist = agenda
     title = shorten(choice, 82) or "Untitled research"
     summary = shorten(synopsis, 270)
     if isinstance(synopsis, str) and len(clean(synopsis)) <= 270 and synopsis.rstrip().endswith((".", "!", "?")):

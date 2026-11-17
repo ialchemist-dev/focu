@@ -112,7 +112,7 @@ body:has(#playerbar:not([hidden])) main{padding-bottom:calc(160px + var(--muse-c
 <body>
 <header><div class="head"><div class="brand">focu<span class="dot">.</span></div><nav class="nav" aria-label="Library"><button id="briefingtab" class="active">Daily Briefing</button><button id="researchtab">Research</button><button id="archive">Archive</button></nav></div></header>
 <main>
-<section id="feed"><h1 class="sectiontitle" id="feedheading">Daily Briefing</h1><div id="status" aria-live="polite" hidden></div><div class="feed" id="grid"></div><div id="archivefoot" class="archivefoot" hidden><button id="exportsummary" class="smallbutton" type="button">Share reading summary</button></div></section>
+<section id="feed"><h1 class="sectiontitle" id="feedheading">Daily Briefing</h1><div id="status" aria-live="polite" hidden></div><div id="archivefoot" class="archivefoot" hidden><button id="exportsummary" class="smallbutton" type="button">Share reading summary</button></div><div class="feed" id="grid"></div></section>
 <section id="reader" hidden>
 <button id="back" class="readerback">← Back to Inbox</button>
 <div class="byline" id="readerbyline"></div><button id="coveredby" class="smallbutton" type="button" hidden></button>
@@ -423,6 +423,11 @@ function appendCard(item){
  // as before. The summary itself stays at scan level (top of the reader).
  if(item.gist)body.append(el('p',item.gist,'feedgist'));
  else if(item.summary)body.append(el('p',item.summary,'feedsummary'));
+ // A compilation card states its size at the same glance: the covered
+ // count comes from the coverage list the payload already carries, so
+ // the owner can price the briefing before opening it.
+ const coveredCount=(item.covered_content_ids||[]).length;
+ if(coveredCount)body.append(el('div',coveredCount+' item'+(coveredCount===1?'':'s'),'cardmeta coveredcount'));
  const compiled=compilationFor(item.id);
  if(compiled)body.append(el('div','In '+(compiled.date||'daily')+' briefing','cardmeta'));
  const cardAudioUrl=safeUrl(item.audio_url);

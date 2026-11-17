@@ -904,6 +904,72 @@ assert.match(html, /\.feedcard\[hidden\]\{display:none!important\}/);
   console.log('Focu reader wave-8 (F4): cards unchanged, data-driven door passed');
 }
 
+// Wave-9 (PM sweep N1): a compilation card says what the briefing
+// contains at the glance layer. The publisher extracts the gist from
+// the agenda (pinned in test_publish), and the card itself renders the
+// covered count from covered_content_ids — data the payload already
+// carried but no surface showed. Non-compilation cards gain no line.
+{
+  const e=makeEnvironment();
+  e.run("render(["+
+    "{id:'daily-n1',origin:'daily_compilation',title:'Daily briefing',summary:'',gist:'Two items today: Pando releases a memory architecture…',date:'2026-11-16',source:'Focu',audio_url:'',covered_content_ids:['unit-a','unit-b'],blocks:[{type:'paragraph',text:'Compiled'}],reading_minutes:5},"+
+    "{id:'solo-n1',origin:'daily_compilation',title:'Single-item briefing',summary:'',date:'2026-11-15',source:'Focu',audio_url:'',covered_content_ids:['unit-c'],blocks:[{type:'paragraph',text:'Compiled'}],reading_minutes:2}"+
+  "],'')");
+  const first=e.get('grid').children[0].children[0].children[0];
+  const count=first.children.find(n=>n.className==='cardmeta coveredcount');
+  assert.ok(count,'compilation card carries a covered-count line');
+  assert.equal(count.textContent,'2 items','the count comes from covered_content_ids');
+  const second=e.get('grid').children[1].children[0].children[0];
+  assert.equal(second.children.find(n=>n.className==='cardmeta coveredcount').textContent,'1 item','a single covered item reads as 1 item');
+  const e2=makeEnvironment();
+  e2.run("render([{id:'plain-n1',origin:'user_initiated',title:'Standalone report',summary:'',date:'2026-11-16',source:'Your research',audio_url:'',blocks:[{type:'paragraph',text:'Evidence'}],reading_minutes:2}],'')");
+  e2.run("setView('research')");
+  const body=e2.get('grid').children[0].children[0].children[0];
+  assert.equal(body.children.find(n=>n.className==='cardmeta coveredcount'),undefined,'no covered-count line on a non-compilation card');
+  console.log('Focu reader wave-9 (N1): compilation cards state their covered count passed');
+}
+// Wave-9 (PM sweep N2): the recorded source name reaches the triage
+// surface. publish passes a delivery's content.json source_name through
+// as the item's source (pinned in test_publish); normalize already
+// carried x.source, so this proves the name lands on an uncovered
+// card's meta line and on the opened item's byline — the reader needed
+// no change, and the test is the proof.
+(async()=>{
+  const e=makeEnvironment();
+  e.get('embedded-episodes').textContent=JSON.stringify({items:[
+    {content_id:'named-1',title:'Uncovered source piece',origin:'registered_source',date:'2026-11-16',source:'OpenAI Official',article_blocks:[{type:'paragraph',text:'Body'}]}
+  ]});
+  await e.run('load()');
+  assert.equal(e.run("allItems.find(x=>x.id==='named-1').source"),'OpenAI Official','normalize passes the recorded source name through');
+  const toggle=e.get('grid').children.find(n=>n.className==='sourcestoggle');
+  assert.ok(toggle,'the uncovered item rests behind the collapsed row');
+  toggle.onclick();
+  const card=e.get('grid').children.find(n=>n.className==='feedcard');
+  assert.ok(card,'expanding the row reveals the source card');
+  assert.match(card.children[0].children[0].children[0].textContent,/OpenAI Official/,'the card meta line names the real source');
+  e.run("openItem('named-1')");
+  assert.match(e.get('readerbyline').textContent,/OpenAI Official/,'the opened item byline names the real source');
+  console.log('Focu reader wave-9 (N2): the recorded source name reaches cards and byline passed');
+})().catch(err=>{console.error(err);process.exit(1)});
+// Wave-9 (PM sweep N3): the reading-summary export — the learning
+// loop's only transport — no longer sits at the bottom of an unbounded
+// Archive. The control now precedes the archive grid in DOM order; its
+// styling, its Archive-only visibility, and the exported payload are
+// unchanged (the wave-5 export tests above stand unmodified).
+{
+  const footAt=html.indexOf('id="archivefoot"'),gridAt=html.indexOf('id="grid"');
+  assert.ok(footAt>-1&&gridAt>-1&&footAt<gridAt,'the export control precedes the first archive card in DOM order');
+  const e=makeEnvironment();
+  e.run('render(['+article('n3-item')+'],"")');
+  e.run("markDone('n3-item','manual')");
+  e.run("setView('archive')");
+  assert.equal(e.get('archivefoot').hidden,false,'the control is visible at the top of Archive');
+  assert.equal(e.get('grid').children.length,1,'archived cards still render in the grid below it');
+  e.run("setView('briefing')");
+  assert.equal(e.get('archivefoot').hidden,true,'no export control appears outside Archive');
+  console.log('Focu reader wave-9 (N3): export control above the archive grid passed');
+}
+
 console.log('Focu reader behavior: article, local read-aloud, persistence and audio end passed');
 console.log('Focu reader wave-2: one-tap play, cost chips and persisted resume passed');
 console.log('Focu reader wave-3: contextual recovery, skip controls and briefing purity passed');
@@ -911,3 +977,4 @@ console.log('Focu reader wave-5: distinct negative act and owner-carried export 
 console.log('Focu reader wave-6: the useful act — the one promotion signal — passed');
 console.log('Focu reader wave-7: compilation covered ids — briefing marks can be attributed — passed');
 console.log('Focu reader wave-8: the original door — the ladder top rung is reachable — passed');
+console.log('Focu reader wave-9: agenda-contents cards, real source names, export above the archive passed');

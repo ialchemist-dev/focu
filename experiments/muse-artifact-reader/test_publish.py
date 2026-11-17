@@ -381,6 +381,137 @@ class PublisherTests(unittest.TestCase):
             self.assertNotIn("original_url", by_id["piece-without-url"])
             self.assertNotIn("original_url", by_id["piece-with-bad-url"])
 
+    AGENDA_ARTICLE = (
+        "# Daily Briefing — November 16, 2026\n\n"
+        "Here's what came in.\n\n"
+        "Two items today:\n\n"
+        "- Pando releases a memory architecture for long-running agents — Pando Blog\n"
+        "- A new cooling design reduces data-center water use — Energy Weekly\n\n"
+        "## Pando releases a memory architecture for long-running agents\n\n"
+        "Pando releases a memory architecture for long-running agents, with "
+        "working state kept across sessions.\n\n"
+        "## A new cooling design reduces data-center water use\n\n"
+        "A new cooling design reduces data-center water use across existing "
+        "facilities.\n"
+    )
+
+    def test_compilation_gist_comes_from_the_agenda_not_the_formula_lead(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            for name, content_id, article in (
+                ("source-a-20261116", "agenda-source-a",
+                 "# Pando release\n\nPando releases a memory architecture for "
+                 "long-running agents. The design keeps working state across "
+                 "sessions, tools, and days.\n"),
+                ("source-b-20261116", "agenda-source-b",
+                 "# Cooling design\n\nA new cooling design reduces data-center "
+                 "water use. The retrofit applies to existing facilities.\n"),
+            ):
+                folder = root / "deliveries" / name
+                folder.mkdir(parents=True)
+                (folder / "article.md").write_text(article, encoding="utf-8")
+                (folder / "content.json").write_text(json.dumps({
+                    "content_id": content_id, "origin": "registered_source",
+                    "podcast_mode": "daily_compilation"
+                }), encoding="utf-8")
+            daily = root / "deliveries" / "daily-20261116"
+            daily.mkdir()
+            (daily / "article.md").write_text(self.AGENDA_ARTICLE, encoding="utf-8")
+            (daily / "content.json").write_text(json.dumps({
+                "content_id": "daily-2026-11-16", "origin": "daily_compilation",
+                "podcast_mode": "daily_compilation", "published_at": "2026-11-16",
+                "covered_content_ids": ["agenda-source-a", "agenda-source-b"]
+            }), encoding="utf-8")
+            build(root / "deliveries", root / "bundle",
+                  Path(__file__).with_name("index.html"), 15)
+            data = json.loads((root / "bundle/assets/episodes.json").read_text())
+            by_id = {item["content_id"]: item for item in data["items"]}
+            gist = by_id["daily-2026-11-16"]["gist"]
+            # The glance line reflects the contents — the agenda's count
+            # and a covered item's title — and is never the bare formula.
+            self.assertNotEqual(gist, "Here's what came in")
+            self.assertIn("Two items today", gist)
+            self.assertIn("Pando releases a memory architecture", gist)
+            self.assertLessEqual(len(gist), 91)
+            # The scan layer is untouched: the summary still leads with
+            # the article's own opening, exactly as before.
+            self.assertEqual(by_id["daily-2026-11-16"]["summary"],
+                             "Here's what came in")
+            # Non-compilation gists are byte-identical to the old pipeline.
+            self.assertEqual(by_id["agenda-source-a"]["gist"],
+                             "Pando releases a memory architecture for long-running agents.")
+            self.assertEqual(by_id["agenda-source-b"]["gist"],
+                             "A new cooling design reduces data-center water use.")
+
+    def test_agenda_gist_is_compilation_only(self):
+        info = editorial(self.AGENDA_ARTICLE, {"origin": "daily_compilation"})
+        self.assertIn("Two items today", info["gist"])
+        self.assertIn("Pando releases a memory architecture", info["gist"])
+        # The same article under any other origin keeps today's gist:
+        # the formula lead, extracted exactly as before this fix.
+        self.assertEqual(editorial(self.AGENDA_ARTICLE,
+                                   {"origin": "registered_source"})["gist"],
+                         "Here's what came in")
+        self.assertEqual(editorial(self.AGENDA_ARTICLE)["gist"],
+                         "Here's what came in")
+        # A compilation whose lead is real prose keeps the prose gist.
+        prose = ("# Daily Briefing\n\nA prose lead that honestly summarises "
+                 "the day for the reader in plain words.\n\n## Item\n\nBody.\n")
+        self.assertEqual(editorial(prose, {"origin": "daily_compilation"})["gist"],
+                         "A prose lead that honestly summarises the day for the "
+                         "reader in plain words")
+        # An explicit synopsis supplied by the publisher still wins.
+        info = editorial(self.AGENDA_ARTICLE,
+                         {"origin": "daily_compilation",
+                          "summary": "An explicit synopsis supplied by the "
+                                     "publisher for this briefing."})
+        self.assertEqual(info["gist"],
+                         "An explicit synopsis supplied by the publisher for "
+                         "this briefing")
+
+    def test_source_name_passes_through_from_content_json(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            def delivery(name, content_id, metadata_extra):
+                folder = root / "deliveries" / name
+                folder.mkdir(parents=True)
+                (folder / "article.md").write_text("# Piece\n\nBody.", encoding="utf-8")
+                metadata = {"content_id": content_id}
+                metadata.update(metadata_extra)
+                (folder / "content.json").write_text(json.dumps(metadata),
+                                                     encoding="utf-8")
+            delivery("named-20261116", "piece-named",
+                     {"origin": "registered_source",
+                      "podcast_mode": "daily_compilation",
+                      "source_name": "OpenAI Official"})
+            delivery("unnamed-20261116", "piece-unnamed",
+                     {"origin": "registered_source",
+                      "podcast_mode": "daily_compilation"})
+            delivery("url-named-20261116", "piece-url-named",
+                     {"origin": "registered_source",
+                      "podcast_mode": "daily_compilation",
+                      "source_name": "https://spam.example/post"})
+            delivery("research-plain-20261116", "piece-research-plain",
+                     {"origin": "user_initiated", "podcast_mode": "none"})
+            delivery("research-named-20261116", "piece-research-named",
+                     {"origin": "user_initiated", "podcast_mode": "none",
+                      "source_name": "Field notes"})
+            build(root / "deliveries", root / "bundle",
+                  Path(__file__).with_name("index.html"), 15)
+            data = json.loads((root / "bundle/assets/episodes.json").read_text())
+            by_id = {item["content_id"]: item for item in data["items"]}
+            self.assertEqual(by_id["piece-named"]["source"], "OpenAI Official")
+            # Absent ⇒ today's labels, byte-identical: registered items
+            # are "Focu", commissioned research is "Your research".
+            self.assertEqual(by_id["piece-unnamed"]["source"], "Focu")
+            self.assertEqual(by_id["piece-research-plain"]["source"],
+                             "Your research")
+            # A URL is not a plain-text name and is never passed through.
+            self.assertEqual(by_id["piece-url-named"]["source"], "Focu")
+            # The pass-through follows the recorded data, not the origin.
+            self.assertEqual(by_id["piece-research-named"]["source"],
+                             "Field notes")
+
     def test_daily_article_rejects_missing_visual_even_without_audio(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
