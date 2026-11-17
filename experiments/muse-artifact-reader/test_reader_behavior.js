@@ -436,5 +436,126 @@ assert.match(html, /\.feedcard\[hidden\]\{display:none!important\}/);
   assert.equal(reloaded.run('scrollY'),280,'article position restored after reload');
 }
 
+// Wave-3 (#6): the Recover control is not part of the resting player bar,
+// and the standard podcast skip controls exist.
+{
+  assert.match(html, /id="recoveraudio"[^>]*hidden/);
+  assert.match(html, /#recoveraudio\[hidden\]\{display:none!important\}/);
+  assert.match(html, /id="skipback"/);
+  assert.match(html, /id="skipfwd"/);
+  assert.doesNotMatch(html, /Please report this playback problem/);
+  assert.doesNotMatch(html, /Player duration differs from verified audio/);
+}
+// Wave-3 (#6): skip buttons move in coarse 15s / 30s steps and clamp at the
+// ends, replacing fine-motor slider scrubbing while listening.
+{
+  const e=makeEnvironment();
+  e.run("render([{id:'skip-ep',origin:'daily_compilation',title:'Episode',date:'2026-11-09',source:'Focu',audio_url:'assets/ep.mp3',audio_duration:300,covered_content_ids:[],blocks:[{type:'paragraph',text:'Report'}]}],'')");
+  e.get('grid').children[0].children[1].children[0].onclick({preventDefault(){},stopPropagation(){}});
+  const audio=e.get('player');
+  audio.duration=300;audio.currentTime=100;
+  e.get('skipfwd').onclick();
+  assert.equal(audio.currentTime,130,'forward skip adds 30 seconds');
+  e.get('skipback').onclick();
+  assert.equal(audio.currentTime,115,'back skip subtracts 15 seconds');
+  audio.currentTime=290;
+  e.get('skipfwd').onclick();
+  assert.equal(audio.currentTime,300,'forward skip clamps at the end');
+  audio.currentTime=10;
+  e.get('skipback').onclick();
+  assert.equal(audio.currentTime,0,'back skip clamps at the start');
+}
+// Wave-3 (#6): a stall triggers one automatic decoder recovery; only a
+// second stall without progress reveals the manual Recover button.
+{
+  const e=makeEnvironment();
+  e.run("render([{id:'stall-ep',origin:'daily_compilation',title:'Episode',date:'2026-11-09',source:'Focu',audio_url:'assets/ep.mp3',audio_duration:1442,covered_content_ids:[],blocks:[{type:'paragraph',text:'Report'}]}],'')");
+  e.get('grid').children[0].children[1].children[0].onclick({preventDefault(){},stopPropagation(){}});
+  const audio=e.get('player');
+  audio.duration=1442.077;audio.currentTime=275;
+  assert.equal(e.get('recoveraudio').hidden,true,'recover hidden while playback is healthy');
+  audio.events.stalled();
+  assert.equal(audio.loadCount,2,'first stall auto-recovers the decoder');
+  assert.match(e.get('nowplaying').textContent,/Audio glitch/);
+  assert.equal(e.get('recoveraudio').hidden,true,'auto-recovery does not surface the repair button');
+  audio.events.loadedmetadata(); // recovery completes and resumes at 275
+  audio.events.stalled();
+  assert.equal(audio.loadCount,2,'second stall does not loop the decoder reset');
+  assert.equal(e.get('recoveraudio').hidden,false,'second stall reveals the manual control');
+  e.get('recoveraudio').onclick();
+  assert.equal(audio.loadCount,4,'manual recovery resets the decoder again');
+  assert.equal(e.get('recoveraudio').hidden,true,'manual recovery hides the button again');
+}
+
+// Wave-3 (#4): no manual refresh control exists and the status line rests
+// hidden — freshness is automated, plumbing is not UI.
+{
+  assert.doesNotMatch(html, /id="refresh"/);
+  assert.match(html, /id="status"[^>]*hidden/);
+  assert.match(html, /#status\[hidden\]\{display:none!important\}/);
+  const e=makeEnvironment();
+  assert.equal(e.run("noteContentChange(new Set(['a','b']),[{id:'a'}])"),false,'no new item, no announcement');
+  assert.equal(e.run("noteContentChange(new Set(['a']),[{id:'a'},{id:'c'}])"),true,'a new item is a change worth one line');
+}
+// Wave-3 (#4): a successful load leaves the status line hidden; new content
+// on a later load announces itself once; stale data reloads on visibility.
+(async()=>{
+  const e=makeEnvironment();
+  e.get('embedded-episodes').textContent='{"episodes":[]}';
+  await e.run('load()');
+  assert.equal(e.get('status').hidden,true,'status rests hidden after a successful load');
+  assert.equal(e.run('reloadIfStale()'),false,'fresh data does not reload when the app becomes visible');
+  e.get('embedded-episodes').textContent=JSON.stringify({episodes:[{id:'fresh-1',title:'Fresh briefing',origin:'daily_compilation',date:'2026-11-10',source:'Focu',blocks:[{type:'paragraph',text:'New'}]}]});
+  await e.run('load()');
+  assert.equal(e.get('status').hidden,false,'new content surfaces the one-line announcement');
+  assert.equal(e.get('status').textContent,'New briefing ready');
+  e.run('lastLoadAt=Date.now()-6*60*1000');
+  const triggered=e.run('reloadIfStale()');
+  assert.notEqual(triggered,false,'stale data triggers a reload when the app becomes visible');
+  await triggered;
+  assert.ok(e.run('Date.now()-lastLoadAt<10000'),'the reload refreshes the freshness stamp');
+  console.log('Focu reader wave-3 (#4): auto-refresh and quiet status passed');
+})().catch(err=>{console.error(err);process.exit(1)});
+
+// Wave-3 (#7): inside an opened article, understanding starts immediately —
+// title, summary and the Listen toolbar all precede the cover, and the cover
+// is demoted to a 160px band instead of a 340px first screen.
+{
+  const titleAt=html.indexOf('id="readertitle"'),summaryAt=html.indexOf('id="readersummary"'),toolbarAt=html.indexOf('id="toolbar"'),coverAt=html.indexOf('id="readercover"');
+  assert.ok(titleAt>-1&&summaryAt>titleAt&&toolbarAt>summaryAt&&coverAt>toolbarAt,'reader order is title, summary, Listen, then cover');
+  assert.match(html, /\.readercover\{[^}]*max-height:160px/);
+  const e=makeEnvironment();
+  e.run('render(['+article('order-story')+'],"")');
+  e.run("openItem('order-story')");
+  assert.equal(e.get('readertitle').textContent,'A grounded research story','reader still opens normally after the reorder');
+  assert.equal(e.get('reader').hidden,false);
+}
+
+// Wave-3 (#8): un-compiled sources rest behind one collapsed row in the
+// Daily Briefing tab — reachable in one tap, never at full card weight.
+{
+  const e=makeEnvironment();
+  e.run("render(["+
+    "{id:'daily-1',origin:'daily_compilation',title:'Today briefing',date:'2026-11-10',source:'Focu',covered_content_ids:[],blocks:[{type:'paragraph',text:'Compiled'}]},"+
+    "{id:'src-1',origin:'registered_source',title:'Raw source one',date:'2026-11-10',source:'Anthropic',blocks:[{type:'paragraph',text:'Raw'}]},"+
+    "{id:'src-2',origin:'registered_source',title:'Raw source two',date:'2026-11-09',source:'OpenAI',blocks:[{type:'paragraph',text:'Raw'}]}"+
+  "],'')");
+  const kids=e.get('grid').children;
+  assert.equal(kids.length,2,'briefing card plus one collapsed row, no full-weight source cards');
+  const toggle=kids[1];
+  assert.equal(toggle.name,'button');
+  assert.match(toggle.textContent,/2 source updates not yet in a briefing/);
+  assert.equal(toggle.attributes['aria-expanded'],'false');
+  toggle.onclick();
+  const open=e.get('grid').children;
+  assert.equal(open.length,4,'expanding reveals both source cards in place');
+  assert.equal(open[1].attributes['aria-expanded'],'true');
+  e.run("render(allItems,'')");
+  assert.equal(e.get('grid').children.length,4,'expansion survives a re-render');
+  e.get('grid').children[1].onclick();
+  assert.equal(e.get('grid').children.length,2,'collapsing returns the tab to one line');
+}
+
 console.log('Focu reader behavior: article, local read-aloud, persistence and audio end passed');
 console.log('Focu reader wave-2: one-tap play, cost chips and persisted resume passed');
+console.log('Focu reader wave-3: contextual recovery, skip controls and briefing purity passed');

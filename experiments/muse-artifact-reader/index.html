@@ -17,10 +17,10 @@ header{position:sticky;top:0;z-index:5;background:#fbfaf8ed;backdrop-filter:blur
 .nav{display:flex;gap:5px;align-items:center}
 .nav button,.smallbutton{border:0;background:transparent;color:#77716b;padding:9px 12px;border-radius:12px;font-size:14px}
 .nav button.active{color:#222;font-weight:700;background:#ece8e2}
-.nav #refresh{padding:8px;font-size:17px}
 main{max-width:760px;margin:0 auto;padding:25px 22px 70px}
 .sectiontitle{font-size:12px;font-weight:700;color:#999189;letter-spacing:.13em;text-transform:uppercase;margin:0 0 15px}
 #status{font-size:13px;color:#938b82;margin-bottom:21px}
+#status[hidden]{display:none!important}
 .feed{display:flex;flex-direction:column;gap:0}
 .feedcard{border:0;border-bottom:1px solid #ebe8e3;background:transparent;padding:18px 0;display:flex;gap:14px;width:100%;text-align:left;color:inherit;align-items:flex-start}
 .feedcard:first-child{padding-top:2px}
@@ -43,7 +43,7 @@ main{max-width:760px;margin:0 auto;padding:25px 22px 70px}
 .empty{padding:60px 15px;text-align:center;color:#8e857b;line-height:1.7}
 #reader[hidden],#feed[hidden],#playerbar[hidden],#toolbar[hidden]{display:none!important}
 .readerback{border:0;background:none;color:#787067;padding:6px 0;margin-bottom:27px;font-size:14px}
-.readercover{width:100%;max-height:340px;object-fit:cover;border-radius:14px;margin-bottom:25px;background:#eee9e2}
+.readercover{width:100%;max-height:160px;object-fit:cover;border-radius:14px;margin-bottom:25px;background:#eee9e2}
 #readertitle{font-size:clamp(30px,6.5vw,45px);letter-spacing:-.055em;line-height:1.13;margin:6px 0 18px;font-weight:790}
 #readersummary{font-size:17px;color:#716b64;line-height:1.65;margin:0 0 23px}
 .readeractions{display:flex;align-items:center;gap:12px;padding:16px 0;border-top:1px solid #e9e5df;border-bottom:1px solid #e9e5df;margin-bottom:28px}
@@ -78,6 +78,9 @@ body:has(#playerbar:not([hidden])) main{padding-bottom:calc(160px + var(--muse-c
 #closeaudio{border:0;background:none;color:#827d76;font-size:22px;min-width:44px;min-height:44px}
 #recoveraudio{border:0;background:transparent;color:#3e6e66;font-size:12px;min-height:44px;padding:6px 8px;margin-left:auto;white-space:nowrap}
 #recoveraudio:focus-visible{outline:3px solid #bd6258}
+#recoveraudio[hidden]{display:none!important}
+.skipbtn{height:44px;min-width:44px;border:0;border-radius:50%;background:transparent;color:#282522;font-size:13px;font-weight:650;padding:0 4px;flex:none}
+.skipbtn:focus-visible{outline:3px solid #bd6258}
 #player{display:none}
 .playcontrols{display:flex;align-items:center;gap:10px;min-height:48px}
 #playpause{height:44px;width:44px;flex:none;border:0;border-radius:50%;background:#282522;color:white;font-size:20px}
@@ -88,6 +91,8 @@ body:has(#playerbar:not([hidden])) main{padding-bottom:calc(160px + var(--muse-c
 #seekbar::-webkit-slider-thumb{-webkit-appearance:none;width:24px;height:24px;margin-top:-9px;border:3px solid #fff;border-radius:50%;background:#3e6e66;box-shadow:0 1px 4px #0004}
 #seekbar::-moz-range-thumb{width:20px;height:20px;border:3px solid #fff;border-radius:50%;background:#3e6e66}
 #seekbar:disabled{opacity:.45;cursor:default}
+.sourcestoggle{display:block;width:100%;text-align:left;border:0;border-top:1px solid #e9e5df;background:transparent;padding:15px 0;color:#716c65;font-size:13px;font-weight:600}
+.sourcestoggle:focus-visible{outline:3px solid #bd6258}
 .coveredsection{margin:26px 0;padding-top:20px;border-top:1px solid #e9e5df}
 .coveredsection h2{font-size:17px;margin:0 0 10px}
 .coveredlink{display:block;width:100%;text-align:left;padding:12px 8px;border:0;border-bottom:1px solid #e9e5df;background:transparent;color:#985449;line-height:1.45}
@@ -98,16 +103,16 @@ body:has(#playerbar:not([hidden])) main{padding-bottom:calc(160px + var(--muse-c
 </style>
 </head>
 <body>
-<header><div class="head"><div class="brand">focu<span class="dot">.</span></div><nav class="nav" aria-label="Library"><button id="briefingtab" class="active">Daily Briefing</button><button id="researchtab">Research</button><button id="archive">Archive</button><button id="refresh" aria-label="Refresh" title="Refresh">↻</button></nav></div></header>
+<header><div class="head"><div class="brand">focu<span class="dot">.</span></div><nav class="nav" aria-label="Library"><button id="briefingtab" class="active">Daily Briefing</button><button id="researchtab">Research</button><button id="archive">Archive</button></nav></div></header>
 <main>
-<section id="feed"><h1 class="sectiontitle" id="feedheading">Daily Briefing</h1><div id="status" aria-live="polite">Loading…</div><div class="feed" id="grid"></div></section>
+<section id="feed"><h1 class="sectiontitle" id="feedheading">Daily Briefing</h1><div id="status" aria-live="polite" hidden></div><div class="feed" id="grid"></div></section>
 <section id="reader" hidden>
 <button id="back" class="readerback">← Back to Inbox</button>
-<img id="readercover" class="readercover" hidden alt="">
 <div class="byline" id="readerbyline"></div><button id="coveredby" class="smallbutton" type="button" hidden></button>
 <h1 id="readertitle"></h1>
 <p id="readersummary"></p>
 <div class="readeractions" id="toolbar"><button id="listen" class="listen" hidden>▶ Listen</button><button id="readaloud" class="listen" hidden>▶ Read aloud</button><span id="readtime" class="readtime"></span><button id="readerarchive" class="card-action reader-archive" type="button">Archive</button><button id="restore" class="card-action reader-archive" type="button" hidden>Restore</button></div>
+<img id="readercover" class="readercover" hidden alt="">
 <div id="articlebody"></div>
 <div id="coveredsection" class="coveredsection" hidden><h2>Articles covered in this briefing</h2><div id="coveredarticles"></div></div>
 <div class="readend" id="readend">End of article</div>
@@ -115,11 +120,11 @@ body:has(#playerbar:not([hidden])) main{padding-bottom:calc(160px + var(--muse-c
 
 </section>
 </main>
-<div id="playerbar" hidden><div class="playinner"><div class="playtop"><span id="nowplaying"></span><button id="recoveraudio" type="button" title="If audio becomes silent while time advances, restart the media decoder from this position">↻ Recover audio</button><button id="closeaudio" type="button" aria-label="Close player">×</button></div><div class="playcontrols"><button id="playpause" type="button" aria-label="Play or pause audio">▶</button><span id="elapsed" class="playtime">0:00</span><input id="seekbar" type="range" min="0" max="1000" value="0" step="1" aria-label="Seek audio position" disabled><span id="remaining" class="playtime">−0:00</span></div><audio id="player" preload="metadata"></audio></div></div>
+<div id="playerbar" hidden><div class="playinner"><div class="playtop"><span id="nowplaying"></span><button id="recoveraudio" type="button" hidden title="If audio becomes silent while time advances, restart the media decoder from this position">↻ Recover audio</button><button id="closeaudio" type="button" aria-label="Close player">×</button></div><div class="playcontrols"><button id="skipback" class="skipbtn" type="button" aria-label="Back 15 seconds">−15s</button><button id="playpause" type="button" aria-label="Play or pause audio">▶</button><button id="skipfwd" class="skipbtn" type="button" aria-label="Forward 30 seconds">+30s</button><span id="elapsed" class="playtime">0:00</span><input id="seekbar" type="range" min="0" max="1000" value="0" step="1" aria-label="Seek audio position" disabled><span id="remaining" class="playtime">−0:00</span></div><audio id="player" preload="metadata"></audio></div></div>
 <script id="embedded-episodes" type="application/json">{"episodes":[]}</script>
 <script>
 'use strict';
-const grid=document.getElementById('grid'),status=document.getElementById('status'),refresh=document.getElementById('refresh');
+const grid=document.getElementById('grid'),status=document.getElementById('status');
 const feed=document.getElementById('feed'),reader=document.getElementById('reader'),articleBody=document.getElementById('articlebody');
 const player=document.getElementById('player'),playerbar=document.getElementById('playerbar'),readend=document.getElementById('readend');
 const seekbar=document.getElementById('seekbar'),playpause=document.getElementById('playpause'),elapsed=document.getElementById('elapsed'),remaining=document.getElementById('remaining');
@@ -133,14 +138,15 @@ if(requestedClearance!==null&&/^\d{1,3}$/.test(requestedClearance)&&Number(reque
  document.documentElement.style.setProperty('--muse-chrome-clearance',requestedClearance+'px');
 }
 const STORE_KEY='focu:content-consumption:v1';
-let view='briefing',allItems=[],allRequests=[],storageOK=true,currentId=null,readMs=0,maxDepth=0,bottomSeen=false,contentAvailable=false;
+let view='briefing',allItems=[],allRequests=[],storageOK=true,currentId=null,readMs=0,maxDepth=0,bottomSeen=false,contentAvailable=false,lastLoadAt=0,loadInFlight=false;
 const feedPositions={briefing:0,research:0,archive:0},articlePositions={},articleTrail=[];
-let tickAt=Date.now(),lastNote='',playingId=null,lastAudioPosition=null,listenedSeconds=0,pendingRecoveryTime=null,pendingResumeTime=null,lastSavedPos=-1;
+let sourcesExpanded=false;
+let tickAt=Date.now(),lastNote='',playingId=null,lastAudioPosition=null,listenedSeconds=0,pendingRecoveryTime=null,pendingResumeTime=null,lastSavedPos=-1,autoRecoveryUsed=false;
 let speechId=null,speechSegments=[],speechIndex=0,speechRunning=false,speechPaused=false,failedAudioId=null,speechEpoch=0;
 function canNarrate(){return !!(typeof speechSynthesis!=='undefined'&&typeof SpeechSynthesisUtterance!=='undefined')}
 function readStates(){try{const obj=JSON.parse(localStorage.getItem(STORE_KEY)||'{}');return obj&&typeof obj==='object'&&!Array.isArray(obj)?obj:{}}catch(e){storageOK=false;return {}}}
 let states=readStates();
-function saveStates(){try{const value=JSON.stringify(states);localStorage.setItem(STORE_KEY,value);storageOK=localStorage.getItem(STORE_KEY)===value}catch(e){storageOK=false}if(!storageOK)status.textContent='Reading history cannot be saved on this device'}
+function saveStates(){try{const value=JSON.stringify(states);localStorage.setItem(STORE_KEY,value);storageOK=localStorage.getItem(STORE_KEY)===value}catch(e){storageOK=false}if(!storageOK){status.hidden=false;status.textContent='Reading history cannot be saved on this device'}}
 function isDone(id){return states[id]?.status==='consumed'}
 function markDone(id,via){if(!id||isDone(id))return;states[id]={status:'consumed',via,updated_at:new Date().toISOString()};saveStates();render(allItems,lastNote);updateReaderState()}
 function markUnread(id){delete states[id];saveStates();render(allItems,lastNote);updateReaderState()}
@@ -239,32 +245,7 @@ function appendResearchQueue(){
 function compilationFor(id){
  return allItems.find(item=>Array.isArray(item.covered_content_ids)&&item.covered_content_ids.includes(id))||null;
 }
-function render(items,note){
- allItems=items;lastNote=note;grid.replaceChildren();
- let visible=[];
- if(view==='archive'){
-   visible=items.filter(x=>isDone(x.id)).sort(newestFirst);
- }else if(view==='research'){
-   visible=items.filter(x=>!isDone(x.id)&&itemKind(x)==='research').sort(newestFirst);
- }else{
-   const briefs=items.filter(x=>!isDone(x.id)&&itemKind(x)==='briefing').sort(newestFirst);
-   // Uncompiled registered-source articles remain reachable without mixing
-   // commissioned research reports into the Daily Briefing stream.
-   const uncovered=items.filter(x=>!isDone(x.id)&&itemKind(x)==='source'&&!compilationFor(x.id)).sort(newestFirst);
-   visible=[...briefs,...uncovered];
- }
- status.textContent=visible.length+' '+(view==='archive'?'archived items':view==='research'?'research reports':'briefings and uncovered sources')+
-   (note?' · '+note:'')+(!storageOK?' · Reading state cannot be saved':'');
- if(!visible.length&&!(view==='research'&&allRequests.length)){
-   grid.append(el('p',view==='archive'?'Nothing archived yet.':view==='research'?'No research reports yet.':'You are all caught up.','empty'));
-   return;
- }
- let sourceHeadingShown=false;
- for(const item of visible){
-  if(view==='briefing'&&itemKind(item)==='source'&&!sourceHeadingShown){
-    grid.append(el('h2','Source updates not yet in a briefing','sectiontitle'));
-    sourceHeadingShown=true;
-  }
+function appendCard(item){
  const card=el('div',undefined,'feedcard');
  const open=el('button',undefined,'feed-open');open.type='button';open.setAttribute('aria-label','Read '+item.title);open.onclick=()=>openItem(item.id);
  const body=el('div',undefined,'cardbody');
@@ -308,6 +289,39 @@ function render(items,note){
    controls.append(play);
  }
  controls.append(action);card.append(controls);grid.append(card);
+}
+function render(items,note){
+ allItems=items;lastNote=note;grid.replaceChildren();
+ let visible=[],briefs=[],uncovered=[];
+ if(view==='archive'){
+   visible=items.filter(x=>isDone(x.id)).sort(newestFirst);
+ }else if(view==='research'){
+   visible=items.filter(x=>!isDone(x.id)&&itemKind(x)==='research').sort(newestFirst);
+ }else{
+   briefs=items.filter(x=>!isDone(x.id)&&itemKind(x)==='briefing').sort(newestFirst);
+   // Uncompiled registered-source articles remain reachable without mixing
+   // commissioned research reports into the Daily Briefing stream, and
+   // without competing with the compiled briefing at full weight: they rest
+   // behind one collapsed row until the owner asks for them.
+   uncovered=items.filter(x=>!isDone(x.id)&&itemKind(x)==='source'&&!compilationFor(x.id)).sort(newestFirst);
+   visible=[...briefs,...uncovered];
+ }
+ if(!visible.length&&!(view==='research'&&allRequests.length)){
+   grid.append(el('p',view==='archive'?'Nothing archived yet.':view==='research'?'No research reports yet.':'You are all caught up.','empty'));
+   return;
+ }
+ if(view==='briefing'){
+   for(const item of briefs)appendCard(item);
+   if(uncovered.length){
+     const toggle=el('button',(sourcesExpanded?'▾ ':'▸ ')+uncovered.length+' source update'+(uncovered.length===1?'':'s')+' not yet in a briefing','sourcestoggle');
+     toggle.type='button';
+     toggle.setAttribute('aria-expanded',sourcesExpanded?'true':'false');
+     toggle.onclick=()=>{sourcesExpanded=!sourcesExpanded;render(allItems,lastNote)};
+     grid.append(toggle);
+     if(sourcesExpanded)for(const item of uncovered)appendCard(item);
+   }
+ }else{
+   for(const item of visible)appendCard(item);
  }
  if(view==='research')appendResearchQueue();
 }
@@ -540,6 +554,7 @@ function playItem(item){
    const resume=audioPosOf(item.id);
    pendingResumeTime=resume>0?resume:null;
  }
+ document.getElementById('recoveraudio').hidden=true;autoRecoveryUsed=false;
  playerbar.hidden=false;document.getElementById('nowplaying').textContent=item.title;
  syncPlayerUI();
  player.play().then(syncPlayerUI).catch(()=>{document.getElementById('nowplaying').textContent='Tap Play to start audio';syncPlayerUI()});
@@ -548,29 +563,48 @@ document.getElementById('listen').onclick=()=>{
  const item=allItems.find(x=>x.id===currentId);if(!item)return;
  playItem(item);
 };
-document.getElementById('recoveraudio').onclick=()=>{
+function recoverAudio(auto){
  // WebKit sometimes reports playing/currentTime even though audible output
- // is silent. No Web Audio output inspection is reliable in a host WebView;
- // recovery must therefore be a user-initiated decoder reset.
+ // is silent. No Web Audio output inspection is reliable in a host WebView,
+ // so recovery is a decoder reset from the current position: attempted
+ // automatically once after a stall, then offered as a button if that fails.
  const item=allItems.find(x=>x.id===playingId);
  const url=item?safeUrl(item.audio_url):null;
- if(!url){document.getElementById('nowplaying').textContent='No audio source available to recover';return}
+ if(!url){document.getElementById('nowplaying').textContent='No audio source available to recover';return false}
  pendingRecoveryTime=Number.isFinite(player.currentTime)?Math.max(0,player.currentTime):0;
  lastAudioPosition=null; // seeking/reloading is not evidence of listening
- document.getElementById('nowplaying').textContent='Reconnecting audio near '+audioClock(pendingRecoveryTime)+'…';
+ document.getElementById('nowplaying').textContent=auto?'Audio glitch — restarting where you left off…':'Reconnecting audio near '+audioClock(pendingRecoveryTime)+'…';
  player.pause();
  player.removeAttribute('src');
  player.load();
  player.src=url;
  player.load(); // loadedmetadata will seek and resume
  syncPlayerUI();
+ return true;
+}
+document.getElementById('recoveraudio').onclick=()=>{
+ document.getElementById('recoveraudio').hidden=true;
+ autoRecoveryUsed=true; // a further stall without progress re-offers the button
+ recoverAudio(false);
+};
+document.getElementById('skipback').onclick=()=>{
+ if(!playingId)return;
+ player.currentTime=Math.max(0,(Number.isFinite(player.currentTime)?player.currentTime:0)-15);
+ lastAudioPosition=null;saveAudioPosition(true);syncPlayerUI();
+};
+document.getElementById('skipfwd').onclick=()=>{
+ if(!playingId)return;
+ const now=Number.isFinite(player.currentTime)?player.currentTime:0;
+ const dur=Number.isFinite(player.duration)&&player.duration>0?player.duration:Infinity;
+ player.currentTime=Math.min(now+30,dur);
+ lastAudioPosition=null;saveAudioPosition(true);syncPlayerUI();
 };
 document.getElementById('closeaudio').onclick=()=>{saveAudioPosition(true);pendingRecoveryTime=null;pendingResumeTime=null;player.pause();playerbar.hidden=true;syncPlayerUI()};
 player.addEventListener('seeking',()=>{lastAudioPosition=null});
 player.addEventListener('timeupdate',()=>{
  if(player.paused||player.seeking||!Number.isFinite(player.currentTime))return;
  const current=player.currentTime;
- if(lastAudioPosition!==null){const diff=current-lastAudioPosition;if(diff>0&&diff<60)listenedSeconds+=diff}
+ if(lastAudioPosition!==null){const diff=current-lastAudioPosition;if(diff>0){autoRecoveryUsed=false;if(diff<60)listenedSeconds+=diff}}
  lastAudioPosition=current;
  if(Math.abs(current-lastSavedPos)>=5)saveAudioPosition();
  syncPlayerUI();
@@ -581,10 +615,10 @@ player.addEventListener('ended',()=>{
  const item=allItems.find(x=>x.id===playingId);
  if(item&&Number.isFinite(item.audio_duration)&&item.audio_duration>0&&
     player.currentTime<item.audio_duration*0.95){
-   document.getElementById('nowplaying').textContent='Audio ended earlier than the verified file duration. Please report this playback problem.';
+   document.getElementById('nowplaying').textContent='The audio ended early — not archived.';
    return;
  }
- if(playingId&&Number.isFinite(player.duration)&&player.duration>0&&Math.max(listenedSeconds,playedCoverage())>=player.duration*0.8){markDone(playingId,'audio')}
+ if(playingId&&Number.isFinite(player.duration)&&player.duration>0&&Math.max(listenedSeconds,playedCoverage())>=player.duration*0.8){const endedId=playingId;markDone(playingId,'audio');if(typeof setTimeout==='function')setTimeout(()=>{if(playingId===endedId&&player.paused)playerbar.hidden=true},4000)}
  else document.getElementById('nowplaying').textContent='Playback ended · Not enough listening time to archive';
 });
 player.addEventListener('loadedmetadata',()=>{
@@ -609,10 +643,14 @@ player.addEventListener('loadedmetadata',()=>{
  const item=allItems.find(x=>x.id===playingId);
  if(item&&item.audio_duration&&Number.isFinite(player.duration)&&
     Math.abs(player.duration-item.audio_duration)>Math.max(4,item.audio_duration*0.05)){
-    document.getElementById('nowplaying').textContent='Player duration differs from verified audio · Try reopening if playback cuts off';
+    document.getElementById('nowplaying').textContent="This episode's audio looks shorter than expected";
  }
 });
-player.addEventListener('stalled',()=>{document.getElementById('nowplaying').textContent='Playback stalled · Waiting for audio data'});
+player.addEventListener('stalled',()=>{
+ if(!playingId||player.paused||pendingRecoveryTime!==null)return; // a recovery is already in flight
+ if(!autoRecoveryUsed){autoRecoveryUsed=true;recoverAudio(true);return}
+ document.getElementById('recoveraudio').hidden=false; // auto-recovery did not hold; offer the manual reset
+});
 
 player.addEventListener('error',()=>{
  pendingRecoveryTime=null;
@@ -646,11 +684,41 @@ function readingTick(){
  if(bottomSeen&&readMs>=minMs)markDone(currentId,'article');
 }
 setInterval(readingTick,1000);
-document.addEventListener('visibilitychange',()=>{tickAt=Date.now();if(document.hidden){saveAudioPosition(true);if(currentId&&!reader.hidden)noteArticlePosition(currentId,scrollY)}});
-async function load(){refresh.disabled=true;status.className='';status.textContent='Loading stories…';try{let data,note='';const raw=document.getElementById('embedded-episodes').textContent;const snapshot=JSON.parse(raw);const embedded=normalize(snapshot);let current=snapshot;const manifest=params.get('manifest')||'assets/episodes.json';try{const url=safeUrl(manifest);if(!url)throw Error('Invalid manifest URL');const response=await fetch(url,{cache:'no-store'});if(!response.ok)throw Error('HTTP '+response.status);const received=await response.json();data=normalize(received);current=received}catch(e){data=embedded;note='embedded snapshot (manifest unavailable)';if(!data.length)note='manifest unavailable; no embedded stories'}
-allRequests=Array.isArray(current.research_requests)?current.research_requests.filter(r=>r&&typeof r.intent_id==='string'&&['queued','researching','failed','completed'].includes(r.status)).slice(0,100):[];
-render(data,note)}catch(e){grid.replaceChildren();status.textContent='Unable to load stories: '+e.message;status.className='error'}finally{refresh.disabled=false}}
-refresh.addEventListener('click',load);load();
+document.addEventListener('visibilitychange',()=>{tickAt=Date.now();if(document.hidden){saveAudioPosition(true);if(currentId&&!reader.hidden)noteArticlePosition(currentId,scrollY)}else reloadIfStale()});
+function noteContentChange(beforeIds,items){return items.some(item=>!beforeIds.has(item.id))}
+function scheduleStatusHide(){
+ if(typeof setTimeout!=='function')return;
+ const shown=status.textContent;
+ setTimeout(()=>{if(status.textContent===shown)status.hidden=true},4000);
+}
+function reloadIfStale(){
+ // Freshness is the system's job: when the app becomes visible again with
+ // data older than five minutes, reload without being asked.
+ if(!lastLoadAt||Date.now()-lastLoadAt<=5*60*1000)return false;
+ return load(true);
+}
+async function load(){
+ if(loadInFlight)return;loadInFlight=true;
+ const firstLoad=!lastLoadAt;
+ if(firstLoad){status.hidden=false;status.className='';status.textContent='Loading stories…'}
+ try{
+  let data,note='';
+  const raw=document.getElementById('embedded-episodes').textContent;
+  const snapshot=JSON.parse(raw);const embedded=normalize(snapshot);let current=snapshot;
+  const manifest=params.get('manifest')||'assets/episodes.json';
+  try{const url=safeUrl(manifest);if(!url)throw Error('Invalid manifest URL');const response=await fetch(url,{cache:'no-store'});if(!response.ok)throw Error('HTTP '+response.status);const received=await response.json();data=normalize(received);current=received}
+  catch(e){data=embedded;note='embedded snapshot (manifest unavailable)';if(!data.length)note='manifest unavailable; no embedded stories'}
+  if(note)console.info('Focu reader:',note); // plumbing belongs in the console, not the resting UI
+  allRequests=Array.isArray(current.research_requests)?current.research_requests.filter(r=>r&&typeof r.intent_id==='string'&&['queued','researching','failed','completed'].includes(r.status)).slice(0,100):[];
+  const beforeIds=new Set(allItems.map(x=>x.id));
+  render(data,note);
+  lastLoadAt=Date.now();
+  if(!firstLoad&&noteContentChange(beforeIds,allItems)){status.hidden=false;status.className='';status.textContent='New briefing ready';scheduleStatusHide()}
+  else if(firstLoad){status.hidden=true;status.textContent=''}
+ }catch(e){grid.replaceChildren();status.hidden=false;status.textContent='Unable to load stories: '+e.message;status.className='error'}
+ finally{loadInFlight=false}
+}
+load();
 </script>
 </body>
 </html>
