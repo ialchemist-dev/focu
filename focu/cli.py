@@ -122,6 +122,8 @@ def main(argv: list[str] | None = None) -> int:
     pack_cmd.add_argument("pack_args", nargs=argparse.REMAINDER)
     yt_adapter_cmd = sub.add_parser("youtube-adapter", help="YouTube channel digest adapter (prototype)")
     yt_adapter_cmd.add_argument("youtube_adapter_args", nargs=argparse.REMAINDER)
+    ig_adapter_cmd = sub.add_parser("instagram-adapter", help="Instagram own-feed digest adapter (prototype)")
+    ig_adapter_cmd.add_argument("instagram_adapter_args", nargs=argparse.REMAINDER)
     daily_cmd = sub.add_parser("daily", help="Persistent feed-to-podcast stages")
     daily_cmd.add_argument("daily_args", nargs=argparse.REMAINDER)
     sync_cmd = sub.add_parser("sync", help="Durable Drive artifacts and private Git metadata")
@@ -148,6 +150,9 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "youtube-adapter":
             from focu.adapters.youtube import main as youtube_adapter_main
             return youtube_adapter_main(args.youtube_adapter_args)
+        if args.command == "instagram-adapter":
+            from focu.adapters.instagram import main as instagram_adapter_main
+            return instagram_adapter_main(args.instagram_adapter_args)
         if args.command == "collect":
             if args.platform == "youtube":
                 _json(collect_youtube(args.url, args.db, args.scope, args.output,
