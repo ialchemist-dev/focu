@@ -1832,7 +1832,19 @@ def plan_update(pack, config_path, *, liveness=None, records=None):
                            for c in pack.get("unverified", [])],
             "errors": [], "warnings": [],
             "attention_posts_per_month": 0.0, "attention_unknown": [],
-            "preexisting_source_ids": sorted(existing_by_id)}
+            "preexisting_source_ids": sorted(existing_by_id),
+            # F1 parity with plan_install (wave-33 follow-up): applying
+            # an update rewrites the registry wholesale in the
+            # serializer's canonical form — hand formatting and ALL
+            # comments are lost. The loss is recoverable (a timestamped
+            # backup is written first, and `focu pack restore` exists),
+            # but, exactly as at install, it must be disclosed in the
+            # plan rather than discovered afterwards.
+            "registry_rewrite": (
+                "Applying this update rewrites "
+                f"{Path(config_path).name} in canonical form; comments "
+                "and hand formatting in the current file are not "
+                "preserved (a timestamped backup is written first).")}
     if plan["already_current"]:
         return plan
 
@@ -2411,6 +2423,8 @@ def format_update_plan(plan) -> str:
         attention += ("; cadence unknown for "
                       + ", ".join(plan["attention_unknown"]))
     lines.append(attention)
+    if plan.get("registry_rewrite"):
+        lines.append(f"  note: {plan['registry_rewrite']}")
     for warning in plan["warnings"]:
         lines.append(f"  warning: {warning}")
     return "\n".join(lines)

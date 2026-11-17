@@ -16,8 +16,9 @@ from datetime import date
 from pathlib import Path
 
 from focu.daily.config import load_config
-from focu.packs import (PACKS_DIR, install_pack, list_backups, manifest_path,
-                        pack_catalog, show_pack, uninstall_pack, update_pack)
+from focu.packs import (PACKS_DIR, format_update_plan, install_pack,
+                        list_backups, manifest_path, pack_catalog, show_pack,
+                        uninstall_pack, update_pack)
 from focu.packs import main as pack_main
 
 TODAY = date(2026, 11, 17)
@@ -210,6 +211,24 @@ class UpdateTests(UpdateTestCase):
         self.assertNotIn("Bob Example",
                          [s["name"] for s in
                           load_config(backup)["sources"]])
+
+    def test_update_plan_discloses_registry_rewrite(self):
+        # F1 parity (wave-33 follow-up): an update rewrites sources.yaml
+        # wholesale exactly like install does, so its plan must carry
+        # the same disclosure — in the plan dict and in the formatted
+        # preview the owner confirms against.
+        config = self.write_config()
+        self.install(make_pack(), config)
+        result = self.update(
+            make_pack([make_source(), bob_source()], version="1.1.0"),
+            config, dry_run=True)
+        plan = result["plan"]
+        self.assertIn("registry_rewrite", plan)
+        self.assertIn("comments", plan["registry_rewrite"])
+        self.assertIn("not", plan["registry_rewrite"])
+        self.assertIn("preserved", plan["registry_rewrite"])
+        text = format_update_plan(plan)
+        self.assertIn(f"  note: {plan['registry_rewrite']}", text)
 
     def test_update_removes_unshared_source(self):
         config = self.write_config()

@@ -46,6 +46,8 @@ def parser():
     legacy.add_argument("--json", action="store_true")
     ds = sub.add_parser("day-status", help="print a run's stored day-status record (read-only)")
     ds.add_argument("--data-dir", default="data")
+    ds.add_argument("--config", default="sources.yaml",
+                    help="registry whose install manifest names the packs in force")
     ds.add_argument("--date", help="YYYY-MM-DD, default the latest run in the store")
     ds.add_argument("--json", action="store_true",
                     help="print the stored record exactly as recorded")
@@ -221,6 +223,36 @@ def format_day_status(record):
     return "\n".join(lines)
 
 
+def _installed_pack_lines(store, run, config_path):
+    """Q11 cold start (design §3 day 0 / §7.3): the FIRST briefing's
+    status surface states which pack is installed by default and the
+    one action that removes it — a default the owner cannot name is a
+    recommendation the system made for its own benefit. Later briefings
+    do not repeat the statement, and --json never carries it (the
+    stored record prints byte-for-byte). The statement comes from the
+    install manifest beside the registry, never from the record."""
+    earliest = store.db.execute(
+        "SELECT MIN(episode_date) FROM runs").fetchone()[0]
+    if earliest is None or run["episode_date"] != earliest:
+        return []
+    from focu.packs import load_manifest
+    try:
+        manifest = load_manifest(config_path)
+    except ValueError as ex:
+        return [f"Installed-pack statement unavailable: {ex}"]
+    lines = []
+    for record in manifest.get("packs", []):
+        pack_id = record.get("pack_id")
+        if not pack_id:
+            continue
+        label = f"Installed pack: {pack_id}"
+        if record.get("version"):
+            label += f" v{record['version']}"
+        lines.append(f"{label} — remove with: focu pack uninstall "
+                     f"{pack_id} --config {config_path}")
+    return lines
+
+
 def print_day_status(args):
     """`focu daily day-status`: the owner-visible surface for the Q5
     record. Strictly read-only — it prints the stored stage report, or
@@ -282,6 +314,9 @@ def print_day_status(args):
                 print(raw)
             else:
                 print(format_day_status(json.loads(raw)))
+                for line in _installed_pack_lines(
+                        store, run, getattr(args, "config", "sources.yaml")):
+                    print(line)
             return 0
         finally:
             store.close()
