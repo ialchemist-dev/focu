@@ -290,6 +290,45 @@ class DayStatusTests(unittest.TestCase):
 
     # -- reconciliation ----------------------------------------------------
 
+    def test_compose_failure_still_leaves_a_failed_day_status(self):
+        # D2b (promotion rehearsal): a run that dies at compose — the
+        # rehearsal's case was briefing QC failing on an Import AI item
+        # — used to leave no day-status record at all: the run stayed
+        # "pending" and the CLI misreported the day as predating
+        # day-status assembly. The record must exist exactly when the
+        # day went wrong. (compose is patched to raise the exact error
+        # it raises on a QC failure; what is under test is
+        # run_pipeline's failure wiring, not compose itself.)
+        from focu.daily.errors import FewError
+        qc_error = FewError(
+            "briefing script omitted source items or figures: "
+            "[{\"issue\": \"missing_key_figures\"}]", "briefing_qc_failed", 4)
+        with patch("focu.daily.pipeline.compose", side_effect=qc_error):
+            with self.assertRaises(FewError):
+                run_pipeline(self.store, self.cfg, self.today, "text_only",
+                             self.units_file([self.item()]))
+        run = self.store.ensure_run(self.today, self.cfg, "text_only")
+        self.assertEqual(run["status"], "failed")
+        record = self.stage_report(run["run_id"], "day_status")
+        self.assertIsNotNone(record)
+        self.assertEqual(record["outcome"], "failed")
+        run_failures = [f for f in record["failures"]
+                        if f.get("stage") == "compose"]
+        self.assertEqual(len(run_failures), 1)
+        self.assertIn("briefing", run_failures[0]["error"])
+        self.assertIn("run failed at compose", record["summary"])
+        # The accounting the completed stages wrote is present: the
+        # item was collected and selected before compose failed.
+        row = self.source_row(record)
+        self.assertEqual(row["collected"], 1)
+        self.assertEqual(row["selected"], 1)
+        self.assertEqual(record["totals"]["selected"], 1)
+        # The day-status stage row itself is staged as failed.
+        stage_row = self.store.db.execute(
+            "SELECT status FROM stage_runs WHERE run_id=? AND stage='day_status'",
+            (run["run_id"],)).fetchone()
+        self.assertEqual(stage_row[0], "failed")
+
     def test_tampered_accounting_is_flagged_never_passed(self):
         result = run_pipeline(self.store, self.cfg, self.today, "text_only",
                               self.units_file([self.item()]))

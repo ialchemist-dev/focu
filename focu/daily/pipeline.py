@@ -188,10 +188,16 @@ def _audio_outcome(outcome, run):
     return {"outcome": "not_attempted", "reason": "run output mode is text_only"}
 
 
-def assemble_day_status(store, cfg, run, fetch_report=None, outcomes=None):
+def assemble_day_status(store, cfg, run, fetch_report=None, outcomes=None,
+                        run_failure=None):
     """Q5: one honest status record for the day, assembled from the stage
     reports the run actually produced — never from a stage's self-summary
     alone.
+
+    ``run_failure`` (D2b) is {"stage", "error"} for a run that died
+    mid-pipeline: the failure is named in failures[], the outcome is
+    "failed", and the accounting covers exactly the stages that did
+    run — absent stages stay absent, never invented.
 
     Per enabled source the record accounts for the whole funnel:
     collected (this run's fetch) -> considered (entered selection) ->
@@ -287,6 +293,9 @@ def assemble_day_status(store, cfg, run, fetch_report=None, outcomes=None):
         else:
             audio[classified["outcome"]].append(outcome["episode_id"])
         episodes.append(entry)
+    if run_failure:
+        failures.append({"stage": run_failure["stage"],
+                         "error": run_failure["error"]})
 
     notes = []
     discrepancies = []
@@ -335,7 +344,9 @@ def assemble_day_status(store, cfg, run, fetch_report=None, outcomes=None):
 
     fetch_not_clean = any(e["fetch"] and e["fetch"]["status"] not in {"success", "empty"}
                           for e in source_list)
-    if episode_failed:
+    if run_failure:
+        outcome_class = "failed"
+    elif episode_failed:
         outcome_class = "failed"
     elif failures or discrepancies:
         outcome_class = "partial_failure"
@@ -373,6 +384,11 @@ def _day_status_summary(status):
     if failed_sources:
         names = ", ".join(f["source"] for f in failed_sources)
         clauses.append(f"{len(failed_sources)} collector(s) failed ({names})")
+    for failure in status["failures"]:
+        if failure.get("stage") in (None, "ingest", "finalize"):
+            continue
+        error = str(failure.get("error") or "")
+        clauses.append(f"run failed at {failure['stage']}: {error[:200]}")
     for announcement in status.get("learned_paused") or []:
         clauses.append(announcement)
     if totals["withheld"]:
@@ -692,6 +708,32 @@ def finalize_episodes(store, cfg, run, channel=None):
     return outcomes
 
 
+def _record_run_failure(store, cfg, run, stage, error, fetch_report=None):
+    """D2b: persist the day-status record for a run that died after
+    ensure_run. The Q5 surface must exist exactly when the day went
+    wrong — before this, a compose/QC failure left the run 'pending'
+    with no record at all, and `focu daily day-status` misreported the
+    day as predating day-status assembly (rehearsal defects D2/F3).
+
+    Best-effort by construction: recording the failure must never mask
+    the original error, so any failure here is swallowed and the
+    caller's exception propagates unchanged. The record names the
+    failing stage and error and carries whatever per-source accounting
+    the completed stages actually wrote — absent stages stay absent.
+    The run row is marked "failed" (the same vocabulary finalize
+    failures use; only "completed" short-circuits a later resume)."""
+    try:
+        with store.db:
+            store.db.execute("UPDATE runs SET status='failed',updated_at=? WHERE run_id=?",
+                             (now_utc(), run["run_id"]))
+        record = assemble_day_status(
+            store, cfg, run, fetch_report=fetch_report,
+            run_failure={"stage": stage, "error": str(error)})
+        store.stage(run["run_id"], "day_status", "failed", record)
+    except Exception:
+        pass
+
+
 def run_pipeline(store, cfg, date, mode, input_units=None, gate_options=None):
     run = store.ensure_run(date, cfg, mode)
     if run["status"] == "completed":
@@ -701,58 +743,68 @@ def run_pipeline(store, cfg, date, mode, input_units=None, gate_options=None):
         if stored_status:
             result["day_status"] = stored_status
         return result
-    selected = store.db.execute("SELECT 1 FROM stage_runs WHERE run_id=? AND stage='select' AND status='success'",
-                                (run["run_id"],)).fetchone()
+    stage = "ingest"
     fetch_report = None
-    if not selected:
-        fetch_report = ingest(store, cfg, date, input_units)
-        store.stage(run["run_id"], "ingest", "success", fetch_report)
-        healthy = [s for s in fetch_report["sources"] if s["status"] in {"success", "empty", "partial"}]
-        if not healthy:
-            ready_backlog = store.db.execute("""SELECT count(DISTINCT c.content_id)
-                FROM candidates k JOIN contents c USING(content_id)
-                JOIN content_revisions r ON r.revision_id=c.latest_revision_id
-                JOIN observations o ON o.content_id=c.content_id
-                JOIN subscriptions s USING(source_id)
-                WHERE k.state='pending' AND k.expires_at>=? AND s.enabled=1
-                AND c.provisional=0 AND length(trim(r.body))>0
-                AND NOT EXISTS (SELECT 1 FROM coverage cv WHERE cv.content_id=c.content_id)
-                AND NOT EXISTS (SELECT 1 FROM episode_items ei JOIN episodes ep USING(episode_id)
-                    WHERE ei.content_id=c.content_id AND ep.status!='finalized')""", (now_utc(),)).fetchone()[0]
-            if not ready_backlog:
-                raise FewError("all configured sources are unavailable and no ready backlog is available",
-                               "sources_unavailable", 3)
-    gate_report = None
-    gate_priorities = None
-    if not selected and gate_options and gate_options["mode"] != "off":
-        from focu.decision_gate import evaluate_pending, gate_priorities as load_gate_priorities
-        gate_report = evaluate_pending(store, date, **gate_options)
-        store.stage(run["run_id"], "gate", "success", {
-            "mode": gate_report["mode"], "provider": gate_report["provider"],
-            "evaluated": gate_report["evaluated"], "errors": gate_report["errors"],
-            "output": gate_report["output"],
-        })
-        if gate_options["mode"] == "active":
-            gate_priorities = load_gate_priorities(store.data_dir, date)
-    digest_report = digest(store, cfg, run, gate_priorities=gate_priorities)
-    compose_report = compose(store, cfg, run)
-    store.stage(run["run_id"], "compose", "success", compose_report)
-    outcomes = finalize_episodes(store, cfg, run)
-    failed = any(o["status"] == "failed" for o in outcomes)
-    store.stage(run["run_id"], "finalize", "failed" if failed else "success", outcomes)
-    with store.db:
-        store.db.execute("UPDATE runs SET status=?,updated_at=? WHERE run_id=?",
-                         ("failed" if failed else "completed", now_utc(), run["run_id"]))
-    degraded = fetch_report and any(s["status"] not in {"success", "empty"} for s in fetch_report["sources"])
-    # Q5: the run's result carries one assembled, reconciled day status,
-    # also persisted as a stage row so a later resume (or the reused
-    # return above) reports the same account instead of re-deriving one.
-    day_status = assemble_day_status(store, cfg, run, fetch_report=fetch_report,
-                                     outcomes=outcomes)
-    store.stage(run["run_id"], "day_status", "failed" if failed else "success", day_status)
-    return {"status": "failed" if failed else "degraded" if degraded else "completed",
-            "run_id": run["run_id"], "fetch": fetch_report, "gate": gate_report,
-            "selection": digest_report,
-            "compose": compose_report, "episodes": outcomes,
-            "day_status": day_status,
-            "warnings": ([] if outcomes else ["no eligible items fit this episode; check pending/enrichment counts with status"])}
+    try:
+        selected = store.db.execute("SELECT 1 FROM stage_runs WHERE run_id=? AND stage='select' AND status='success'",
+                                    (run["run_id"],)).fetchone()
+        if not selected:
+            fetch_report = ingest(store, cfg, date, input_units)
+            store.stage(run["run_id"], "ingest", "success", fetch_report)
+            healthy = [s for s in fetch_report["sources"] if s["status"] in {"success", "empty", "partial"}]
+            if not healthy:
+                ready_backlog = store.db.execute("""SELECT count(DISTINCT c.content_id)
+                    FROM candidates k JOIN contents c USING(content_id)
+                    JOIN content_revisions r ON r.revision_id=c.latest_revision_id
+                    JOIN observations o ON o.content_id=c.content_id
+                    JOIN subscriptions s USING(source_id)
+                    WHERE k.state='pending' AND k.expires_at>=? AND s.enabled=1
+                    AND c.provisional=0 AND length(trim(r.body))>0
+                    AND NOT EXISTS (SELECT 1 FROM coverage cv WHERE cv.content_id=c.content_id)
+                    AND NOT EXISTS (SELECT 1 FROM episode_items ei JOIN episodes ep USING(episode_id)
+                        WHERE ei.content_id=c.content_id AND ep.status!='finalized')""", (now_utc(),)).fetchone()[0]
+                if not ready_backlog:
+                    raise FewError("all configured sources are unavailable and no ready backlog is available",
+                                   "sources_unavailable", 3)
+        gate_report = None
+        gate_priorities = None
+        if not selected and gate_options and gate_options["mode"] != "off":
+            stage = "gate"
+            from focu.decision_gate import evaluate_pending, gate_priorities as load_gate_priorities
+            gate_report = evaluate_pending(store, date, **gate_options)
+            store.stage(run["run_id"], "gate", "success", {
+                "mode": gate_report["mode"], "provider": gate_report["provider"],
+                "evaluated": gate_report["evaluated"], "errors": gate_report["errors"],
+                "output": gate_report["output"],
+            })
+            if gate_options["mode"] == "active":
+                gate_priorities = load_gate_priorities(store.data_dir, date)
+        stage = "select"
+        digest_report = digest(store, cfg, run, gate_priorities=gate_priorities)
+        stage = "compose"
+        compose_report = compose(store, cfg, run)
+        store.stage(run["run_id"], "compose", "success", compose_report)
+        stage = "finalize"
+        outcomes = finalize_episodes(store, cfg, run)
+        failed = any(o["status"] == "failed" for o in outcomes)
+        store.stage(run["run_id"], "finalize", "failed" if failed else "success", outcomes)
+        with store.db:
+            store.db.execute("UPDATE runs SET status=?,updated_at=? WHERE run_id=?",
+                             ("failed" if failed else "completed", now_utc(), run["run_id"]))
+        degraded = fetch_report and any(s["status"] not in {"success", "empty"} for s in fetch_report["sources"])
+        # Q5: the run's result carries one assembled, reconciled day status,
+        # also persisted as a stage row so a later resume (or the reused
+        # return above) reports the same account instead of re-deriving one.
+        stage = "day_status"
+        day_status = assemble_day_status(store, cfg, run, fetch_report=fetch_report,
+                                         outcomes=outcomes)
+        store.stage(run["run_id"], "day_status", "failed" if failed else "success", day_status)
+        return {"status": "failed" if failed else "degraded" if degraded else "completed",
+                "run_id": run["run_id"], "fetch": fetch_report, "gate": gate_report,
+                "selection": digest_report,
+                "compose": compose_report, "episodes": outcomes,
+                "day_status": day_status,
+                "warnings": ([] if outcomes else ["no eligible items fit this episode; check pending/enrichment counts with status"])}
+    except Exception as ex:
+        _record_run_failure(store, cfg, run, stage, ex, fetch_report)
+        raise

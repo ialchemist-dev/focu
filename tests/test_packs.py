@@ -15,8 +15,9 @@ from urllib.error import HTTPError
 import yaml
 
 from focu.daily.config import load_config
-from focu.packs import (PACKS_DIR, install_pack, manifest_path, plan_install,
-                        restore_backup, uninstall_pack, validate_pack)
+from focu.packs import (PACKS_DIR, format_plan, install_pack, manifest_path,
+                        plan_install, restore_backup, uninstall_pack,
+                        validate_pack)
 from focu.packs import main as pack_main
 
 TODAY = date(2026, 11, 17)
@@ -246,6 +247,21 @@ class PlanTests(PackTestCase):
         # Planning is pure: no writes, no manifest.
         self.assertEqual(config.read_bytes(), before)
         self.assertFalse(manifest_path(config).exists())
+
+    def test_plan_discloses_registry_rewrite(self):
+        # F1 (promotion rehearsal): applying a plan rewrites
+        # sources.yaml wholesale — comments and hand formatting are
+        # lost. The plan dict and its formatted preview must say so.
+        config = self.write_config()
+        pack = validate_pack(make_pack(), today=TODAY)["pack"]
+        plan = plan_install(pack, config)
+        self.assertIn("comments", plan["registry_rewrite"])
+        self.assertIn("not", plan["registry_rewrite"])
+        self.assertIn("preserved", plan["registry_rewrite"])
+        text = format_plan(plan)
+        self.assertIn("note:", text)
+        self.assertIn("comments", text)
+        self.assertIn("canonical form", text)
 
     def test_plan_attention_total_for_shipped_pack(self):
         config = self.write_config()

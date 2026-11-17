@@ -134,6 +134,58 @@ class BriefingTests(unittest.TestCase):
         self.assertNotIn("1.0", figures)
         self.assertIn("25%", figures)
 
+    def test_name_glued_version_tokens_are_not_figures(self):
+        # D2a (promotion rehearsal): "Kimi K3.1 Pro" — the extractor
+        # once took a bare "1" out of "K3.1" while the presence check
+        # refused to count that "1" as present, so render_script could
+        # never pass QC and compose aborted deterministically. A
+        # dotted digit run glued to a name (letter or hyphen) is a
+        # version identifier, and extractor and checker share that
+        # one rule.
+        style = read_style()
+        item = {"id": "v-2", "origin": "registered_source", "source": "Import AI",
+                "title": "Kimi K3.1 Pro ships",
+                "body": "Moonshot released Kimi K3.1 Pro today. It scores 71% "
+                        "on the benchmark, up from 65%."}
+        figures = key_figures(item)
+        self.assertNotIn("1", figures)
+        self.assertNotIn("3.1", figures)
+        self.assertEqual(figures, ["71%", "65%"])
+        qc = validate_script(render_script([item], style), [item], style)
+        self.assertTrue(qc["passed"], qc["issues"])
+
+    def test_hyphen_and_bare_version_tokens_are_not_figures(self):
+        style = read_style()
+        item = {"id": "v-3", "origin": "registered_source", "source": "Blog",
+                "title": "GPT-5.2 and v2.0 notes",
+                "body": "GPT-5.2 rolled out with the v2.0 client. "
+                        "Latency fell by 40 ms."}
+        figures = key_figures(item)
+        self.assertNotIn("5.2", figures)
+        self.assertNotIn("2.0", figures)
+        self.assertNotIn("0", figures)
+        self.assertEqual(figures, ["40"])
+        qc = validate_script(render_script([item], style), [item], style)
+        self.assertTrue(qc["passed"], qc["issues"])
+
+    def test_standalone_decimal_is_still_a_figure_and_enforced(self):
+        # The version rule must not swallow real measurements: a
+        # space-delimited decimal is not glued to a name.
+        style = read_style()
+        item = {"id": "v-4", "origin": "registered_source", "source": "Blog",
+                "title": "Growth",
+                "body": "Revenue grew by 3.1 points this quarter and churn "
+                        "hit 2 percent."}
+        self.assertIn("3.1", key_figures(item))
+        script = render_script([item], style)
+        qc = validate_script(script, [item], style)
+        self.assertTrue(qc["passed"], qc["issues"])
+        stripped = script.replace("3.1", "several")
+        qc = validate_script(stripped, [item], style)
+        self.assertFalse(qc["passed"])
+        self.assertTrue(any(x["issue"] == "missing_key_figures"
+                            and x["values"] == ["3.1"] for x in qc["issues"]))
+
     def test_dangling_visuals_fail_strict_qc_even_with_otherwise_complete_script(self):
         style = read_style()
         script = render_script(units(), style) + "\\nHost: See Figure 2 and Table 3.\\n"

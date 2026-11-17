@@ -262,8 +262,21 @@ def print_day_status(args):
                 (run["run_id"],)).fetchone()
             raw = stored[0] if stored else None
             if not raw:
+                # F3: name the run's actual state, not a guess. A failed
+                # run without a record predates the D2b failure record
+                # (or recording it failed); a pending run simply has
+                # not finished; only a completed run without a record
+                # genuinely predates day-status assembly.
+                if run["status"] == "failed":
+                    reason = ("The run failed and no day-status record "
+                              "was assembled for it.")
+                elif run["status"] == "pending":
+                    reason = ("The run has not finished; no day-status "
+                              "record has been assembled yet.")
+                else:
+                    reason = "The run predates day-status assembly."
                 print(f"No day-status record for {run['episode_date']}. "
-                      "The run predates day-status assembly.")
+                      f"{reason}")
                 return 0
             if args.json:
                 print(raw)

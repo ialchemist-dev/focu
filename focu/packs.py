@@ -473,14 +473,28 @@ def _host_set(locators):
 # compromised host redirecting — could make the owner's machine fetch
 # internal addresses during validate / install / refresh-check. So the
 # one fetch every pack path shares refuses, before every hop: a
-# non-HTTPS target, or a host that resolves to ANY non-public address
-# (loopback, private, link-local, reserved, multicast). Redirects are
-# followed manually, one hop at a time, at most MAX_REDIRECTS of them,
-# so each hop's target is checked before it is fetched. The check is
-# resolve-then-connect, so a DNS answer that changes between the check
-# and the connection is a known residual window; the guard's boundary
-# is the one the sweep named — the targets the pack itself names,
-# directly or by redirect.
+# non-HTTPS target, or a host that resolves to ANY genuinely non-public
+# address (loopback, private, link-local, reserved, multicast).
+# Redirects are followed manually, one hop at a time, at most
+# MAX_REDIRECTS of them, so each hop's target is checked before it is
+# fetched. The check is resolve-then-connect, so a DNS answer that
+# changes between the check and the connection is a known residual
+# window; the guard's boundary is the one the sweep named — the
+# targets the pack itself names, directly or by redirect.
+#
+# One range is neither public nor a chosen target: 198.18.0.0/15, the
+# benchmarking range. A resolver behind a proxy / fake-IP setup (this
+# host's DNS among them) maps ordinary public hostnames into it, so
+# refusing it refused EVERY hostname there and install-with-liveness
+# silently disabled every feed source (promotion rehearsal, defect
+# D1). A benchmarking-range answer for a public hostname is therefore
+# "indeterminate": the fetch proceeds — egress in such an environment
+# is proxy-mediated anyway — and the verdict travels with the result
+# so liveness records "indeterminate" instead of claiming the address
+# was verified public. The exception is narrow by construction: it
+# applies only to resolver answers for hostnames, never to a literal
+# address a pack or a redirect names, and a name that resolves to a
+# benchmarking address AND a genuinely private one is still refused.
 #
 # The guard lives in the DEFAULT fetch only. Callers that inject a
 # ``fetch`` (tests, fixtures) own that fetch's behavior; the guard's
@@ -504,11 +518,40 @@ def _default_resolver(host):
     return sorted({info[4][0] for info in infos})
 
 
+_BENCHMARK_NETWORK = ipaddress.ip_network("198.18.0.0/15")
+
+
+def _address_class(ip) -> str:
+    """Classify one address for the fetch guard.
+
+    "public" — globally reachable addressing (``_is_public_ip``).
+    "indeterminate" — the benchmarking range 198.18.0.0/15: not public
+    addressing, but as a *resolver answer* for a public hostname it is
+    the proxy/fake-IP resolver's stand-in for a public address, not a
+    target anyone chose (see the guard comment above).
+    "refused" — everything else non-public: RFC1918, loopback,
+    link-local, shared/CGNAT space, documentation ranges, reserved,
+    multicast, unspecified.
+    """
+    if ip.version == 4 and ip in _BENCHMARK_NETWORK:
+        return "indeterminate"
+    if _is_public_ip(ip):
+        return "public"
+    return "refused"
+
+
 def _assert_public_target(url, resolver):
     """Refuse a fetch target that is not HTTPS or not publicly
-    addressed. A literal-IP host is checked directly; a hostname is
-    resolved and refused when ANY of its addresses is non-public — a
-    name that points both ways is not a public target."""
+    addressed, and return the address-check verdict: "public" when
+    every address is public, "indeterminate" when the only non-public
+    addresses are benchmarking-range resolver answers.
+
+    A literal-IP host is checked directly and held to the public rule
+    with no indeterminate pass — a benchmarking address named
+    literally (by a pack, or by a redirect) is a chosen target, not a
+    resolver artifact. A hostname is refused when ANY of its addresses
+    is in the refused class — a name that points both ways is not a
+    public target."""
     parts = urlsplit(url)
     if parts.scheme != "https":
         raise FetchRefused(f"fetch refused: {url} does not use HTTPS")
@@ -520,23 +563,30 @@ def _assert_public_target(url, resolver):
     except ValueError:
         literal = None
     if literal is not None:
-        addresses = [literal]
-    else:
-        try:
-            addresses = [ipaddress.ip_address(text)
-                         for text in resolver(host)]
-        except (OSError, ValueError) as ex:
+        if not _is_public_ip(literal):
             raise FetchRefused(
-                f"fetch refused: cannot resolve host {host}: {ex}"
-            ) from ex
-        if not addresses:
-            raise FetchRefused(
-                f"fetch refused: host {host} resolves to no addresses")
+                f"fetch refused: {url} names non-public address {literal}")
+        return "public"
+    try:
+        addresses = [ipaddress.ip_address(text)
+                     for text in resolver(host)]
+    except (OSError, ValueError) as ex:
+        raise FetchRefused(
+            f"fetch refused: cannot resolve host {host}: {ex}"
+        ) from ex
+    if not addresses:
+        raise FetchRefused(
+            f"fetch refused: host {host} resolves to no addresses")
+    verdict = "public"
     for ip in addresses:
-        if not _is_public_ip(ip):
+        address_class = _address_class(ip)
+        if address_class == "refused":
             raise FetchRefused(
                 f"fetch refused: host {host} resolves to non-public "
                 f"address {ip}")
+        if address_class == "indeterminate":
+            verdict = "indeterminate"
+    return verdict
 
 
 class _NoRedirect(HTTPRedirectHandler):
@@ -553,15 +603,19 @@ _GUARDED_OPENER = build_opener(_NoRedirect())
 def _guarded_fetch_prefix(url, *, opener=None, resolver=None):
     """The default pack fetch: source_collection's discipline (same UA,
     15 s timeout, 2 MB read bound) behind the target guard above.
-    Returns (final_url, bytes, oversized) like ``_bounded_fetch_prefix``,
-    which see for the oversized contract."""
+    Returns (final_url, bytes, oversized, address_check); see
+    ``_bounded_fetch_prefix`` for the oversized contract and
+    ``_assert_public_target`` for the address_check verdict, which is
+    "indeterminate" when any hop's resolution was."""
     opener = opener if opener is not None else _GUARDED_OPENER
     resolver = resolver if resolver is not None else _default_resolver
     current = url
     seen = set()
     hops = 0
+    address_check = "public"
     while True:
-        _assert_public_target(current, resolver)
+        if _assert_public_target(current, resolver) == "indeterminate":
+            address_check = "indeterminate"
         if current in seen:
             raise FetchRefused(
                 f"fetch refused: redirect loop at {current}")
@@ -571,7 +625,8 @@ def _guarded_fetch_prefix(url, *, opener=None, resolver=None):
         try:
             with opener.open(req, timeout=15) as response:
                 data = response.read(2_000_001)
-                return response.geturl(), data, len(data) > 2_000_000
+                return (response.geturl(), data, len(data) > 2_000_000,
+                        address_check)
         except HTTPError as ex:
             headers = (getattr(ex, "headers", None)
                        or getattr(ex, "hdrs", None))
@@ -599,16 +654,25 @@ def _bounded_fetch_prefix(url, *, opener=None, resolver=None):
     path is the guarded fetch above: this is the single fetch behind
     validate, install liveness, show and refresh-check, so no pack
     path bypasses the guard. ``opener``/``resolver`` exist for the
-    guard's own tests."""
-    return _guarded_fetch_prefix(url, opener=opener, resolver=resolver)
+    guard's own tests. The guard's address-check verdict is dropped
+    here (this contract predates it); callers that record the verdict
+    use ``_bounded_fetch``."""
+    final_url, data, oversized, _address_check = _guarded_fetch_prefix(
+        url, opener=opener, resolver=resolver)
+    return final_url, data, oversized
 
 
-def _bounded_fetch(url):
-    """Fetch with source_collection's discipline; return (final_url, bytes)."""
-    final_url, data, oversized = _bounded_fetch_prefix(url)
+def _bounded_fetch(url, *, opener=None, resolver=None):
+    """Fetch with source_collection's discipline; return (final_url,
+    bytes, address_check). Raises ValueError past the 2 MB cap instead
+    of returning a truncated prefix. ``address_check`` is the guard's
+    verdict ("public" / "indeterminate") so liveness can record how
+    the target was vetted, not just that it answered."""
+    final_url, data, oversized, address_check = _guarded_fetch_prefix(
+        url, opener=opener, resolver=resolver)
     if oversized:
         raise ValueError("response exceeds 2 MB")
-    return final_url, data
+    return final_url, data, address_check
 
 
 def _parse_item_date(text):
@@ -628,19 +692,36 @@ def _parse_item_date(text):
 
 
 def check_liveness(pack, *, fetch=None):
-    """Feed and homepage liveness for a normalized pack, keyed by source id."""
+    """Feed and homepage liveness for a normalized pack, keyed by source id.
+
+    A live feed result also carries ``address_check`` when the fetch
+    reported the guard's verdict (the default fetch does): "public"
+    when the feed's addresses were verified public, "indeterminate"
+    when they resolved into the proxy benchmarking range instead —
+    the result must not claim a verification that never happened.
+    Injected fetches return (final_url, bytes) and record no verdict.
+    """
     fetch = fetch or _bounded_fetch
     results = {}
     for src in pack.get("sources", []):
         result = {}
         if src.get("enabled") is True and src.get("feed_url"):
             try:
-                final_url, data = fetch(src["feed_url"])
+                fetched = fetch(src["feed_url"])
+                final_url, data = fetched[0], fetched[1]
+                # A third element is the guard's address-check verdict
+                # when it is a string; the (final_url, bytes, oversized)
+                # prefix contract's third element is a bool and is not
+                # a verdict (the _probe_feed normalization precedent).
+                address_check = (fetched[2] if len(fetched) == 3
+                                 and isinstance(fetched[2], str) else None)
                 records = parse_feed(data, final_url)
                 dates = [d for d in (_parse_item_date(r.get("published_at"))
                                      for r in records) if d]
                 result["feed"] = {"status": "live", "items": len(records),
                                   "newest": max(dates) if dates else None}
+                if address_check is not None:
+                    result["feed"]["address_check"] = address_check
             except HTTPError as ex:
                 result["feed"] = {"status": "dead", "error": f"HTTP {ex.code}"}
             except (ValueError, ET.ParseError) as ex:
@@ -798,7 +879,19 @@ def plan_install(pack, config_path, *, channel_override=None, liveness=None):
             "unverified": [{"name": c.get("name"), "reason": c.get("reason")}
                            for c in pack.get("unverified", [])],
             "attention_posts_per_month": 0.0, "attention_unknown": [],
-            "preexisting_source_ids": sorted(existing_by_id)}
+            "preexisting_source_ids": sorted(existing_by_id),
+            # F1 (promotion rehearsal): applying a plan rewrites the
+            # registry file wholesale in the serializer's canonical
+            # form — hand formatting and ALL comments are lost, and
+            # until this field existed nothing in the plan said so.
+            # The loss is recoverable (a timestamped backup is written
+            # first, and `focu pack restore` exists), but it must be
+            # disclosed at preview time, not discovered afterwards.
+            "registry_rewrite": (
+                "Applying this plan rewrites "
+                f"{Path(config_path).name} in canonical form; comments "
+                "and hand formatting in the current file are not "
+                "preserved (a timestamped backup is written first).")}
     planned_ids: dict[str, str] = {}
     planned_names: dict[str, str] = {}
     for src in pack["sources"]:
@@ -2094,7 +2187,7 @@ def _load_pack_argument(argument):
         data = path.read_bytes()
         origin = str(path)
     elif argument.startswith("https://"):
-        _final_url, data = _bounded_fetch(argument)
+        _final_url, data, _address_check = _bounded_fetch(argument)
         origin = argument
     else:
         candidate = PACKS_DIR / (argument if argument.endswith(".json")
@@ -2131,6 +2224,8 @@ def format_plan(plan) -> str:
         attention += ("; cadence unknown for "
                       + ", ".join(plan["attention_unknown"]))
     lines.append(attention)
+    if plan.get("registry_rewrite"):
+        lines.append(f"  note: {plan['registry_rewrite']}")
     for warning in plan["warnings"]:
         lines.append(f"  warning: {warning}")
     return "\n".join(lines)

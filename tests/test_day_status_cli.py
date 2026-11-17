@@ -161,13 +161,62 @@ class DayStatusCliTests(unittest.TestCase):
         self.assertEqual(out, "No day-status record for 1999-01-01. "
                               "No run exists for that date.\n")
 
-    def test_missing_record_for_a_run_predating_day_status(self):
-        # A run row with no day_status stage row: the pre-Q5 shape.
+    def test_missing_record_for_an_unfinished_run(self):
+        # F3: the missing-record line names the run's actual state.
+        # This fixture (ensure_run only) is a run that never finished —
+        # status "pending" — not a completed pre-Q5 run; the old line
+        # called every record-less run "predates day-status assembly",
+        # which misdiagnosed the rehearsal's failed day.
         self.store.ensure_run(self.today, self.cfg, "text_only")
         code, out = self.day_status("--date", self.today)
         self.assertEqual(code, 0)
         self.assertEqual(out, f"No day-status record for {self.today}. "
+                              "The run has not finished; no day-status "
+                              "record has been assembled yet.\n")
+
+    def test_missing_record_for_a_completed_run_predates_day_status(self):
+        # The genuine pre-Q5 shape: a completed run with no record.
+        run = self.store.ensure_run(self.today, self.cfg, "text_only")
+        with self.store.db:
+            self.store.db.execute(
+                "UPDATE runs SET status='completed' WHERE run_id=?",
+                (run["run_id"],))
+        code, out = self.day_status("--date", self.today)
+        self.assertEqual(code, 0)
+        self.assertEqual(out, f"No day-status record for {self.today}. "
                               "The run predates day-status assembly.\n")
+
+    def test_missing_record_for_a_failed_run_says_so(self):
+        # A failed run with no record (pre-D2b, or recording failed):
+        # the line says the run failed, not that it predates assembly.
+        run = self.store.ensure_run(self.today, self.cfg, "text_only")
+        with self.store.db:
+            self.store.db.execute(
+                "UPDATE runs SET status='failed' WHERE run_id=?",
+                (run["run_id"],))
+        code, out = self.day_status("--date", self.today)
+        self.assertEqual(code, 0)
+        self.assertEqual(out, f"No day-status record for {self.today}. "
+                              "The run failed and no day-status record "
+                              "was assembled for it.\n")
+
+    def test_failed_run_renders_its_failure_record(self):
+        # D2b end to end: a compose failure leaves a record, and the
+        # surface renders it — outcome failed, the failure named — with
+        # no missing-record line anywhere.
+        from focu.daily.errors import FewError
+        qc_error = FewError("briefing script omitted source items or "
+                            "figures", "briefing_qc_failed", 4)
+        with patch("focu.daily.pipeline.compose", side_effect=qc_error):
+            with self.assertRaises(FewError):
+                run_pipeline(self.store, self.cfg, self.today, "text_only",
+                             self.units_file([self.item()]))
+        code, out = self.day_status()
+        self.assertEqual(code, 0)
+        self.assertIn(f"Day status for {self.today} — failed", out)
+        self.assertIn("- compose: briefing script omitted source items "
+                      "or figures", out)
+        self.assertNotIn("No day-status record", out)
 
     def test_missing_store_prints_one_line_and_creates_nothing(self):
         missing = self.root / "no-such-data"
