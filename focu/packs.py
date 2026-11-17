@@ -1,5 +1,5 @@
 """Curated source packs: catalog, validation, preview, install, update,
-show, uninstall, restore.
+show, uninstall, restore, refresh-check.
 
 A source pack is a versioned, curator-signed list of sources (schema v1,
 ``schemas/source-pack.schema.json``). This module is the bridge between the
@@ -417,14 +417,24 @@ def _host_set(locators):
 # Liveness (design section 6, rules 8-9). Network results are recorded,
 # never raised: a dead feed is data for the plan, not an exception.
 
-def _bounded_fetch(url):
-    """Fetch with source_collection's discipline; return (final_url, bytes)."""
+def _bounded_fetch_prefix(url):
+    """Fetch with source_collection's discipline; return (final_url, bytes,
+    oversized). Same UA, timeout and 2 MB read bound as ``_bounded_fetch``,
+    but an over-cap response is returned (truncated at the cap) with
+    ``oversized`` set instead of raised: refresh-check needs to tell a
+    valid feed that outgrew the cap apart from a dead one."""
     req = Request(url, headers={"User-Agent": "Focu/0.2 (+explicit source collection)"})
     with urlopen(req, timeout=15) as response:
         data = response.read(2_000_001)
-        if len(data) > 2_000_000:
-            raise ValueError("response exceeds 2 MB")
-        return response.geturl(), data
+        return response.geturl(), data, len(data) > 2_000_000
+
+
+def _bounded_fetch(url):
+    """Fetch with source_collection's discipline; return (final_url, bytes)."""
+    final_url, data, oversized = _bounded_fetch_prefix(url)
+    if oversized:
+        raise ValueError("response exceeds 2 MB")
+    return final_url, data
 
 
 def _parse_item_date(text):
@@ -1104,6 +1114,264 @@ def show_pack(raw_pack, config_path=None, *, check_feeds=True, fetch=None,
 
 
 # ---------------------------------------------------------------------------
+# Refresh check: packs rot — feeds die, feeds outgrow the fetch cap,
+# authors move. This is a REPORT ONLY: it re-probes every source's feed
+# through the same bounded fetch as validation and diffs what it finds
+# against the pack's recorded state (last_post_at, verified_at). It
+# writes nothing — refreshing a pack stays a curator's research act,
+# never an automatic rewrite.
+#
+# Feed status taxonomy:
+#   live        fetched and parsed as RSS/Atom
+#   not_a_feed  fetched, but the body does not parse as a feed (an HTML
+#               interstitial, malformed XML, oversized non-feed content)
+#   http_error  the host answered with an HTTP error status
+#   unreachable no answer at all from here (DNS/connect/reset/timeout) —
+#               a property of this vantage point as much as of the feed
+#   oversized   the response begins as a feed document but exceeds the
+#               2 MB fetch cap, so Focu cannot consume it (a Substack
+#               full-text feed measured ~2.87 MB live, 2026-11-17)
+#   no_feed     the source records no feed_url; nothing to probe
+
+_FEED_ROOT = re.compile(rb"<(rss|feed|rdf:RDF)(?=[\s>])")
+
+
+def _looks_like_feed_prefix(data):
+    """Does this (possibly truncated) body begin as a feed document?
+
+    Skips a BOM, an XML prolog, a DOCTYPE and leading comments, then
+    asks whether the root element is rss / Atom feed / rdf:RDF. Used
+    only for over-cap responses, where a full parse is impossible.
+    """
+    prefix = data[:8192]
+    if prefix.startswith(b"\xef\xbb\xbf"):
+        prefix = prefix[3:]
+    prefix = prefix.lstrip()
+    for opener, closer in ((b"<?xml", b"?>"), (b"<!DOCTYPE", b">"),
+                           (b"<!--", b"-->")):
+        if prefix.startswith(opener):
+            end = prefix.find(closer)
+            if end == -1:
+                return False
+            prefix = prefix[end + len(closer):].lstrip()
+    return bool(_FEED_ROOT.match(prefix))
+
+
+def _probe_feed(url, fetch):
+    """One bounded feed probe; every outcome is data, never an exception."""
+    try:
+        result = fetch(url)
+    except HTTPError as ex:
+        return {"status": "http_error", "error": f"HTTP {ex.code}"}
+    except (URLError, TimeoutError, OSError) as ex:
+        return {"status": "unreachable", "error": str(ex)}
+    except ValueError as ex:
+        # An injected fetch with _bounded_fetch's contract raises on
+        # oversize instead of returning the prefix; the cap is still
+        # the finding, the prefix is just unavailable for sniffing.
+        if "exceeds" in str(ex):
+            return {"status": "oversized",
+                    "error": "response exceeds the 2 MB fetch cap"}
+        return {"status": "not_a_feed", "error": str(ex)}
+    if len(result) == 3:
+        final_url, data, oversized = result
+    else:  # check_liveness-style (final_url, bytes) fixtures
+        final_url, data = result
+        oversized = len(data) > 2_000_000
+    if oversized:
+        if _looks_like_feed_prefix(data):
+            return {"status": "oversized",
+                    "error": "feed document exceeds the 2 MB fetch cap"}
+        return {"status": "not_a_feed",
+                "error": "response exceeds the 2 MB fetch cap and does "
+                         "not begin as a feed document"}
+    try:
+        records = parse_feed(data, final_url)
+    except (ValueError, ET.ParseError) as ex:
+        return {"status": "not_a_feed", "error": str(ex)}
+    dates = [d for d in (_parse_item_date(r.get("published_at"))
+                         for r in records) if d]
+    return {"status": "live", "items": len(records),
+            "newest": max(dates) if dates else None}
+
+
+def _age_days(value, today):
+    if not _is_date(value):
+        return None
+    return (today - date.fromisoformat(value)).days
+
+
+def _refresh_signals(src, feed, *, today, vantage_ok):
+    """Stale signals for one source: current probe vs recorded state.
+
+    An enabled source's feed health is a pack claim (it costs the user
+    attention), so a broken enabled feed signals; a disabled source's
+    feed state is already priced into the pack, so only resumed
+    activity (newer items than recorded) signals there. Unreachable
+    signals only when at least one other probe was answered — when
+    nothing at all was reached, unreachability describes our vantage
+    point, not the pack, and the verdict says so instead.
+    """
+    signals = []
+    enabled = src.get("enabled") is True
+    recorded = src.get("last_post_at")
+    status = feed["status"]
+    if status == "live":
+        newest = feed.get("newest")
+        if newest and (recorded is None or newest > recorded):
+            detail = (f"feed's newest item {newest} is newer than the "
+                      f"recorded last_post_at {recorded} — cadence "
+                      "evidence has moved" if recorded else
+                      f"pack records no last_post_at; the feed's "
+                      f"newest item is {newest}")
+            signals.append({"kind": "newer_items", "detail": detail})
+        elif enabled and newest and recorded and newest < recorded:
+            signals.append(
+                {"kind": "newest_mismatch",
+                 "detail": f"recorded last_post_at {recorded} is newer "
+                           f"than the feed's newest item {newest} — "
+                           "the record and the feed disagree"})
+    elif enabled:
+        kind = {"http_error": "feed_http_error",
+                "not_a_feed": "feed_not_a_feed",
+                "unreachable": "feed_unreachable",
+                "oversized": "feed_oversized"}.get(status)
+        if kind == "feed_unreachable" and not vantage_ok:
+            kind = None
+        if kind:
+            detail = {"feed_http_error":
+                      f"enabled feed now answers {feed.get('error')}",
+                      "feed_not_a_feed":
+                      f"enabled feed no longer parses as RSS/Atom: "
+                      f"{feed.get('error')}",
+                      "feed_unreachable":
+                      f"enabled feed unreachable from here: "
+                      f"{feed.get('error')}",
+                      "feed_oversized":
+                      "enabled feed is a valid feed document but "
+                      "exceeds the 2 MB fetch cap; Focu cannot "
+                      "consume it"}[kind]
+            signals.append({"kind": kind, "detail": detail})
+    verified_age = _age_days(src.get("verified_at"), today)
+    if verified_age is not None and verified_age > STALE_DAYS:
+        signals.append(
+            {"kind": "verification_stale",
+             "detail": f"source verified_at {src['verified_at']} is "
+                       f"{verified_age} days old (stale after "
+                       f"{STALE_DAYS})"})
+    return signals
+
+
+def refresh_check(raw_pack, config_path=None, *, fetch=None, today=None):
+    """Re-verify one pack against the live web; report only, no writes.
+
+    Every source with a feed_url is probed serially through the bounded
+    fetch (an injectable ``fetch`` may return ``(final_url, bytes)`` or
+    ``(final_url, bytes, oversized)``). The verdict is one line:
+    ``current``, ``N stale signal(s)``, or ``unverifiable from here``
+    (no probe was answered, or the pack has no feeds to probe).
+    Install state is read from the manifest beside ``config_path``
+    when one is given, exactly as in :func:`show_pack`.
+    """
+    today = today or date.today()
+    fetch = fetch or _bounded_fetch_prefix
+    report = validate_pack(raw_pack, today=today)
+    if not report["valid"]:
+        raise ValueError("pack validation failed: "
+                         + "; ".join(report["errors"]))
+    pack = report["pack"]
+    probed = []
+    for src in pack["sources"]:
+        if src.get("feed_url"):
+            feed = _probe_feed(src["feed_url"], fetch)
+        else:
+            feed = {"status": "no_feed"}
+        probed.append((src, feed))
+    answered = sum(1 for _src, feed in probed
+                   if feed["status"] not in ("no_feed", "unreachable"))
+    vantage_ok = answered > 0
+    sources = []
+    stale = 0
+    for src, feed in probed:
+        signals = _refresh_signals(src, feed, today=today,
+                                   vantage_ok=vantage_ok)
+        stale += len(signals)
+        sources.append(
+            {"id": src["id"], "name": src["name"],
+             "enabled": bool(src.get("enabled", True)),
+             "feed_url": src.get("feed_url"),
+             "recorded_last_post_at": src.get("last_post_at"),
+             "verified_at": src.get("verified_at"),
+             "verified_age_days": _age_days(src.get("verified_at"), today),
+             "feed": feed, "signals": signals})
+    pack_signals = []
+    pack_age = _age_days(pack.get("verified_at"), today)
+    if pack_age is not None and pack_age > STALE_DAYS:
+        pack_signals.append(
+            {"kind": "verification_stale",
+             "detail": f"pack verified_at {pack['verified_at']} is "
+                       f"{pack_age} days old (stale after {STALE_DAYS})"})
+        stale += 1
+    if not vantage_ok:
+        # Nothing answered (or nothing to probe): from here we cannot
+        # tell a rotten pack from a healthy one, and the verdict must
+        # not pretend otherwise.
+        verdict = "unverifiable from here"
+    elif stale:
+        verdict = f"{stale} stale signal" + ("s" if stale != 1 else "")
+    else:
+        verdict = "current"
+    installed = {"installed": False}
+    if config_path is not None:
+        manifest = load_manifest(config_path)
+        records = [r for r in manifest["packs"]
+                   if r.get("pack_id") == pack["id"]]
+        if records:
+            record = records[-1]
+            installed = {"installed": True,
+                         "installed_version": record.get("version"),
+                         "available_version": pack["version"],
+                         "update_available":
+                             record.get("version") != pack["version"],
+                         "installed_at": record.get("installed_at")}
+    return {"pack": {"id": pack["id"], "title": pack["title"],
+                     "version": pack["version"],
+                     "verified_at": pack["verified_at"],
+                     "verified_age_days": pack_age},
+            "checked_at": today.isoformat(),
+            "sources": sources, "signals": pack_signals,
+            "stale_signals": stale, "verdict": verdict,
+            "installed": installed}
+
+
+def refresh_check_bundled(config_path=None, *, fetch=None, today=None):
+    """Refresh-check every bundled pack; per-file failures are entries,
+    not exceptions (the :func:`pack_catalog` precedent). Report only."""
+    today = today or date.today()
+    packs = []
+    for path in sorted(PACKS_DIR.glob("*.json")):
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            packs.append({"file": path.name, "error": "unreadable"})
+            continue
+        if not isinstance(raw, dict):
+            packs.append({"file": path.name,
+                          "error": "pack must be a JSON object"})
+            continue
+        try:
+            report = refresh_check(raw, config_path, fetch=fetch,
+                                   today=today)
+        except ValueError as ex:
+            packs.append({"file": path.name, "id": raw.get("id"),
+                          "error": str(ex)})
+            continue
+        report["file"] = path.name
+        packs.append(report)
+    return {"packs": packs, "checked_at": today.isoformat()}
+
+
+# ---------------------------------------------------------------------------
 # Update (design section 7): explicit, pinned, previewed. The diff is
 # computed against the manifest snapshot (the latest install record for
 # the pack); removed sources are detached only when this pack solely
@@ -1648,6 +1916,49 @@ def format_show(report) -> str:
     return "\n".join(lines)
 
 
+def format_refresh(report) -> str:
+    pack = report["pack"]
+    lines = [f"Pack {pack['id']} v{pack['version']} — {pack['title']}",
+             f"  verified {pack['verified_at']} "
+             f"({pack['verified_age_days']} days ago); "
+             f"checked {report['checked_at']}"]
+    installed = report["installed"]
+    if installed.get("installed"):
+        state = f"  installed: v{installed['installed_version']}"
+        if installed["update_available"]:
+            state += f"; update available → v{installed['available_version']}"
+        lines.append(state)
+    for src in report["sources"]:
+        feed = src["feed"]
+        state = "enabled" if src["enabled"] else "disabled"
+        detail = feed["status"]
+        if feed["status"] == "live":
+            detail += (f" ({feed['items']} items, "
+                       f"newest {feed['newest']})")
+        elif feed.get("error"):
+            detail += f" — {feed['error']}"
+        lines.append(f"  - {src['name']} [{state}] feed: {detail}")
+        lines.append(f"      recorded last post: "
+                     f"{src['recorded_last_post_at'] or 'none'}")
+        for sig in src["signals"]:
+            lines.append(f"      ! {sig['kind']}: {sig['detail']}")
+    for sig in report["signals"]:
+        lines.append(f"  ! {sig['kind']}: {sig['detail']}")
+    lines.append(f"  verdict: {report['verdict']}")
+    return "\n".join(lines)
+
+
+def format_refresh_all(report) -> str:
+    blocks = []
+    for item in report["packs"]:
+        if item.get("error"):
+            blocks.append(f"{item.get('id') or item['file']}: "
+                          f"error — {item['error']}")
+        else:
+            blocks.append(format_refresh(item))
+    return "\n".join(blocks)
+
+
 def format_update_plan(plan) -> str:
     pack = plan["pack"]
     lines = [f"Pack {pack['id']} v{plan['installed_version']} → "
@@ -1760,6 +2071,15 @@ def main(argv=None) -> int:
     update.add_argument("--yes", action="store_true",
                         help="Apply without the interactive confirmation")
     update.add_argument("--json", action="store_true")
+    refresh = sub.add_parser(
+        "refresh-check",
+        help="Re-verify pack(s) against live feeds; report only, "
+             "writes nothing")
+    refresh.add_argument("pack", nargs="?", default=None,
+                         help="One pack (file, HTTPS URL or bundled id); "
+                              "default: every bundled pack")
+    refresh.add_argument("--config", default="sources.yaml")
+    refresh.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
 
     if args.action == "validate":
@@ -1885,6 +2205,21 @@ def main(argv=None) -> int:
             _print_json(result)
         else:
             print(format_show(result))
+        return 0
+    if args.action == "refresh-check":
+        if args.pack:
+            raw, _sha, _origin = _load_pack_argument(args.pack)
+            result = refresh_check(raw, args.config)
+            if args.json:
+                _print_json(result)
+            else:
+                print(format_refresh(result))
+        else:
+            result = refresh_check_bundled(args.config)
+            if args.json:
+                _print_json(result)
+            else:
+                print(format_refresh_all(result))
         return 0
     if args.action == "update":
         raw, sha, _origin = _load_pack_argument(args.pack)
