@@ -1,6 +1,6 @@
 # Focu personal secretary briefing style
 
-**Version:** 2026-11-14.1
+**Version:** 2026-11-16.1
 **Owner:** Jerry Yu
 **Purpose:** Source of truth for scripted daily briefings and Muse/Open Notebook generation prompts.
 **Edit policy:** Change this file, append a dated changelog entry, commit, and use the updated version for future (not frozen) episodes. No source registration or production state change is required.
@@ -10,7 +10,7 @@
 The YAML block below is read by `focu.briefing` and the daily composer. Keep the setting names stable; edit the values to change the next briefing.
 
 ```yaml
-version: "2026-11-14.1"
+version: "2026-11-16.1"
 language: en
 recipient: "Jerry"
 speaker_label: "Host: "
@@ -56,6 +56,8 @@ forbidden_phrases:
 
 10. **Links are locators, not content.** URLs stay in the written article, where they can be tapped; the spoken script never reads a URL aloud — read the content the link points to, not the link. Digits inside a URL (post IDs, tracking parameters) are not figures, and dotted version identifiers (v1.0.0, 2.5.1) are product identifiers, not measured quantities: coverage QC excludes both from the key figures a script must preserve, so a script is never failed — or padded — for omitting them.
 
+11. **Research podcasts are a separate text from the report (issue #48).** This requirement governs standalone research podcasts (user-initiated items), not the daily briefing, whose figure coverage under requirement #5 is unchanged pending a separate owner decision. A research report and its podcast are two deliverables with two texts: the report/article is the evidence layer — complete, precise, numbers, charts, tables, citations, consumed by eye; the podcast is an audio-native summary written from the report, never a narration or transformation of it. The spoken script states each section's **conclusion** first, then what was investigated and how the evidence supports the conclusion in qualitative form, plus differing viewpoints and limits. **Audio numbers policy:** a number is spoken only when the number itself is the conclusion (e.g. a promised-versus-delivered gap, a pass/fail measurement), stated once and briefly; statistics are never enumerated — no chart readouts, no table narration, no figure lists, no per-item price/stat sequences. QC for research podcasts is conclusion/evidence coverage (`check_fidelity` summary mode): every report section's heading present in order, no section reduced to a name-drop, and figure-density limits that reject number-dense scripts. Figure-token completeness (`missing_figures`) no longer applies to research podcasts.
+
 ## Required QC gate
 
 - Generate a unit/section manifest with stable IDs and original numeric facts.
@@ -65,6 +67,7 @@ forbidden_phrases:
 - Reject unresolved visual locators in daily text/articles and transcripts. A figure index is not a measured value; preserve actual data.
 - Run the boilerplate detector over every script and every briefing article; any hit fails QC (`boilerplate_contamination`) and blocks synthesis and publication until the text is cleaned.
 - Persist QC results and style version/hash with the generated script. For externally authored scripts, run the same validator before audio synthesis.
+- Research podcasts use the summary-mode gate instead (style v2026-11-16.1, requirement #11): section/conclusion coverage plus figure-density limits (`figure_dense`, `section_too_thin`); a summary script must never be failed for omitting the article's figures.
 - These automated checks are not a substitute for factual review of paraphrases.
 
 ## Changelog
@@ -76,3 +79,4 @@ forbidden_phrases:
 
 - **2026-11-10 — v2026-11-10.3:** Integrate the missing-visual-reference prohibition and QC from PR #35 with the agenda and press-release boilerplate policy already on main. Both gates remain active.
 - **2026-11-14 — v2026-11-14.1:** Owner feedback: the Nov 14 briefing's audio read all 34 LinkedIn permalinks aloud, because coverage QC treated the digits inside each URL as key figures and the authored script failed QC for omitting them. New requirement #10: links are locators, not content — URLs stay in the article, are never read aloud, and URL digits plus dotted version identifiers are excluded from key-figure extraction in both the daily composer and the single-podcast fidelity check; the deterministic fallback script strips URLs before synthesis.
+- **2026-11-16 — v2026-11-16.1:** Owner feedback (issue #48): after listening to the AI explainer-video-tools research episode, the owner ruled that a research report and its podcast are two separate deliverables with separate texts — the figure-fidelity gate had forced chart values and statistic lists to be read aloud, which is unprocessable in audio. New requirement #11: research podcasts are summary-first audio texts (conclusions, investigation, evidence in qualitative form, viewpoints); the audio numbers policy allows a number only when the number itself is the conclusion, stated once; `check_fidelity` gains a default summary mode (conclusion/section coverage + figure-density rejection) and the old figure-token gate remains only as explicit verbatim mode. The daily briefing's figure coverage is unchanged; whether it relaxes the same way is a separate owner decision recorded in issue #48.

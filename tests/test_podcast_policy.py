@@ -199,7 +199,7 @@ class PodcastPolicyTests(unittest.TestCase):
             self.assertFalse((folder / "podcast.mp3").exists())
             qc = json.loads((folder / "podcast-qc.json").read_text())
             self.assertFalse(qc["passed"])
-            self.assertTrue(any(e["issue"] == "missing_figures"
+            self.assertTrue(any(e["issue"] == "section_too_thin"
                                 for attempt in qc["attempts"] for e in attempt["issues"]))
             self.assertTrue((folder / "article.md").is_file())
 
@@ -212,9 +212,73 @@ class PodcastPolicyTests(unittest.TestCase):
         reversed_order = check_fidelity(ARTICLE, "Measurements. 7.9% 48.1%. " +
                                          TRANSCRIPT.replace("Measurements.", "Measurements again."), "machine_learning")
         self.assertFalse(reversed_order["passed"])
-        figures = check_fidelity(ARTICLE, BAD, "machine_learning")
+        thin = check_fidelity(ARTICLE, BAD, "machine_learning")
+        self.assertFalse(thin["passed"])
+        self.assertTrue(any(i["issue"] == "section_too_thin" for i in thin["issues"]))
+
+    def test_verbatim_mode_still_enforces_figures(self):
+        passing = check_fidelity(ARTICLE, TRANSCRIPT, "machine_learning", mode="verbatim")
+        self.assertTrue(passing["passed"], passing["issues"])
+        self.assertEqual(passing["mode"], "verbatim")
+        figures = check_fidelity(ARTICLE, BAD, "machine_learning", mode="verbatim")
         self.assertFalse(figures["passed"])
         self.assertTrue(any(i["issue"] == "missing_figures" for i in figures["issues"]))
+
+    def test_summary_mode_passes_number_light_summary(self):
+        summary = """Mechanism. The edit worked by changing a small, selected subset of parameters rather than retraining the whole network, which is what makes the approach cheap enough to repeat.
+Measurements. Accuracy improved dramatically after the targeted update, rising from a near-failure level to a usable one, and the improvement was specific to the edited behaviour.
+Negative control. The unedited model showed no such improvement, which rules out the gain being an artefact of the evaluation setup rather than the edit itself.
+Independent verification. A separate implementation reproduced the central result, which strengthens confidence that the effect is real and not tied to one codebase."""
+        report = check_fidelity(ARTICLE, summary, "machine_learning")
+        self.assertTrue(report["passed"], report["issues"])
+        self.assertEqual(report["mode"], "summary")
+        verbatim = check_fidelity(ARTICLE, summary, "machine_learning", mode="verbatim")
+        self.assertFalse(verbatim["passed"])
+
+    def test_summary_mode_rejects_figure_enumeration(self):
+        dense = """Mechanism. A 131,072-weight edit changed a selected parameter subset, not the full network.
+Measurements. The scores were 7.9% and 48.1% and 3.2 and 9,412 and 55 and 1.07 and 800 and 12% across the eight reported benchmarks in the table.
+Negative control. The unedited model was used as a negative control and did not show the improvement.
+Independent verification. A separate implementation reproduced the central measurements."""
+        report = check_fidelity(ARTICLE, dense, "machine_learning")
+        self.assertFalse(report["passed"])
+        self.assertTrue(any(i["issue"] == "figure_dense" for i in report["issues"]))
+
+    def test_summary_mode_rejects_heading_only_section(self):
+        dropped = """Mechanism. The edit worked by changing a small, selected subset of parameters rather than retraining the whole network, which is what makes the approach cheap.
+Measurements.
+Negative control. The unedited model showed no improvement at all, which rules out the gain being an artefact of the evaluation setup rather than the edit itself.
+Independent verification. A separate implementation reproduced the central result, which strengthens confidence that the effect is real and not tied to one codebase."""
+        report = check_fidelity(ARTICLE, dropped, "machine_learning")
+        self.assertFalse(report["passed"])
+        self.assertTrue(any(i["issue"] == "section_too_thin" for i in report["issues"]))
+
+    def test_summary_mode_audits_h2_not_h3(self):
+        article = """# Deep Report
+
+## Findings
+The overall finding is that the approach works under the stated conditions.
+
+### Method detail
+A 4,096-sample run with 12 configurations produced the underlying numbers.
+
+## Limits
+The evidence comes from a single site and has not been replicated elsewhere.
+"""
+        summary = """Findings. The approach works under the stated conditions, based on a controlled run whose configuration details are in the written report for anyone who wants them.
+Limits. The evidence comes from a single site and has not been replicated elsewhere, so the finding should be treated as provisional until a second site confirms it."""
+        report = check_fidelity(article, summary, "machine_learning")
+        self.assertTrue(report["passed"], report["issues"])
+        self.assertEqual(report["article_sections"], 2)
+        verbatim = check_fidelity(article, summary, "machine_learning", mode="verbatim")
+        self.assertFalse(verbatim["passed"])
+
+    def test_podcast_prompt_is_summary_first(self):
+        prompt = podcast_prompt(ARTICLE, "machine_learning")
+        self.assertIn("Numbers policy", prompt)
+        self.assertIn("Never enumerate statistics", prompt)
+        self.assertNotIn("retain every numeric value", prompt)
+        self.assertNotIn('"figures"', prompt)
 
     def test_audience_expert_novice_and_report_only_mismatch(self):
         profile = load_profile()
