@@ -1,5 +1,7 @@
 # Focu Learning Loop — Design (Project Manager, wave 6)
 
+> Status: Phases 1–3 shipped on dev-main during the 2026-11-17 run, plus renewal/pause-review proposals, the anti-spiral step rule, and sparsity accounting; "(next run)" labels below are history.
+
 - Scope: the owner's point 8 — "Focu must get smarter; the more the user uses it, the more it understands the user" — under the PRD's hard constraint: **no silent learning** (PRD §1, objective 5). This doc designs P2-1, P2-2, and P2-3 as one system.
 - Governing document: `attention-sovereignty.md`. The agent applies priorities the user defined; it reduces the cost of *the user deciding*, it does not decide for them. Where this doc and the article disagree, the article wins.
 - Grounding: reader code and pipeline code as of dev-main, 2026-11-17. Tool numbers measured live via the GitHub API on 2026-11-17.

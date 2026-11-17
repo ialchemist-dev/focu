@@ -2,6 +2,8 @@
 
 Current integrated version: **0.4.0**. Research/evidence handoff, podcast delivery, finite mobile reader, versioned source packs, explicit feedback, collector PoCs, auditable snapshots, and the recoverable daily pipeline are available on `main`. Recurring research orchestration and authenticated mobile hosting remain host integration work.
 
+> Development note: active development happens on the dev-main branch — see "Development — the dev-main branch and the multi-agent team" below; main carries the last integrated release.
+
 **Agent-native Attention Infrastructure** — focus on what matters, stay quiet about the rest.
 
 Focu is evolving from the original feed-to-podcast prototype into an intent-led, evidence-backed information workflow. The current v0.2 code implements research-intent capture, evidence persistence and agent handoff; recurring Watches, change detection and silence-by-default delivery are **planned, not yet implemented**.

@@ -1,5 +1,7 @@
 # Focu Exchange — backend design: source-pack schema v1, import flow, validation, versioning
 
+> Superseded in part: the pack CLI sketched here shipped as the focu pack surface (validate/preview/install/uninstall/restore/list/catalog/show/update/refresh-check/refresh-due); treat command sketches below as design history.
+
 **Author:** backend developer agent, 24h dev run, wave 1 (design + data only; no code changes this wave)
 **Status:** design for PM/infra review. Working name "Focu Exchange" per STATE.md (owner may veto/rename).
 **Scope:** the backend contract for curated source packs: schema v1, one-step install into
