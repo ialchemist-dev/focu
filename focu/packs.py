@@ -54,6 +54,22 @@ PACKS_DIR = Path(__file__).with_name("source_packs")
 MANIFEST_NAME = "packs-installed.json"
 SCHEMA_VERSION = 1
 STALE_DAYS = 180
+# Cadence-vs-value flags (self-iteration Q4). A source at or above
+# HIGH_VOLUME_POSTS_PER_MONTH publishes roughly five times a week: in a
+# daily briefing that is a near-daily attention tax, not an occasional
+# item. A single source at or above DOMINANT_SHARE of a pack whose total
+# is at least DOMINANT_MIN_POSTS_PER_MONTH means installing the pack
+# mostly means subscribing to that one source (the geothermal pack's
+# ThinkGeoEnergy wire: 78 of ≈92 posts/month, measured 2026-11-17).
+# Both flags are preview warnings only — nothing is capped, demoted or
+# excluded; the preview is the judgment surface and the user decides
+# (the Q6 dedupe-warning precedent). Dominance alone does not flag at
+# low absolute volume: a weekly newsletter that is 70% of a ≈6/month
+# people pack (Import AI in the Anthropic pack) is the pack working as
+# intended, not a tax.
+HIGH_VOLUME_POSTS_PER_MONTH = 20
+DOMINANT_SHARE = 0.5
+DOMINANT_MIN_POSTS_PER_MONTH = 20
 # The publishing catalog's owner, used only as the flagged default for
 # legacy packs that predate the curator field (design section 3.4).
 DEFAULT_CURATOR = {"name": "AI Praxis Lab Source Library",
@@ -686,6 +702,11 @@ def plan_install(pack, config_path, *, channel_override=None, liveness=None):
             else:
                 plan["attention_posts_per_month"] = round(
                     plan["attention_posts_per_month"] + ppm, 4)
+    plan["warnings"].extend(cadence_warnings(
+        [(add["name"], add["cadence_posts_per_month"],
+          add["entry"].get("max_items_per_day"))
+         for add in plan["adds"] if add["enabled"]],
+        total=plan["attention_posts_per_month"]))
     return plan
 
 
@@ -916,6 +937,45 @@ def _attention_total(pack):
     return round(total, 4), unknown
 
 
+def cadence_warnings(items, total=None):
+    """Q4 cadence-vs-value flags over enabled sources with known cadence.
+
+    ``items`` is an iterable of (name, posts_per_month, max_items_per_day)
+    triples for ENABLED sources only; unknown cadences are skipped (they
+    are reported separately as unknown, never flagged on a guess).
+    ``total`` is the attention total the items are shares of; when omitted
+    it is the sum of the known cadences. Returns one warning per flagged
+    source, loudest first. Warnings only: this function decides nothing.
+    """
+    known = [(name, ppm, cap) for name, ppm, cap in items
+             if _is_nonneg_number(ppm)]
+    if total is None:
+        total = round(sum(ppm for _name, ppm, _cap in known), 4)
+    warnings = []
+    for name, ppm, cap in sorted(known, key=lambda row: -row[1]):
+        share = (ppm / total) if total else 0.0
+        dominant = (total >= DOMINANT_MIN_POSTS_PER_MONTH
+                    and share >= DOMINANT_SHARE)
+        high_volume = ppm >= HIGH_VOLUME_POSTS_PER_MONTH
+        if not (dominant or high_volume):
+            continue
+        if dominant:
+            text = (f"source {name!r} dominates this pack: "
+                    f"≈{ppm:g} posts/month is {share:.0%} of its "
+                    f"≈{total:g} posts/month — installing the pack mostly "
+                    f"means subscribing to this one source")
+        else:
+            text = (f"source {name!r} is high-volume: ≈{ppm:g} posts/month "
+                    f"({share:.0%} of this pack's ≈{total:g} posts/month) "
+                    f"— it will claim briefing space most days")
+        if cap is not None:
+            text += f" (curator cap: {cap}/day)"
+        text += ("; the choice stays yours — install as-is, or ask the "
+                 "curator for a lower max_items_per_day")
+        warnings.append(text)
+    return warnings
+
+
 def pack_catalog(config_path=None):
     """Every bundled pack, with install state from the manifest.
 
@@ -1036,7 +1096,10 @@ def show_pack(raw_pack, config_path=None, *, check_feeds=True, fetch=None,
                            for c in pack.get("unverified", [])],
             "attention_posts_per_month": total,
             "attention_unknown": unknown,
-            "warnings": report["warnings"],
+            "warnings": report["warnings"] + cadence_warnings(
+                [(s["name"], s["cadence_posts_per_month"],
+                  s["max_items_per_day"]) for s in sources if s["enabled"]],
+                total=total),
             "installed": installed}
 
 
@@ -1124,6 +1187,8 @@ def plan_update(pack, config_path, *, liveness=None, records=None):
     if plan["already_current"]:
         return plan
 
+    attention_items = []
+
     def note_attention(src, enabled):
         if not enabled:
             return
@@ -1134,6 +1199,8 @@ def plan_update(pack, config_path, *, liveness=None, records=None):
         else:
             plan["attention_posts_per_month"] = round(
                 plan["attention_posts_per_month"] + ppm, 4)
+            attention_items.append(
+                (src["name"], ppm, src.get("max_items_per_day")))
 
     old_by_identity = {}
     old_by_name = {}
@@ -1329,6 +1396,8 @@ def plan_update(pack, config_path, *, liveness=None, records=None):
              "entry": entry, "cadence_posts_per_month": ppm,
              "last_post_at": src.get("last_post_at"), "liveness": live})
         note_attention(src, enabled)
+    plan["warnings"].extend(cadence_warnings(
+        attention_items, total=plan["attention_posts_per_month"]))
     return plan
 
 
