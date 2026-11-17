@@ -101,15 +101,6 @@ MIN_USEFUL_EVENTS = 3
 PROMOTE_WEIGHT = 1.25         # promotion requires the owner's own useful marks
 MAX_OPEN_PROPOSALS = 3        # the weekly attention budget (design §2.2)
 REVIEW_AFTER_DAYS = 90
-# Anti-spiral constants (design §6.1): at most one accepted demotion
-# step per target per 90 days, and a pause earns its quarterly review
-# once it is 90 days old.
-DEMOTION_STEP_WINDOW_DAYS = 90
-PAUSE_REVIEW_MIN_AGE_DAYS = 90
-# Proposal-only kinds: accepting one refreshes an existing record entry
-# in place; it never appends one. Their target is the entry id (lp-NNN),
-# so snoozes and the quarterly gate key per entry, not per source.
-RENEWAL_PROPOSAL_KINDS = {"entry_renewal", "pause_review"}
 
 
 # --------------------------------------------------------------------------
@@ -541,7 +532,10 @@ def _review_candidates(record, history, db_path, daily_dir, today: date):
                 "statement": (
                     f"Keep entry {entry['id']} in force "
                     f"({entry['statement']}) and review again in "
-                    f"{REVIEW_AFTER_DAYS} days."),
+                    f"{REVIEW_AFTER_DAYS} days. Dismissing with 'never' "
+                    "retires this renewal question for the entry; the "
+                    "entry itself stays active until you edit the "
+                    "record by hand."),
                 "evidence": _entry_current_evidence(
                     entry, db_path, daily_dir, today),
             })
@@ -742,8 +736,9 @@ def dismiss_proposal(proposal_id, db_path="data/focu.sqlite3", never: bool = Fal
 def show(db_path="data/focu.sqlite3", record_path=RECORD_PATH,
          now: datetime | None = None) -> dict:
     """The record, inspectable: every active entry carries its age in
-    days (design §3.4 — staleness is visible even when no renewal
-    proposal has been sent)."""
+    days and its distance to the review date in days (negative once
+    the review is overdue) — design §3.4: staleness is visible even
+    when no renewal proposal has been sent."""
     now = now or datetime.now(timezone.utc)
     today = now.date()
     record, error = safe_load_record(record_path)
@@ -757,6 +752,11 @@ def show(db_path="data/focu.sqlite3", record_path=RECORD_PATH,
                 today - date.fromisoformat(entry["created_at"])).days
         except (KeyError, ValueError):
             shown["age_days"] = None
+        try:
+            shown["review_in_days"] = (
+                date.fromisoformat(entry["review_after"]) - today).days
+        except (KeyError, ValueError):
+            shown["review_in_days"] = None
         entries.append(shown)
     result = {
         "record_path": str(record_path),

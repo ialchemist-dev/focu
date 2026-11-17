@@ -174,6 +174,16 @@ class RenewalProposalTests(ReviewFixture):
         self.assertEqual(len(result["proposals"]), 3)
         self.assertEqual(result["proposals"][0]["kind"], "renewal")
 
+    def test_renewal_statement_states_never_semantics(self):
+        # The proposal text itself must say what a 'never' dismissal
+        # does and does not do: the question retires, the entry stays
+        # active until the owner edits the record by hand.
+        self.write_record(WEIGHT_ENTRY)
+        proposal = self.generate()["proposals"][0]
+        self.assertIn("'never'", proposal["statement"])
+        self.assertIn("stays active", proposal["statement"])
+        self.assertIn("by hand", proposal["statement"])
+
     def test_expired_renewal_is_not_reasked_inside_30_days(self):
         self.write_record(WEIGHT_ENTRY)
         first = self.generate()
@@ -230,6 +240,34 @@ class RenewalAcceptanceTests(ReviewFixture):
         with self.assertRaises(ValueError):
             learn.accept_proposal(proposal["id"], self.db, self.record,
                                   now=BASE_NOW)
+
+
+class RenewalDismissalTests(ReviewFixture):
+    def make_renewal(self):
+        self.write_record(WEIGHT_ENTRY)
+        result = self.generate()
+        self.assertEqual(len(result["proposals"]), 1)
+        return result["proposals"][0]
+
+    def test_dismissed_renewal_snoozes_like_its_kind(self):
+        proposal = self.make_renewal()
+        result = learn.dismiss_proposal(proposal["id"], self.db, now=BASE_NOW)
+        self.assertEqual(result["snooze_until"],
+                         (BASE_NOW.date() + timedelta(days=30)).isoformat())
+        self.assertEqual(self.generate(now=BASE_NOW + timedelta(days=10))["proposals"],
+                         [])
+        result = self.generate(now=BASE_NOW + timedelta(days=31))
+        self.assertEqual(len(result["proposals"]), 1)
+        self.assertEqual(result["proposals"][0]["kind"], "renewal")
+
+    def test_never_dismissal_retires_the_question_not_the_entry(self):
+        proposal = self.make_renewal()
+        learn.dismiss_proposal(proposal["id"], self.db, never=True, now=BASE_NOW)
+        result = self.generate(now=BASE_NOW + timedelta(days=200))
+        self.assertEqual(result["proposals"], [])
+        entry = learn.load_record(self.record)["entries"][0]
+        self.assertEqual(entry["status"], "active")
+        self.assertEqual(entry["review_after"], "2026-10-30")
 
 
 class LongPauseReviewTests(ReviewFixture):
@@ -322,11 +360,19 @@ class ShowAgeTests(ReviewFixture):
         ages = {e["id"]: e["age_days"] for e in result["entries"]}
         self.assertEqual(ages, {"lp-001": 108, "lp-002": 108})
 
+    def test_show_prints_days_until_or_past_review(self):
+        self.write_record(WEIGHT_ENTRY + PAUSE_ENTRY)
+        result = learn.show(self.db, self.record, now=BASE_NOW)
+        distances = {e["id"]: e["review_in_days"] for e in result["entries"]}
+        # review_after 2026-10-30 is 18 days before BASE_NOW (2026-11-17).
+        self.assertEqual(distances, {"lp-001": -18, "lp-002": -18})
+
     def test_show_ages_do_not_leak_into_the_record(self):
         self.write_record(WEIGHT_ENTRY)
         learn.show(self.db, self.record, now=BASE_NOW)
         entry = learn.load_record(self.record)["entries"][0]
         self.assertNotIn("age_days", entry)
+        self.assertNotIn("review_in_days", entry)
 
 
 if __name__ == "__main__":
