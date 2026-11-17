@@ -44,6 +44,11 @@ def parser():
     legacy.add_argument("--register-coverage", action="store_true",
                         help="explicitly attest existing episode snapshots as covered (does not imply listening)")
     legacy.add_argument("--json", action="store_true")
+    ds = sub.add_parser("day-status", help="print a run's stored day-status record (read-only)")
+    ds.add_argument("--data-dir", default="data")
+    ds.add_argument("--date", help="YYYY-MM-DD, default the latest run in the store")
+    ds.add_argument("--json", action="store_true",
+                    help="print the stored record exactly as recorded")
     return ap
 
 
@@ -151,8 +156,140 @@ def execute(args):
             store.close()
 
 
+def format_day_status(record):
+    """Render the stored Q5 day-status record as plain lines.
+
+    The surface reads the record; it never re-assembles or re-computes
+    one. Every name, count, and reason below is the record's own, and
+    the record's summary is printed verbatim.
+    """
+    lines = [f"Day status for {record['date']} — {record['outcome']}",
+             record["summary"],
+             "Sources:"]
+    for entry in record["sources"]:
+        line = (f"- {entry['source'] or entry['source_id']}: "
+                f"collected {entry['collected']}, considered {entry['considered']}, "
+                f"selected {entry['selected']}")
+        if entry["withheld"]:
+            line += "; withheld: " + ", ".join(
+                f"{w['count']} {w['reason']}" for w in entry["withheld"])
+        if entry["not_ready"]:
+            line += "; not ready: " + ", ".join(
+                f"{w['count']} {w['reason']}" for w in entry["not_ready"])
+        fetch = entry["fetch"]
+        if fetch and fetch["status"] not in {"success", "empty"}:
+            line += f"; fetch {fetch['status']}"
+            if fetch["error_code"]:
+                line += f" ({fetch['error_code']})"
+            if fetch["message"]:
+                line += f": {fetch['message']}"
+        lines.append(line)
+    audio = record["audio"]
+    audio_line = (f"Audio: {len(audio['synthesized'])} synthesized, "
+                  f"{len(audio['text_only'])} text-only, "
+                  f"{len(audio['not_attempted'])} not attempted")
+    if audio["text_only"]:
+        reasons = []
+        for entry in audio["text_only"]:
+            if entry["reason"] not in reasons:
+                reasons.append(entry["reason"])
+        audio_line += " (" + "; ".join(reasons) + ")"
+    lines.append(audio_line)
+    # Ingest failures already appear on their source's line above (the
+    # record's fetch block names them); this section carries the rest.
+    failures = [f for f in record["failures"] if f.get("stage") != "ingest"]
+    if failures:
+        lines.append("Failures:")
+        for failure in failures:
+            if failure.get("episode_id"):
+                lines.append(f"- episode {failure['episode_id']}: {failure.get('error')}")
+            else:
+                lines.append(f"- {failure.get('stage')}: "
+                             f"{failure.get('message') or failure.get('error')}")
+    if record["discrepancies"]:
+        lines.append("Discrepancies:")
+        lines.extend(f"- {d}" for d in record["discrepancies"])
+    notes = list(record.get("notes") or [])
+    if record.get("learned_record_error"):
+        notes.append("learning record error: "
+                     + record["learned_record_error"])
+    for error in (record.get("gate") or {}).get("errors") or []:
+        notes.append(f"gate error: {error}")
+    if notes:
+        lines.append("Notes:")
+        lines.extend(f"- {n}" for n in notes)
+    return "\n".join(lines)
+
+
+def print_day_status(args):
+    """`focu daily day-status`: the owner-visible surface for the Q5
+    record. Strictly read-only — it prints the stored stage report, or
+    one explicit line saying no record exists for the date; it never
+    assembles a substitute record from other data."""
+    path = Path(args.data_dir).resolve()
+    date = args.date
+    if date is not None:
+        try:
+            if Date.fromisoformat(date).isoformat() != date:
+                raise ValueError("date must be YYYY-MM-DD")
+        except ValueError as ex:
+            raise FewError("date must be YYYY-MM-DD") from ex
+    if not (path / "few.sqlite3").exists():
+        if date is None:
+            print("No day-status record for any date. The store has no runs.")
+        else:
+            print(f"No day-status record for {date}. No run exists for that date.")
+        return 0
+    with run_lock(path):
+        store = Store(path)
+        try:
+            if date is not None:
+                row = store.db.execute(
+                    "SELECT * FROM runs WHERE episode_date=?", (date,)).fetchone()
+            else:
+                row = store.db.execute(
+                    "SELECT * FROM runs ORDER BY episode_date DESC LIMIT 1").fetchone()
+            if row is None:
+                if date is None:
+                    print("No day-status record for any date. The store has no runs.")
+                else:
+                    print(f"No day-status record for {date}. "
+                          "No run exists for that date.")
+                return 0
+            run = dict(row)
+            stored = store.db.execute(
+                "SELECT report_json FROM stage_runs WHERE run_id=? AND stage='day_status'",
+                (run["run_id"],)).fetchone()
+            raw = stored[0] if stored else None
+            if not raw:
+                print(f"No day-status record for {run['episode_date']}. "
+                      "The run predates day-status assembly.")
+                return 0
+            if args.json:
+                print(raw)
+            else:
+                print(format_day_status(json.loads(raw)))
+            return 0
+        finally:
+            store.close()
+
+
 def main(argv=None):
     args = parser().parse_args(argv)
+    if args.command == "day-status":
+        try:
+            return print_day_status(args)
+        except FewError as ex:
+            report = {"schema_version": 1, "status": "error", "errors": [{
+                "code": ex.code, "message": str(ex),
+                "retryable": ex.exit_code in {3, 4, 5}}]}
+            print(json.dumps(report, ensure_ascii=False))
+            return ex.exit_code
+        except Exception as ex:
+            report = {"schema_version": 1, "status": "error", "errors": [{
+                "code": "runtime_error", "message": str(ex), "retryable": True}]}
+            print(json.dumps(report, ensure_ascii=False))
+            return 3
     try:
         report = execute(args)
         exit_code = 4 if report["status"] == "failed" else 0
