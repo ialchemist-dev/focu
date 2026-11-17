@@ -58,6 +58,13 @@ kind+target whose last ACCEPTED proposal is under 90 days old is not
 re-proposed, even if the entry it wrote has since been superseded —
 an accept → supersede → re-propose cycle cannot ratchet a source
 down inside one quarter.
+
+Pruning proposals (PRD P2-1) complete the statistics side: once
+Phase-2 completion evidence exists in the ledger, a source with
+sustained zero completions (see PAUSE_MIN_DELIVERED / PAUSE_MIN_DAYS
+below) earns a source_pause proposal — never a silent pause. The
+pause class is demote-side only, yields to a same-batch demotion for
+the same source, and is vetoed by any useful mark in the window.
 """
 from __future__ import annotations
 
@@ -99,6 +106,21 @@ MIN_NEGATIVE_RATE = 0.2
 DEMOTE_WEIGHT = 0.7           # statistics may only demote (design §3.3 rule 2)
 MIN_USEFUL_EVENTS = 3
 PROMOTE_WEIGHT = 1.25         # promotion requires the owner's own useful marks
+# Pruning proposals (PRD P2-1, design §1.2(1) + §6.2): a source_pause
+# proposal is drafted ONLY from completion-rate evidence — the Phase-2
+# transport's attributed completions (ledger kind "other"; via=manual
+# archives never become events, see ingest). Absence is weak evidence
+# (§1.3), so the pause floor is deliberately stricter than the weight
+# floors: at least PAUSE_MIN_DELIVERED delivered items spread over at
+# least PAUSE_MIN_DAYS distinct delivery days in the window, ZERO
+# completions, and ZERO useful marks (any useful mark vetoes the
+# proposal outright). A source that qualifies for a statistics demotion
+# gets the gentler demotion instead — pause is never proposed in the
+# same batch as a demotion for the same source. The proposal changes
+# nothing by itself; accepting it is the owner's act, exactly like
+# every other kind.
+PAUSE_MIN_DELIVERED = 20
+PAUSE_MIN_DAYS = 10
 MAX_OPEN_PROPOSALS = 3        # the weekly attention budget (design §2.2)
 REVIEW_AFTER_DAYS = 90
 
@@ -444,6 +466,12 @@ def compute_statistics(db_path, daily_dir, now: datetime | None = None) -> dict:
             "negative": {k: kinds.get(k, 0) for k in NEGATIVE_KINDS if kinds.get(k, 0)},
             "negative_total": sum(kinds.get(k, 0) for k in NEGATIVE_KINDS),
             "useful": kinds.get("useful", 0),
+            # Attributed completions (ledger kind "other", recorded by
+            # ingest from non-manual reader completions) and the rate
+            # they make against delivered — the pruning evidence base.
+            "completed": kinds.get("other", 0),
+            "completion_rate": (kinds.get("other", 0) / slot["delivered"]
+                                if slot["delivered"] else 0.0),
         }
     return {"window": {"start": start.isoformat(), "end": end.isoformat(),
                        "days": WINDOW_DAYS},
@@ -596,12 +624,28 @@ def generate_proposals(db_path="data/focu.sqlite3", daily_dir="data",
             })
         elif slot["useful"] >= MIN_USEFUL_EVENTS:
             candidates.append({
-                "rank": (1, -slot["useful"], -slot["delivered"]),
+                "rank": (2, -slot["useful"], -slot["delivered"]),
                 "kind": "source_weight", "target": source_id,
                 "target_name": slot["name"], "value": PROMOTE_WEIGHT,
                 "evidence": (f"{slot['useful']} owner 'useful' marks on "
                              f"{slot['delivered']} delivered items, {WINDOW_DAYS}d "
                              f"window, n={slot['delivered']} delivered"),
+            })
+        elif (slot["completed"] == 0 and slot["useful"] == 0
+                and slot["delivered"] >= PAUSE_MIN_DELIVERED
+                and slot["days"] >= PAUSE_MIN_DAYS):
+            # Pruning (PRD P2-1): sustained zero completion at volume,
+            # with no positive mark to contradict it. Ranked below the
+            # demotion tier and above promotion: a dead source's tax is
+            # certain, a promotion's gain is speculative.
+            candidates.append({
+                "rank": (1, -slot["delivered"], -slot["days"]),
+                "kind": "source_pause", "target": source_id,
+                "target_name": slot["name"], "value": True,
+                "evidence": (f"0 of {slot['delivered']} items completed "
+                             f"in {WINDOW_DAYS}d window across "
+                             f"{slot['days']} delivery days, 0 useful "
+                             f"marks, n={slot['delivered']} delivered"),
             })
 
     created = []
