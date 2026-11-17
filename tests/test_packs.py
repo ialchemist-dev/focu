@@ -129,7 +129,7 @@ class ShippedPackTests(PackTestCase):
     def test_shipped_anthropic_pack_validates(self):
         raw, pack = self.shipped_pack()
         self.assertEqual(pack["title"], "Anthropic · Personal blogs")
-        self.assertEqual(len(pack["sources"]), 10)
+        self.assertEqual(len(pack["sources"]), 11)
         for source in pack["sources"]:
             # writers emit site_url alongside homepage (reader code path)
             self.assertEqual(source["site_url"], source["homepage"])
@@ -252,7 +252,7 @@ class PlanTests(PackTestCase):
         _raw, pack = self.shipped_pack()
         plan = plan_install(pack, config)
         self.assertEqual(plan["errors"], [])
-        self.assertAlmostEqual(plan["attention_posts_per_month"], 5.5)
+        self.assertAlmostEqual(plan["attention_posts_per_month"], 6.1)
 
     def test_unknown_channel_is_a_plan_error(self):
         config = self.write_config()

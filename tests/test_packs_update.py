@@ -106,12 +106,12 @@ class CatalogTests(UpdateTestCase):
         catalog = pack_catalog(config)
         by_id = {p["id"]: p for p in catalog["packs"] if not p.get("error")}
         anthropic = by_id["anthropic-personal-blogs"]
-        self.assertEqual(anthropic["version"], "1.0.0")
+        self.assertEqual(anthropic["version"], "1.1.0")
         self.assertEqual(anthropic["verified_at"], "2026-11-17")
-        self.assertEqual(anthropic["sources"], 10)
-        self.assertAlmostEqual(anthropic["attention_posts_per_month"], 5.5)
+        self.assertEqual(anthropic["sources"], 11)
+        self.assertAlmostEqual(anthropic["attention_posts_per_month"], 6.1)
         self.assertTrue(anthropic["installed"])
-        self.assertEqual(anthropic["installed_version"], "1.0.0")
+        self.assertEqual(anthropic["installed_version"], "1.1.0")
         self.assertFalse(anthropic["update_available"])
         geothermal = by_id["geothermal-industry"]
         self.assertFalse(geothermal["installed"])
@@ -170,7 +170,7 @@ class ShowTests(UpdateTestCase):
         raw = json.loads((PACKS_DIR / "anthropic-personal-blogs.json")
                          .read_text(encoding="utf-8"))
         report = show_pack(raw, check_feeds=False, today=TODAY)
-        self.assertEqual(len(report["sources"]), 10)
+        self.assertEqual(len(report["sources"]), 11)
         self.assertEqual(len(report["unverified"]), 9)
         self.assertTrue(all(s["feed_status"] in {"unchecked", "no_feed"}
                             for s in report["sources"]))

@@ -10,6 +10,12 @@ this phase its only programmatic writer is the accept path below
 (owner-stated entries are entered by hand — the file is the source of
 truth). Phase 1 deliberately does not touch selection or scoring:
 influence wiring, with its clamps and explain view, is Phase 3.
+
+Phase 2 transport lives here too: ingest_reading_summary imports the
+reader's owner-carried reading-summary export (format contract in the
+reader's index.html) into the feedback ledger, idempotently, so real
+reader signals — completions, not-for-me marks, useful marks — reach
+the Phase-1 statistics. It writes only to the ledger.
 """
 from __future__ import annotations
 
@@ -545,7 +551,204 @@ def explain(content_id: str | None = None) -> dict:
 
 
 # --------------------------------------------------------------------------
-# CLI: focu learn show / proposals / accept / dismiss / explain
+# Phase 2 transport: ingest the reader's owner-carried reading summary
+# --------------------------------------------------------------------------
+
+READING_SUMMARY_FORMAT = "focu-reading-summary"
+READING_SUMMARY_VERSION = 1
+READER_STATUSES = {"consumed", "not_for_me", "in_progress"}
+
+
+def _load_reading_summary(export_path):
+    """Parse and validate the export envelope and every item BEFORE any
+    write: a corrupt export is a clean error with nothing recorded."""
+    path = Path(export_path)
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise ValueError(f"Reading summary cannot be read: {path} ({exc})") from exc
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Reading summary is not valid JSON: {exc}") from exc
+    if not isinstance(data, dict):
+        raise ValueError("Reading summary must be a JSON object")
+    if data.get("format") != READING_SUMMARY_FORMAT:
+        raise ValueError(f"Reading summary format must be {READING_SUMMARY_FORMAT!r}, "
+                         f"got {data.get('format')!r}")
+    if data.get("version") != READING_SUMMARY_VERSION:
+        raise ValueError(f"Reading summary version must be {READING_SUMMARY_VERSION}, "
+                         f"got {data.get('version')!r}")
+    if not isinstance(data.get("exported_at"), str) or not data["exported_at"].strip():
+        raise ValueError("Reading summary lacks an exported_at timestamp")
+    if not isinstance(data.get("items"), list):
+        raise ValueError("Reading summary items must be a list")
+    for index, item in enumerate(data["items"]):
+        if not isinstance(item, dict):
+            raise ValueError(f"Reading summary item {index} is not an object")
+        content_id = item.get("content_id")
+        if not isinstance(content_id, str) or not content_id.strip():
+            raise ValueError(f"Reading summary item {index} lacks a content_id")
+        if item.get("status") not in READER_STATUSES:
+            raise ValueError(f"Reading summary item {content_id}: unknown status "
+                             f"{item.get('status')!r}")
+    return data
+
+
+def _reader_source(item):
+    source = item.get("source")
+    if isinstance(source, str) and source.strip():
+        return source.strip()
+    nfm = item.get("not_for_me")
+    if isinstance(nfm, dict) and isinstance(nfm.get("source"), str):
+        return nfm["source"].strip()
+    return ""
+
+
+def _reader_event_id(item, signal):
+    """Deterministic ledger id for one reader signal.
+
+    Dedupe basis (the reader format contract): content_id + updated_at +
+    signal class. Re-ingesting an export whose item state has not changed
+    reproduces the same ids, so the second ingest records nothing new.
+    When updated_at is absent, a fingerprint of the item's signal-bearing
+    fields stands in, so identical state still dedupes. exported_at is
+    deliberately NOT part of the basis: a fresher export of an unchanged
+    state must not double-count.
+    """
+    basis = item.get("updated_at")
+    if not isinstance(basis, str) or not basis.strip():
+        fingerprint = {key: item.get(key) for key in
+                       ("status", "via", "source", "not_for_me", "useful", "audio")}
+        basis = "fp:" + hashlib.sha256(
+            json.dumps(fingerprint, sort_keys=True, default=str).encode()).hexdigest()
+    else:
+        basis = basis.strip()
+    raw = f"{item['content_id']}|{basis}|{signal}"
+    return "rs_" + hashlib.sha256(raw.encode()).hexdigest()[:32]
+
+
+def _reader_events(item):
+    """One export item -> (ledger candidates, disposition).
+
+    Mapping (Phase 2, honest semantics):
+      not_for_me            -> observation / not_useful: the unambiguous
+                               negative signal the design requires.
+      consumed, via!=manual -> observation / other: a completion record
+                               with via preserved in the note. Kind
+                               "other" is inert in Phase-1 statistics,
+                               which count only negative and useful
+                               kinds; the record exists for later phases.
+      consumed, via=manual  -> nothing: the reader's Archive act
+                               conflates done and dismissed, so a manual
+                               archive must not become consumption
+                               evidence (the design's exclusion).
+      in_progress           -> nothing: a saved position is not evidence.
+      useful (any status)   -> observation / useful: the owner's own
+                               mark, the only promotion evidence the
+                               Phase-1 engine counts.
+    """
+    source = _reader_source(item)
+    status = item["status"]
+    candidates = []
+    disposition = status
+    if status == "not_for_me":
+        nfm = item.get("not_for_me") if isinstance(item.get("not_for_me"), dict) else {}
+        note = "reader not_for_me"
+        if source:
+            note += f"; source: {source}"
+        at = nfm.get("at")
+        if isinstance(at, str) and at.strip():
+            note += f"; marked at {at.strip()}"
+        candidates.append({"signal": "not_useful", "kind": "not_useful", "note": note})
+    elif status == "consumed":
+        via = item.get("via")
+        if via == "manual":
+            disposition = "manual_excluded"
+        else:
+            note = "reader completion; via: " + (
+                via if isinstance(via, str) and via else "unknown")
+            if source:
+                note += f"; source: {source}"
+            audio = item.get("audio")
+            if isinstance(audio, str) and audio:
+                note += f"; audio: {audio}"
+            candidates.append({"signal": "completed", "kind": "other", "note": note})
+    if item.get("useful"):
+        note = "reader useful mark"
+        if source:
+            note += f"; source: {source}"
+        useful = item["useful"]
+        if isinstance(useful, dict):
+            at = useful.get("at")
+            if isinstance(at, str) and at.strip():
+                note += f"; marked at {at.strip()}"
+        candidates.append({"signal": "useful", "kind": "useful", "note": note})
+    return candidates, disposition
+
+
+def ingest_reading_summary(export_path, db_path="data/focu.sqlite3") -> dict:
+    """Import a reader reading-summary export into the feedback ledger.
+
+    The export reaches the VM only because the owner carried it (the
+    reader's sole transport). Ingest writes ONLY to the feedback ledger;
+    the preference record is never touched here. Idempotent by
+    content_id + updated_at (see _reader_event_id): an item whose state
+    has not changed since a previous ingest produces no new events.
+    """
+    data = _load_reading_summary(export_path)
+    store = FeedbackStore(db_path)
+    existing = {event["id"]: event for event in store.list()}
+    recorded = already = 0
+    by_kind: dict[str, int] = {}
+    skipped_in_progress = 0
+    excluded_manual = 0
+    conflicts = []
+    for item in data["items"]:
+        candidates, disposition = _reader_events(item)
+        if disposition == "in_progress":
+            skipped_in_progress += 1
+        elif disposition == "manual_excluded":
+            excluded_manual += 1
+        for cand in candidates:
+            event_id = _reader_event_id(item, cand["signal"])
+            prior = existing.get(event_id)
+            if prior is not None:
+                if (prior["target_type"] == "observation"
+                        and prior["target_id"] == item["content_id"].strip()
+                        and prior["kind"] == cand["kind"]
+                        and prior["note"] == cand["note"]):
+                    already += 1
+                else:
+                    conflicts.append(item["content_id"])
+                continue
+            event = store.record(target_type="observation",
+                                 target_id=item["content_id"],
+                                 kind=cand["kind"], note=cand["note"],
+                                 event_id=event_id)
+            existing[event_id] = event
+            recorded += 1
+            by_kind[cand["kind"]] = by_kind.get(cand["kind"], 0) + 1
+    return {
+        "format": data["format"], "version": data["version"],
+        "exported_at": data["exported_at"],
+        "items": len(data["items"]),
+        "events_recorded": recorded,
+        "events_already_recorded": already,
+        "events_by_kind": by_kind,
+        "skipped_in_progress": skipped_in_progress,
+        "excluded_manual_archives": excluded_manual,
+        "conflicts": conflicts,
+        "notes": [
+            "in_progress items record no events in Phase 2: a saved position is not evidence.",
+            "Manual archives (via=manual) record no completion: the reader's Archive act conflates done and dismissed.",
+            "Ingest writes only to the feedback ledger; the preference record is untouched.",
+        ],
+    }
+
+
+# --------------------------------------------------------------------------
+# CLI: focu learn show / proposals / accept / dismiss / explain / ingest
 # --------------------------------------------------------------------------
 
 def _parse_value(raw: str):
@@ -587,6 +790,10 @@ def main(argv: list[str] | None = None, db_path: str | None = None) -> int:
     explain_cmd = sub.add_parser("explain", parents=[common],
                                  help="Why an item was selected (Phase-1 stub)")
     explain_cmd.add_argument("content_id", nargs="?")
+    ingest = sub.add_parser("ingest", parents=[common],
+                            help="Import a reader reading-summary export "
+                                 "into the feedback ledger (idempotent)")
+    ingest.add_argument("export", help="Path to focu-reading-summary.json")
     args = parser.parse_args(argv)
     db = args.db or db_path or "data/focu.sqlite3"
     try:
@@ -609,6 +816,10 @@ def main(argv: list[str] | None = None, db_path: str | None = None) -> int:
             return 0
         if args.action == "explain":
             print(json.dumps(explain(args.content_id), ensure_ascii=False, indent=2))
+            return 0
+        if args.action == "ingest":
+            result = ingest_reading_summary(args.export, db)
+            print(json.dumps(result, ensure_ascii=False, indent=2))
             return 0
         return 2
     except (ValueError, OSError) as exc:
