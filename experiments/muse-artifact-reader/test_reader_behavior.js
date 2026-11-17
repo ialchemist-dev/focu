@@ -385,9 +385,10 @@ assert.match(html, /\.feedcard\[hidden\]\{display:none!important\}/);
   assert.ok(chip,'text card carries a cost chip');
   assert.equal(chip.textContent,'4 min read');
   assert.equal(card.children[1].children.some(n=>String(n.className).includes('play-action')),false,'no Play control without audio');
-  assert.equal(card.children[1].children.length,2,'Archive plus the quiet Not for me action (wave 5)');
+  assert.equal(card.children[1].children.length,3,'Archive plus the quiet Not for me and Useful actions (waves 5 and 6)');
   assert.equal(card.children[1].children[0].textContent,'Archive');
   assert.equal(card.children[1].children[1].textContent,'Not for me');
+  assert.equal(card.children[1].children[2].textContent,'Useful');
 }
 // Wave-2 (#3): a saved position turns the card button into Continue with the
 // remaining time, and playback resumes at that position after a reload.
@@ -705,7 +706,7 @@ assert.match(html, /\.feedcard\[hidden\]\{display:none!important\}/);
   assert.ok(Number.isFinite(Date.parse(summary.exported_at)),'export carries its own timestamp');
   assert.deepEqual(summary.items.map(x=>x.content_id),['exp-audio','exp-manual','exp-nfm','exp-partial'],'items sorted by content_id');
   const byId={};for(const item of summary.items)byId[item.content_id]=item;
-  assert.deepEqual(Object.keys(byId['exp-audio']).sort(),['archived','article_pos_px','audio','audio_pos_seconds','content_id','not_for_me','source','status','updated_at','via'],'the per-item key set is exactly the documented format');
+  assert.deepEqual(Object.keys(byId['exp-audio']).sort(),['archived','article_pos_px','audio','audio_pos_seconds','content_id','not_for_me','source','status','updated_at','useful','via'],'the per-item key set is exactly the documented format (useful added in wave 6, additively within version 1)');
   assert.equal(byId['exp-audio'].status,'consumed');
   assert.equal(byId['exp-audio'].via,'audio');
   assert.equal(byId['exp-audio'].audio,'completed','a finished listen summarizes as completed');
@@ -713,6 +714,7 @@ assert.match(html, /\.feedcard\[hidden\]\{display:none!important\}/);
   assert.equal(byId['exp-audio'].archived,true);
   assert.equal(byId['exp-audio'].source,'Focu');
   assert.equal(byId['exp-audio'].not_for_me,null);
+  assert.equal(byId['exp-audio'].useful,null,'an unendorsed item exports useful as null');
   assert.ok(Number.isFinite(Date.parse(byId['exp-audio'].updated_at)));
   assert.equal(byId['exp-manual'].status,'consumed');
   assert.equal(byId['exp-manual'].via,'manual','manual archive stays distinguishable from real consumption');
@@ -730,7 +732,113 @@ assert.match(html, /\.feedcard\[hidden\]\{display:none!important\}/);
   console.log('Focu reader wave-5 (Learning Phase 2): not-for-me act and reading summary export passed');
 }
 
+// Wave-6 (Learning Phase 2): "Useful" completes the signal pair — the
+// only mark that may ever support promoting a source (promotion requires
+// the owner's own useful marks; completion can never promote). From a
+// card it is a pure signal: the item is NOT consumed and NOT hidden, the
+// mark is recorded with the item's source and a timestamp in the same
+// consumption store, the action re-renders as a muted "Useful ✓", and
+// re-tapping is a strict no-op — the first mark's timestamp stands, so
+// exactly one mark per item ever reaches the export.
+{
+  assert.match(html, /id="readeruseful"/);
+  assert.match(html, /function markUseful\(id\)/);
+  const e=makeEnvironment();
+  e.run('render(['+article('use-card')+'],"")');
+  const controls=e.get('grid').children[0].children[1].children;
+  const use=controls.find(n=>n.textContent==='Useful');
+  assert.ok(use,'card carries the quiet Useful action beside Archive and Not for me');
+  assert.equal(use.className,'quiet-action','the positive act is as quiet as the negative one');
+  let prevented=false,stopped=false;
+  use.onclick({preventDefault(){prevented=true},stopPropagation(){stopped=true}});
+  assert.equal(prevented,true,'tap should not bubble into the story opener');
+  assert.equal(stopped,true);
+  assert.equal(e.run("isUseful('use-card')"),true);
+  assert.equal(e.run("isDone('use-card')"),false,'useful is not consumption');
+  assert.equal(e.run("isNotForMe('use-card')"),false);
+  const entry=JSON.parse(e.storage['focu:content-consumption:v1'])['use-card'];
+  assert.equal(entry.status,undefined,'no consumed status is written');
+  assert.equal(entry.useful.source,'Your research','the mark records the item source');
+  assert.ok(Number.isFinite(Date.parse(entry.useful.at)),'the mark records a timestamp');
+  assert.equal(e.get('grid').children.length,1,'the marked item remains in the feed');
+  assert.equal(e.get('grid').children[0].hidden,false,'the card was never hidden');
+  const marked=e.get('grid').children[0].children[1].children.find(n=>n.textContent==='Useful ✓');
+  assert.ok(marked,'the action shows the registered mark, muted and without fanfare');
+  const firstAt=entry.useful.at;
+  marked.onclick({preventDefault(){},stopPropagation(){}});
+  const again=JSON.parse(e.storage['focu:content-consumption:v1'])['use-card'];
+  assert.equal(again.useful.at,firstAt,'re-marking is a no-op: the first timestamp stands');
+  assert.equal(makeEnvironment(e.storage).run("isUseful('use-card')"),true,'the mark survives a reload');
+}
+// Wave-6 (Learning Phase 2): the same act inside the article view — it
+// neither closes the reader nor consumes, it stays offered after the
+// item is finished (endorsement after reading is the signal's strongest
+// form), finishing an endorsed item does not erase the mark, and a
+// dismissed item cannot be endorsed (Restore is its only way back).
+{
+  const e=makeEnvironment();
+  e.run('render(['+article('use-reader')+'],"")');
+  e.run("openItem('use-reader')");
+  assert.equal(e.get('readeruseful').hidden,false,'article view offers Useful');
+  assert.equal(e.get('readeruseful').textContent,'Useful');
+  e.get('readeruseful').onclick();
+  assert.equal(e.run("isUseful('use-reader')"),true);
+  assert.equal(e.run("isDone('use-reader')"),false,'reader Useful does not consume');
+  assert.equal(e.get('reader').hidden,false,'Useful does not close the reader');
+  assert.equal(e.get('readeruseful').textContent,'Useful ✓','the toolbar shows the registered mark');
+  e.run("markDone('use-reader','article')");
+  const entry=JSON.parse(e.storage['focu:content-consumption:v1'])['use-reader'];
+  assert.equal(entry.status,'consumed');
+  assert.ok(entry.useful&&entry.useful.source==='Your research','consumption preserves the useful mark');
+  assert.equal(e.get('readeruseful').hidden,false,'a finished item still offers Useful');
+  const e2=makeEnvironment();
+  e2.run('render(['+article('use-after')+'],"")');
+  e2.run("markDone('use-after','manual')");
+  e2.run("openItem('use-after')");
+  assert.equal(e2.get('readeruseful').hidden,false,'Useful is offered on a finished item');
+  e2.get('readeruseful').onclick();
+  const after=JSON.parse(e2.storage['focu:content-consumption:v1'])['use-after'];
+  assert.equal(after.status,'consumed','endorsing a finished item keeps its consumed status');
+  assert.equal(after.via,'manual');
+  assert.ok(after.useful,'the endorsement lands on the consumed entry');
+  const e3=makeEnvironment();
+  e3.run('render(['+article('use-nfm')+'],"")');
+  e3.run("markNotForMe('use-nfm')");
+  e3.run("setView('archive')");
+  e3.run("openItem('use-nfm')");
+  assert.equal(e3.get('readeruseful').hidden,true,'no Useful on a dismissed item');
+  e3.run("markUseful('use-nfm')");
+  assert.equal(e3.run("isUseful('use-nfm')"),false,'a dismissed item refuses the mark');
+}
+// Wave-6 (Learning Phase 2): the export carries the useful mark as an
+// additive version-1 field, orthogonal to status — an endorsed-but-unread
+// item exports as in_progress with the mark attached and stays out of
+// Archive; a consumed AND endorsed item keeps both facts. (Exports
+// written before this act existed simply omit the key; the format
+// comment in index.html pins that ingest reads a missing key as null.)
+{
+  const e=makeEnvironment();
+  e.run("render(["+
+    "{id:'exp-useful',origin:'user_initiated',title:'Endorsed, unread',date:'2026-11-10',source:'Anthropic',blocks:[{type:'paragraph',text:'E'}]},"+
+    "{id:'exp-both',origin:'user_initiated',title:'Read and endorsed',date:'2026-11-10',source:'OpenAI',blocks:[{type:'paragraph',text:'F'}]}"+
+  "],'')");
+  e.run("markUseful('exp-useful')");
+  e.run("markUseful('exp-both')");
+  e.run("markDone('exp-both','article')");
+  const summary=JSON.parse(e.run('JSON.stringify(buildReadingSummary())'));
+  assert.equal(summary.version,1,'the useful field does not bump the format version');
+  const byId={};for(const item of summary.items)byId[item.content_id]=item;
+  assert.equal(byId['exp-useful'].status,'in_progress','an endorsed-only entry is neither consumed nor dismissed');
+  assert.equal(byId['exp-useful'].archived,false,'an endorsed item stays in the feed, out of Archive');
+  assert.equal(byId['exp-useful'].useful.source,'Anthropic','the endorsement keeps its source attribution');
+  assert.ok(Number.isFinite(Date.parse(byId['exp-useful'].useful.at)));
+  assert.equal(byId['exp-both'].status,'consumed');
+  assert.ok(byId['exp-both'].useful&&byId['exp-both'].useful.source==='OpenAI','consumption and endorsement travel together');
+  console.log('Focu reader wave-6 (Learning Phase 2): useful act and export field passed');
+}
+
 console.log('Focu reader behavior: article, local read-aloud, persistence and audio end passed');
 console.log('Focu reader wave-2: one-tap play, cost chips and persisted resume passed');
 console.log('Focu reader wave-3: contextual recovery, skip controls and briefing purity passed');
 console.log('Focu reader wave-5: distinct negative act and owner-carried export passed');
+console.log('Focu reader wave-6: the useful act — the one promotion signal — passed');

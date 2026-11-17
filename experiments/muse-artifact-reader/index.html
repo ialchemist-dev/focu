@@ -116,7 +116,7 @@ body:has(#playerbar:not([hidden])) main{padding-bottom:calc(160px + var(--muse-c
 <div class="byline" id="readerbyline"></div><button id="coveredby" class="smallbutton" type="button" hidden></button>
 <h1 id="readertitle"></h1>
 <p id="readersummary"></p>
-<div class="readeractions" id="toolbar"><button id="listen" class="listen" hidden>▶ Listen</button><button id="readaloud" class="listen" hidden>▶ Read aloud</button><span id="readtime" class="readtime"></span><button id="readerarchive" class="card-action reader-archive" type="button">Archive</button><button id="restore" class="card-action reader-archive" type="button" hidden>Restore</button><button id="readernotforme" class="card-action" type="button" hidden>Not for me</button></div>
+<div class="readeractions" id="toolbar"><button id="listen" class="listen" hidden>▶ Listen</button><button id="readaloud" class="listen" hidden>▶ Read aloud</button><span id="readtime" class="readtime"></span><button id="readerarchive" class="card-action reader-archive" type="button">Archive</button><button id="restore" class="card-action reader-archive" type="button" hidden>Restore</button><button id="readernotforme" class="card-action" type="button" hidden>Not for me</button><button id="readeruseful" class="card-action" type="button" hidden>Useful</button></div>
 <img id="readercover" class="readercover" hidden alt="">
 <div id="articlebody"></div>
 <div id="coveredsection" class="coveredsection" hidden><h2>Articles covered in this briefing</h2><div id="coveredarticles"></div></div>
@@ -153,7 +153,16 @@ function readStates(){try{const obj=JSON.parse(localStorage.getItem(STORE_KEY)||
 let states=readStates();
 function saveStates(){try{const value=JSON.stringify(states);localStorage.setItem(STORE_KEY,value);storageOK=localStorage.getItem(STORE_KEY)===value}catch(e){storageOK=false}if(!storageOK){status.hidden=false;status.textContent='Reading history cannot be saved on this device'}}
 function isDone(id){return states[id]?.status==='consumed'}
-function markDone(id,via){if(!id||isDone(id))return;states[id]={status:'consumed',via,updated_at:new Date().toISOString()};saveStates();render(allItems,lastNote);updateReaderState()}
+function markDone(id,via){
+ if(!id||isDone(id))return;
+ const entry={status:'consumed',via,updated_at:new Date().toISOString()};
+ // A useful mark is durable evidence (Learning Phase 2): finishing an
+ // item the owner endorsed must not erase the endorsement, so it is the
+ // one field carried across this wholesale entry replacement.
+ const prev=savedEntry(id);
+ if(prev&&prev.useful&&typeof prev.useful==='object')entry.useful=prev.useful;
+ states[id]=entry;saveStates();render(allItems,lastNote);updateReaderState();
+}
 function markUnread(id){delete states[id];saveStates();render(allItems,lastNote);updateReaderState()}
 function manualArchive(id){
  if(!id)return;
@@ -189,6 +198,26 @@ function readerNotForMe(id){
    if(playingId===id){player.pause();playerbar.hidden=true}
    setView(view);
  }
+}
+function isUseful(id){const s=savedEntry(id);return !!(s&&s.useful&&typeof s.useful==='object')}
+function markUseful(id){
+ // The unambiguous positive act (Learning Phase 2), twin of Not for me:
+ // the ONLY signal that may ever support promoting a source (promotion
+ // requires the owner's own useful marks; finishing an item can never
+ // promote — completion is not endorsement). Unlike Not for me it is a
+ // pure signal: the item stays in the feed, no status is written, and
+ // any saved positions are preserved. Marking an already-marked item is
+ // a strict no-op — the first mark's timestamp stands, so exactly one
+ // mark per item ever reaches the export. A dismissed (not-for-me) item
+ // cannot be endorsed; Restore is the path back from a dismissal.
+ if(!id||isUseful(id)||isNotForMe(id))return;
+ const item=allItems.find(x=>x.id===id);
+ const at=new Date().toISOString();
+ const entry=savedEntry(id)||{};
+ entry.useful={at,source:item?String(item.source||''):''};
+ entry.updated_at=at;
+ states[id]=entry;
+ saveStates();render(allItems,lastNote);updateReaderState();
 }
 function savedEntry(id){const s=states[id];return s&&typeof s==='object'?s:null}
 function audioPosOf(id){const s=savedEntry(id);const v=s?Number(s.audio_pos):NaN;return Number.isFinite(v)&&v>0?v:0}
@@ -245,6 +274,7 @@ function noteArticlePosition(id,y){
 //       "via": "audio" | "article" | "device_voice" | "manual" | null,
 //       "archived": true | false,
 //       "not_for_me": { "at": "<ISO 8601>", "source": "<source>" } | null,
+//       "useful": { "at": "<ISO 8601>", "source": "<source>" } | null,
 //       "audio": "completed" | "partial" | null,
 //       "audio_pos_seconds": <number> | null,
 //       "article_pos_px": <number> | null,
@@ -252,7 +282,8 @@ function noteArticlePosition(id,y){
 //     }
 //   ]
 // }
-// "in_progress" means an entry exists only because a position was saved.
+// "in_progress" means an entry exists without consumption or dismissal:
+// a saved position, a useful mark, or both.
 // "archived" means the item rests in the Archive view (consumed, or marked
 // not-for-me). "audio" summarizes the listen position: "completed" when
 // the item was consumed via audio, "partial" when a position is saved on
@@ -261,6 +292,11 @@ function noteArticlePosition(id,y){
 // a depth percentage. Items are sorted by content_id so exports diff
 // cleanly. The per-item fields extend the store's own fields with the
 // item's source (which the store does not carry) — nothing else is added.
+// "useful" is the owner's endorsement mark (the promotion signal of the
+// learning design); it is orthogonal to "status" — an item can be
+// consumed AND useful. The field is additive within version 1: exports
+// written before the Useful act existed carry no "useful" key at all,
+// and ingest must read a missing key as null, exactly as it reads null.
 // ---------------------------------------------------------------------------
 const READING_SUMMARY_FORMAT='focu-reading-summary';
 function buildReadingSummary(){
@@ -269,20 +305,22 @@ function buildReadingSummary(){
   const entry=savedEntry(id);if(!entry)continue;
   const item=allItems.find(x=>x.id===id);
   const nfm=entry.not_for_me&&typeof entry.not_for_me==='object'?entry.not_for_me:null;
+  const use=entry.useful&&typeof entry.useful==='object'?entry.useful:null;
   const done=entry.status==='consumed';
   const audioPos=Number(entry.audio_pos),articlePos=Number(entry.article_pos);
   const hasAudioPos=Number.isFinite(audioPos)&&audioPos>0,hasArticlePos=Number.isFinite(articlePos)&&articlePos>0;
   items.push({
    content_id:id,
-   source:item?String(item.source||''):(nfm?String(nfm.source||''):''),
+   source:item?String(item.source||''):(nfm?String(nfm.source||''):(use?String(use.source||''):'')),
    status:done?'consumed':(nfm?'not_for_me':'in_progress'),
    via:done?(entry.via||null):null,
    archived:done||!!nfm,
    not_for_me:nfm?{at:String(nfm.at||''),source:String(nfm.source||'')}:null,
+   useful:use?{at:String(use.at||''),source:String(use.source||'')}:null,
    audio:done&&entry.via==='audio'?'completed':(hasAudioPos?'partial':null),
    audio_pos_seconds:hasAudioPos?Math.floor(audioPos):null,
    article_pos_px:hasArticlePos?Math.floor(articlePos):null,
-   updated_at:entry.updated_at||(nfm?nfm.at:null)||null
+   updated_at:entry.updated_at||(nfm?nfm.at:null)||(use?use.at:null)||null
   });
  }
  return {format:READING_SUMMARY_FORMAT,version:1,exported_at:new Date().toISOString(),items};
@@ -420,6 +458,18 @@ function appendCard(item){
      markNotForMe(item.id);
    };
    controls.append(nfm);
+   // The positive twin, in the same quiet register: one tap records the
+   // owner's endorsement and nothing else happens — the card stays in
+   // the feed, still unread if it was unread, and the action re-renders
+   // as a muted "Useful ✓" so the mark is visible. No count, no badge.
+   const marked=isUseful(item.id);
+   const use=el('button',marked?'Useful ✓':'Useful','quiet-action');use.type='button';
+   use.setAttribute('aria-label',(marked?'Marked useful: ':'Mark useful: ')+item.title);
+   use.onclick=event=>{
+     if(event){event.preventDefault();event.stopPropagation()}
+     markUseful(item.id);
+   };
+   controls.append(use);
  }
  card.append(controls);grid.append(card);
 }
@@ -529,6 +579,13 @@ function updateReaderState(){
  document.getElementById('restore').hidden=!done&&!nfm;
  document.getElementById('readerarchive').hidden=done||nfm;
  document.getElementById('readernotforme').hidden=done||nfm;
+ // Useful stays offered on a finished item — endorsing after reading is
+ // the signal's strongest form — and on an unfinished one; only a
+ // dismissed item loses it (Restore is that item's way back). The label
+ // carries the mark itself, in the same muted register as the cards.
+ const usefulButton=document.getElementById('readeruseful');
+ usefulButton.hidden=nfm;
+ usefulButton.textContent=isUseful(currentId)?'Useful ✓':'Useful';
 }
 function openItem(id,viaLink=false){
  const item=allItems.find(x=>x.id===id);if(!item)return;
@@ -584,6 +641,7 @@ document.getElementById('back').onclick=()=>{
 document.getElementById('restore').onclick=()=>{if(currentId)markUnread(currentId)};
 document.getElementById('readerarchive').onclick=()=>manualArchive(currentId);
 document.getElementById('readernotforme').onclick=()=>readerNotForMe(currentId);
+document.getElementById('readeruseful').onclick=()=>markUseful(currentId);
 document.getElementById('exportsummary').onclick=()=>exportReadingSummary();
 function stopNarration(){
  speechRunning=false;speechPaused=false;speechId=null;speechSegments=[];speechIndex=0;speechEpoch++;
