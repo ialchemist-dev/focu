@@ -368,6 +368,34 @@ def _entry_locator(entry):
         return None
 
 
+def _locator_set(entry):
+    """Every canonical locator an entry names (feed, site, homepage).
+
+    Identity (``_entry_identity``) uses exactly one of these, chosen by
+    type — which is how the same publication can hold two identities
+    (an rss entry keyed by its feed, a blog entry keyed by its site).
+    The planner compares the full sets to spot that case.
+    """
+    locators = set()
+    for key in ("feed_url", "site_url", "homepage"):
+        value = entry.get(key) if isinstance(entry, dict) else None
+        if isinstance(value, str) and value:
+            try:
+                locators.add(identity.canonical_url(value))
+            except (TypeError, ValueError, AttributeError):
+                continue
+    return locators
+
+
+def _host_set(locators):
+    hosts = set()
+    for url in locators:
+        host = urlsplit(url).hostname
+        if host:
+            hosts.add(host)
+    return hosts
+
+
 # ---------------------------------------------------------------------------
 # Liveness (design section 6, rules 8-9). Network results are recorded,
 # never raised: a dead feed is data for the plan, not an exception.
@@ -549,6 +577,20 @@ def plan_install(pack, config_path, *, channel_override=None, liveness=None):
                 providers.setdefault(entry["source_id"], set()).add(record["pack_id"])
     existing_by_id = {e["source_id"]: e for e in existing if e["source_id"]}
     existing_names = {e["name"]: e for e in existing if e["name"]}
+    # Cross-locator index (self-iteration Q6): identity is type-dependent,
+    # so the same publication can reappear under a different identity via
+    # a different locator (feed vs site, trailing-slash variant). Track
+    # every locator and host already claimed — by the registry and by
+    # sources planned earlier in this same pack — so the preview can
+    # warn instead of silently subscribing twice.
+    claimed: list[dict] = []
+    for e in existing:
+        locators = _locator_set(e["entry"])
+        if e.get("locator"):
+            locators.add(e["locator"])
+        claimed.append({"name": e["name"], "source_id": e["source_id"],
+                        "locators": locators, "hosts": _host_set(locators),
+                        "where": "registry"})
     plan = {"pack": {"id": pack["id"], "title": pack["title"],
                      "version": pack["version"]},
             "adds": [], "duplicates": [], "errors": [], "warnings": [],
@@ -612,6 +654,24 @@ def plan_install(pack, config_path, *, channel_override=None, liveness=None):
         if sid is not None:
             planned_ids[sid] = src["id"]
         planned_names[name] = src["id"]
+        new_locators = _locator_set(src)
+        new_locators |= _locator_set(entry)
+        new_hosts = _host_set(new_locators)
+        for other in claimed:
+            if sid is not None and other["source_id"] == sid:
+                continue
+            if new_locators & other["locators"] or new_hosts & other["hosts"]:
+                plan["warnings"].append(
+                    f"source {src['id']!r}: shares a site with "
+                    f"{other['where']} source {other['name']!r} but under "
+                    f"a different identity — installing both would "
+                    f"subscribe the same publication twice; if these are "
+                    f"genuinely different publications on a shared host, "
+                    f"ignore this warning")
+                break
+        claimed.append({"name": name, "source_id": sid,
+                        "locators": new_locators, "hosts": new_hosts,
+                        "where": "pack"})
         cadence = src.get("cadence") if isinstance(src.get("cadence"), dict) else None
         ppm = cadence.get("posts_per_month") if cadence else None
         plan["adds"].append(
