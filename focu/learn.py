@@ -30,6 +30,34 @@ cap; pauses honored as the owner acts they are), and the daily store's
 select() freezes every factor it actually applied onto the episode
 item, which is what explain() answers from. Phase 3 adds no inference
 path of its own: it consumes owner-written entries, nothing else.
+
+Review proposals (PM sweep F5, design §3.4 + §6.1) close the loop's
+long horizon. Two extra proposal kinds, both ABOUT an existing record
+entry (their value is the entry id, never a new preference):
+
+  renewal      — an active entry past its review_after. Its evidence
+                 is current: delivered / completion / useful /
+                 negative counts for the entry's target SINCE the
+                 entry was created, so renewal is a fresh judgment.
+  pause_review — an active source_pause entry aged 90+ days: the
+                 quarterly "restore, keep, or remove?" question. At
+                 most one pause_review per entry per 90 days, counted
+                 over ALL past pause_review proposals for that entry
+                 (open, expired, dismissed, or accepted alike).
+
+Acceptance semantics for both kinds, stated once here: accepting a
+review proposal REFRESHES the named entry in place — review_after
+moves 90 days out, the renewal and its evidence are appended to the
+entry's evidence trail, and an owner-supplied --value replaces the
+entry's value (validated as usual). It never appends a duplicate
+entry and never supersedes the old one; restore/remove remain owner
+acts on the record itself. Dismissal snoozes like any other kind.
+
+The 90-day step rule (design §6.1) is explicit, not emergent: a
+kind+target whose last ACCEPTED proposal is under 90 days old is not
+re-proposed, even if the entry it wrote has since been superseded —
+an accept → supersede → re-propose cycle cannot ratchet a source
+down inside one quarter.
 """
 from __future__ import annotations
 
@@ -53,7 +81,15 @@ ENTRY_FIELDS = {"id", "kind", "target", "value", "statement", "provenance",
 # Dismissal snoozes (design §2.3): "not now" costs the engine 60 days for
 # pauses/caps, 30 days for weight changes.
 SNOOZE_DAYS = {"source_pause": 60, "source_cap": 60, "source_weight": 30,
-               "topic_weight": 30, "standing_note": 30}
+               "topic_weight": 30, "standing_note": 30,
+               "renewal": 30, "pause_review": 90}
+
+# Review proposals (see module docstring): kinds whose value is an
+# existing record entry's id, not a new preference value.
+REVIEW_KINDS = {"renewal", "pause_review"}
+LONG_PAUSE_DAYS = 90          # a pause this old earns a quarterly review
+STEP_RULE_DAYS = 90           # one accepted step per kind+target per quarter
+REVIEW_REPROPOSE_DAYS = {"renewal": 30, "pause_review": 90}
 
 WINDOW_DAYS = 30
 MIN_DELIVERED = 10            # evidence floor (design §6.2): below this, silence
@@ -65,6 +101,15 @@ MIN_USEFUL_EVENTS = 3
 PROMOTE_WEIGHT = 1.25         # promotion requires the owner's own useful marks
 MAX_OPEN_PROPOSALS = 3        # the weekly attention budget (design §2.2)
 REVIEW_AFTER_DAYS = 90
+# Anti-spiral constants (design §6.1): at most one accepted demotion
+# step per target per 90 days, and a pause earns its quarterly review
+# once it is 90 days old.
+DEMOTION_STEP_WINDOW_DAYS = 90
+PAUSE_REVIEW_MIN_AGE_DAYS = 90
+# Proposal-only kinds: accepting one refreshes an existing record entry
+# in place; it never appends one. Their target is the entry id (lp-NNN),
+# so snoozes and the quarterly gate key per entry, not per source.
+RENEWAL_PROPOSAL_KINDS = {"entry_renewal", "pause_review"}
 
 
 # --------------------------------------------------------------------------
@@ -277,6 +322,17 @@ class ProposalStore:
                        (state, snooze_until, int(never), decided_at, proposal_id))
         return self.get(proposal_id)
 
+    def history(self) -> list[dict]:
+        """Every proposal ever stored, oldest first, any state. The
+        review-proposal cadence (one pause_review per entry per
+        quarter) and the explicit 90-day step rule are computed over
+        this full history, not just over open or dismissed rows: an
+        expired proposal still counts as having been asked."""
+        with self._connect() as db:
+            rows = db.execute("""SELECT * FROM learn_proposals
+                ORDER BY created_at, id""").fetchall()
+        return [self._decode(row) for row in rows]
+
     def snoozes(self) -> dict:
         """(kind, target) -> {'never': bool, 'until': date|None} from dismissals."""
         result = {}
@@ -407,11 +463,100 @@ def compute_statistics(db_path, daily_dir, now: datetime | None = None) -> dict:
 # The proposal engine: statistics in, at most 3 evidenced proposals out
 # --------------------------------------------------------------------------
 
+def _entry_current_evidence(entry, db_path, daily_dir, today: date) -> str:
+    """Current evidence for a review proposal: what the entry's target
+    has done SINCE the entry was created (design §3.4: renewal is a
+    fresh judgment, not a rubber stamp). Delivered counts come from
+    the frozen selection history; completion / useful / negative
+    counts from the attributed feedback ledger over the same span.
+    A target with no recorded history says so, plainly."""
+    created = date.fromisoformat(entry["created_at"])
+    age = (today - created).days
+    base = (f"entry {entry['id']} ({entry['kind']}) created "
+            f"{created.isoformat()}, {age}d old, review_after "
+            f"{entry['review_after']}")
+    target = entry.get("target")
+    if not target:
+        return base + "; standing note: no delivered history applies"
+    delivered, content_source, episode_sources = _selection_history(
+        daily_dir, created, today)
+    slot = delivered.get(target)
+    events = FeedbackStore(db_path).list()
+    per_source, _unattributed = _attribute_feedback(
+        events, content_source, episode_sources, created, today)
+    kinds = per_source.get(target, {})
+    negative = sum(kinds.get(k, 0) for k in NEGATIVE_KINDS)
+    feedback = (f"feedback since: {kinds.get('other', 0)} completion(s), "
+                f"{kinds.get('useful', 0)} useful, {negative} negative")
+    if slot:
+        return (base + f"; since then {slot['delivered']} items delivered "
+                f"over {slot['days']} day(s); " + feedback)
+    return base + "; since then 0 items delivered recorded; " + feedback
+
+
+def _review_candidates(record, history, db_path, daily_dir, today: date):
+    """Renewal and long-pause candidates from the record itself.
+
+    A pause aged 90+ days gets pause_review INSTEAD of renewal (one
+    question per entry per batch, the sharper one). An entry with a
+    review proposal created inside its repropose window (30d renewal,
+    90d pause_review, over the full proposal history) is not asked
+    about again yet — expiry of the earlier proposal does not reset
+    the clock."""
+    recently_reviewed = set()
+    for past in history:
+        if past["kind"] not in REVIEW_KINDS:
+            continue
+        try:
+            asked = datetime.fromisoformat(past["created_at"]).date()
+        except ValueError:
+            continue
+        if (today - asked).days < REVIEW_REPROPOSE_DAYS[past["kind"]]:
+            recently_reviewed.add(past["value"])
+    candidates = []
+    for entry in record["entries"]:
+        if entry.get("status") != "active" or entry["id"] in recently_reviewed:
+            continue
+        created = date.fromisoformat(entry["created_at"])
+        age = (today - created).days
+        name = entry.get("target") or entry["id"]
+        if entry["kind"] == "source_pause" and age >= LONG_PAUSE_DAYS:
+            candidates.append({
+                "rank": (-2, -age),
+                "kind": "pause_review", "target": entry["target"],
+                "target_name": entry["target"], "value": entry["id"],
+                "statement": (
+                    f"Keep {name} paused (entry {entry['id']}, paused "
+                    f"{age} days) and review again in 90 days — or "
+                    f"restore or remove it by your word."),
+                "evidence": _entry_current_evidence(
+                    entry, db_path, daily_dir, today),
+            })
+        elif date.fromisoformat(entry["review_after"]) <= today:
+            candidates.append({
+                "rank": (-1, -age),
+                "kind": "renewal", "target": entry.get("target") or entry["id"],
+                "target_name": entry.get("target") or "",
+                "value": entry["id"],
+                "statement": (
+                    f"Keep entry {entry['id']} in force "
+                    f"({entry['statement']}) and review again in "
+                    f"{REVIEW_AFTER_DAYS} days."),
+                "evidence": _entry_current_evidence(
+                    entry, db_path, daily_dir, today),
+            })
+    return candidates
+
+
 def generate_proposals(db_path="data/focu.sqlite3", daily_dir="data",
                        record_path=RECORD_PATH, now: datetime | None = None) -> dict:
     """Run one weekly batch. Prior open proposals expire; snoozes and
     never-dismissals are honored; pairs already in the record are not
-    re-proposed. Empty history correctly produces an empty batch."""
+    re-proposed; a kind+target accepted under 90 days ago is not
+    re-proposed even if its entry was superseded (the explicit 90-day
+    step rule); review proposals for stale record entries compete in
+    the same 3-proposal budget, ahead of new statistics proposals.
+    Empty history correctly produces an empty batch."""
     now = now or datetime.now(timezone.utc)
     today = now.date()
     store = ProposalStore(db_path)
@@ -421,8 +566,22 @@ def generate_proposals(db_path="data/focu.sqlite3", daily_dir="data",
     record, record_error = safe_load_record(record_path)
     in_record = {(e["kind"], e["target"]) for e in record["entries"]
                  if e.get("status") == "active"}
+    history = store.history()
+    last_accepted: dict[tuple[str, str], date] = {}
+    for past in history:
+        if past["state"] not in ("accepted", "edited-accepted"):
+            continue
+        if not past.get("decided_at"):
+            continue
+        try:
+            decided = datetime.fromisoformat(past["decided_at"]).date()
+        except ValueError:
+            continue
+        key = (past["kind"], past["target"])
+        if key not in last_accepted or decided > last_accepted[key]:
+            last_accepted[key] = decided
 
-    candidates = []
+    candidates = _review_candidates(record, history, db_path, daily_dir, today)
     below_floor = 0
     for source_id, slot in stats["sources"].items():
         if slot["delivered"] < MIN_DELIVERED:
@@ -458,6 +617,9 @@ def generate_proposals(db_path="data/focu.sqlite3", daily_dir="data",
         key = (cand["kind"], cand["target"])
         if key in in_record:
             continue
+        accepted_on = last_accepted.get(key)
+        if accepted_on is not None and (today - accepted_on).days < STEP_RULE_DAYS:
+            continue
         snooze = snoozes.get(key)
         if snooze and (snooze["never"] or (snooze["until"] and today < snooze["until"])):
             continue
@@ -465,7 +627,8 @@ def generate_proposals(db_path="data/focu.sqlite3", daily_dir="data",
             "id": f"prop-{today.strftime('%Y%m%d')}-{len(created) + 1}",
             "kind": cand["kind"], "target": cand["target"],
             "target_name": cand["target_name"], "value": cand["value"],
-            "statement": _statement_for(cand["kind"], cand["target_name"], cand["value"]),
+            "statement": cand.get("statement") or _statement_for(
+                cand["kind"], cand["target_name"], cand["value"]),
             "evidence": cand["evidence"],
             "created_at": now.isoformat(),
         }
@@ -492,32 +655,69 @@ def accept_proposal(proposal_id, db_path="data/focu.sqlite3",
         raise ValueError(f"Proposal not found: {proposal_id}")
     if proposal["state"] != "proposed":
         raise ValueError(f"Proposal {proposal_id} is not open (state: {proposal['state']})")
-    edited = value is not None and value != proposal["value"]
-    final_value = proposal["value"] if value is None else value
     record = load_record(record_path)  # strict: never write into a broken record
-    numbers = [int(e["id"][3:]) for e in record["entries"]
-               if re.fullmatch(r"lp-\d+", str(e.get("id", "")))]
-    entry = {
-        "id": f"lp-{max(numbers, default=0) + 1:03d}",
-        "kind": proposal["kind"],
-        "target": proposal["target"],
-        "value": final_value,
-        "statement": _statement_for(proposal["kind"], proposal["target_name"], final_value),
-        "provenance": "owner-accepted",
-        "evidence": f"{proposal_id} · {proposal['evidence']}"
-                    + (" · value edited by owner at accept" if edited else ""),
-        "created_at": today.isoformat(),
-        "review_after": (today + timedelta(days=REVIEW_AFTER_DAYS)).isoformat(),
-        "status": "active",
-    }
-    _validate_entry(dict(entry))
-    record["entries"].append(entry)
-    changelog = (f"- **{today.isoformat()} — accepted {proposal_id}:** "
-                 f"{entry['statement']} Evidence: {entry['evidence']}")
+    renewed = proposal["kind"] in REVIEW_KINDS
+    if renewed:
+        # Review acceptance semantics (module docstring): refresh the
+        # named entry IN PLACE — review_after moves out by
+        # REVIEW_AFTER_DAYS, the renewal and its evidence join the
+        # entry's evidence trail, and an owner-supplied value replaces
+        # the entry's value. No duplicate is appended, nothing is
+        # superseded; the entry keeps its id, kind, target, and
+        # provenance. For a review proposal the `value` argument is
+        # the ENTRY's new value, not a replacement for the proposal's
+        # value (which is the entry id).
+        entry = next((e for e in record["entries"]
+                      if e["id"] == proposal["value"]
+                      and e.get("status") == "active"), None)
+        if entry is None:
+            raise ValueError(
+                f"Proposal {proposal_id} reviews entry {proposal['value']!r}, "
+                "which is not an active record entry")
+        edited = value is not None and value != entry["value"]
+        if edited:
+            entry["value"] = value
+            entry["statement"] = _statement_for(
+                entry["kind"], proposal["target_name"], value)
+        entry["review_after"] = (
+            today + timedelta(days=REVIEW_AFTER_DAYS)).isoformat()
+        entry["evidence"] = (
+            f"{entry['evidence']} · renewed by {proposal_id} on "
+            f"{today.isoformat()}: {proposal['evidence']}"
+            + (" · value edited by owner at accept" if edited else ""))
+        _validate_entry(dict(entry))
+        changelog = (f"- **{today.isoformat()} — renewed {entry['id']} via "
+                     f"{proposal_id}:** {entry['statement']} "
+                     f"Evidence: {entry['evidence']}")
+    else:
+        edited = value is not None and value != proposal["value"]
+        final_value = proposal["value"] if value is None else value
+        numbers = [int(e["id"][3:]) for e in record["entries"]
+                   if re.fullmatch(r"lp-\d+", str(e.get("id", "")))]
+        entry = {
+            "id": f"lp-{max(numbers, default=0) + 1:03d}",
+            "kind": proposal["kind"],
+            "target": proposal["target"],
+            "value": final_value,
+            "statement": _statement_for(proposal["kind"], proposal["target_name"], final_value),
+            "provenance": "owner-accepted",
+            "evidence": f"{proposal_id} · {proposal['evidence']}"
+                        + (" · value edited by owner at accept" if edited else ""),
+            "created_at": today.isoformat(),
+            "review_after": (today + timedelta(days=REVIEW_AFTER_DAYS)).isoformat(),
+            "status": "active",
+        }
+        _validate_entry(dict(entry))
+        record["entries"].append(entry)
+        changelog = (f"- **{today.isoformat()} — accepted {proposal_id}:** "
+                     f"{entry['statement']} Evidence: {entry['evidence']}")
     new_version = _write_record(record_path, record, changelog, today)
     decided = store.decide(proposal_id, "edited-accepted" if edited else "accepted",
                            decided_at=now.isoformat())
-    return {"proposal": decided, "entry": entry, "record_version": new_version}
+    result = {"proposal": decided, "entry": entry, "record_version": new_version}
+    if renewed:
+        result["renewed"] = True
+    return result
 
 
 def dismiss_proposal(proposal_id, db_path="data/focu.sqlite3", never: bool = False,
@@ -539,13 +739,30 @@ def dismiss_proposal(proposal_id, db_path="data/focu.sqlite3", never: bool = Fal
                         never=never, decided_at=now.isoformat())
 
 
-def show(db_path="data/focu.sqlite3", record_path=RECORD_PATH) -> dict:
+def show(db_path="data/focu.sqlite3", record_path=RECORD_PATH,
+         now: datetime | None = None) -> dict:
+    """The record, inspectable: every active entry carries its age in
+    days (design §3.4 — staleness is visible even when no renewal
+    proposal has been sent)."""
+    now = now or datetime.now(timezone.utc)
+    today = now.date()
     record, error = safe_load_record(record_path)
+    entries = []
+    for entry in record["entries"]:
+        if entry.get("status") != "active":
+            continue
+        shown = dict(entry)
+        try:
+            shown["age_days"] = (
+                today - date.fromisoformat(entry["created_at"])).days
+        except (KeyError, ValueError):
+            shown["age_days"] = None
+        entries.append(shown)
     result = {
         "record_path": str(record_path),
         "record_version": record["version"],
         "record_sha256": record["record_sha256"],
-        "entries": [e for e in record["entries"] if e.get("status") == "active"],
+        "entries": entries,
         "superseded_entries": sum(1 for e in record["entries"]
                                   if e.get("status") == "superseded"),
         "open_proposals": ProposalStore(db_path).list_open(),
