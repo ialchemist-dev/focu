@@ -352,4 +352,89 @@ assert.match(html, /\.feedcard\[hidden\]\{display:none!important\}/);
   assert.match(spoken,/Net loss attributable; Figure: −\$20.8M/);
 }
 
+// Wave-2 (#1): one-tap Play on the card itself plus a duration chip — the
+// daily briefing must start without opening the article or scrolling.
+{
+  assert.match(html, /function playItem\(item\)/);
+  const e=makeEnvironment();
+  e.run("render([{id:'daily-1',origin:'daily_compilation',title:'Daily briefing',summary:'',date:'2026-11-09',source:'Focu',audio_url:'media/briefing.mp3',audio_duration:1442,covered_content_ids:[],blocks:[{type:'paragraph',text:'Daily report'}],reading_minutes:5}],'')");
+  const card=e.get('grid').children[0];
+  const body=card.children[0].children[0];
+  const chip=body.children.find(n=>n.className==='cardmeta costchip');
+  assert.ok(chip,'audio card carries a cost chip');
+  assert.equal(chip.textContent,'▶ 24 min');
+  const play=card.children[1].children[0];
+  assert.equal(play.textContent,'▶ Play','first control on an audio card is Play');
+  assert.equal(card.children[1].children[1].textContent,'Archive');
+  play.onclick({preventDefault(){},stopPropagation(){}});
+  assert.equal(e.run('playingId'),'daily-1');
+  assert.equal(e.run('currentId'),null,'card Play does not open the reader');
+  assert.equal(e.get('playerbar').hidden,false,'player bar appears on card Play');
+  assert.equal(e.get('player').src,'media/briefing.mp3');
+  assert.equal(e.get('player').paused,false);
+}
+// Wave-2 (#2): a text-only card prices itself in reading minutes and offers
+// no phantom Play control.
+{
+  const e=makeEnvironment();
+  e.run("render([{id:'text-1',origin:'user_initiated',title:'Text report',summary:'',date:'2026-11-09',source:'Your research',audio_url:'',blocks:[{type:'paragraph',text:'Evidence'}],reading_minutes:4}],'')");
+  e.run("setView('research')");
+  const card=e.get('grid').children[0];
+  const body=card.children[0].children[0];
+  const chip=body.children.find(n=>n.className==='cardmeta costchip');
+  assert.ok(chip,'text card carries a cost chip');
+  assert.equal(chip.textContent,'4 min read');
+  assert.equal(card.children[1].children.length,1,'no Play control without audio');
+  assert.equal(card.children[1].children[0].textContent,'Archive');
+}
+// Wave-2 (#3): a saved position turns the card button into Continue with the
+// remaining time, and playback resumes at that position after a reload.
+{
+  const saved={'focu:content-consumption:v1':JSON.stringify({'long-audio':{audio_pos:275}})};
+  const e=makeEnvironment(saved);
+  e.run("render([{id:'long-audio',origin:'daily_compilation',title:'24 minute briefing',date:'2026-11-09',source:'Focu',audio_url:'assets/long.mp3',audio_duration:1442,covered_content_ids:[],blocks:[{type:'paragraph',text:'Long report'}]}],'')");
+  const play=e.get('grid').children[0].children[1].children[0];
+  assert.equal(play.textContent,'▸ Continue · 19:27 left');
+  play.onclick({preventDefault(){},stopPropagation(){}});
+  const audio=e.get('player');
+  audio.duration=1442.077;
+  audio.events.loadedmetadata();
+  assert.equal(audio.currentTime,275,'playback resumes at the saved position');
+  assert.match(e.get('nowplaying').textContent,/Resumed at 4:35/);
+}
+// Wave-2 (#3): pausing persists the position into the same consumption store,
+// and a fresh environment (reload) offers Continue from it.
+{
+  const e=makeEnvironment();
+  e.run("render([{id:'ep',origin:'daily_compilation',title:'Episode',date:'2026-11-09',source:'Focu',audio_url:'assets/ep.mp3',audio_duration:1442,covered_content_ids:[],blocks:[{type:'paragraph',text:'Report'}]}],'')");
+  e.get('grid').children[0].children[1].children[0].onclick({preventDefault(){},stopPropagation(){}});
+  const audio=e.get('player');
+  audio.duration=1442.077;
+  audio.currentTime=120;
+  audio.events.pause();
+  assert.equal(JSON.parse(e.storage['focu:content-consumption:v1'])['ep'].audio_pos,120,'pause persists position');
+  const reloaded=makeEnvironment(e.storage);
+  reloaded.run("render([{id:'ep',origin:'daily_compilation',title:'Episode',date:'2026-11-09',source:'Focu',audio_url:'assets/ep.mp3',audio_duration:1442,covered_content_ids:[],blocks:[{type:'paragraph',text:'Report'}]}],'')");
+  assert.match(reloaded.get('grid').children[0].children[1].children[0].textContent,/Continue · 22:02 left/);
+  // A position at the very end is finished, not a resume point.
+  audio.currentTime=1441.5;
+  e.run('saveAudioPosition(true)');
+  assert.equal(JSON.parse(e.storage['focu:content-consumption:v1'])['ep'].audio_pos,undefined,'near-end position clears instead of saving');
+}
+// Wave-2 (#3): article scroll position persists across a reload, not only
+// across in-session tab switches.
+{
+  const e=makeEnvironment();
+  e.run('render(['+article('scroll-story')+'],"")');
+  e.run("openItem('scroll-story')");
+  e.run('scrollY=280');
+  e.run("setView('briefing')");
+  assert.equal(JSON.parse(e.storage['focu:content-consumption:v1'])['scroll-story'].article_pos,280,'article position persisted');
+  const reloaded=makeEnvironment(e.storage);
+  reloaded.run('render(['+article('scroll-story')+'],"")');
+  reloaded.run("openItem('scroll-story')");
+  assert.equal(reloaded.run('scrollY'),280,'article position restored after reload');
+}
+
 console.log('Focu reader behavior: article, local read-aloud, persistence and audio end passed');
+console.log('Focu reader wave-2: one-tap play, cost chips and persisted resume passed');
