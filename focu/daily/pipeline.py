@@ -130,7 +130,21 @@ def digest(store, cfg, run, gate_priorities=None):
     grouped = {e["channel_id"]: store.units(e["episode_id"]) for e in store.episodes(run["run_id"])}
     path = store.data_dir / "digested" / f"{run['episode_date']}.json"
     write_json(path, grouped)
-    return {"selected": sum(len(u) for u in grouped.values()), "artifact": str(path)}
+    result = {"selected": sum(len(u) for u in grouped.values()), "artifact": str(path)}
+    # Surface what selection froze about learned influence (Phase 3):
+    # a source the owner paused is announced in the run's status, never
+    # silently absent, and a broken preference record is named rather
+    # than quietly ignored. Keys appear only when there is something
+    # to say, so an ordinary run's report is unchanged.
+    stage = store.db.execute("SELECT report_json FROM stage_runs WHERE run_id=? AND stage='select'",
+                             (run["run_id"],)).fetchone()
+    if stage and stage[0]:
+        learned = (json.loads(stage[0]) or {}).get("learned") or {}
+        if learned.get("paused"):
+            result["learned_paused"] = [entry["announcement"] for entry in learned["paused"]]
+        if learned.get("record_error"):
+            result["learned_record_error"] = learned["record_error"]
+    return result
 
 
 def render_skeleton(channel, units):

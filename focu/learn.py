@@ -16,6 +16,15 @@ reader's owner-carried reading-summary export (format contract in the
 reader's index.html) into the feedback ledger, idempotently, so real
 reader signals — completions, not-for-me marks, useful marks — reach
 the Phase-1 statistics. It writes only to the ledger.
+
+Phase 3 is the record's consumer: learned_adjustments() below is the
+ONLY path from the preference record to selection. It applies the
+design's §3.3 bounds at the point of consumption (weights clamped to
+[0.5, 1.5]; caps carried raw so the seam can only lower the registry
+cap; pauses honored as the owner acts they are), and the daily store's
+select() freezes every factor it actually applied onto the episode
+item, which is what explain() answers from. Phase 3 adds no inference
+path of its own: it consumes owner-written entries, nothing else.
 """
 from __future__ import annotations
 
@@ -541,13 +550,173 @@ def show(db_path="data/focu.sqlite3", record_path=RECORD_PATH) -> dict:
     return result
 
 
-def explain(content_id: str | None = None) -> dict:
-    """Phase-1 stub: no learned preference is wired into selection yet, so
-    the honest answer for every item is that none applied (design §3.3)."""
-    return {"content_id": content_id, "learned_factors": [],
-            "note": "Phase 1: learned preferences are not wired into selection "
-                    "yet (bounded influence arrives in Phase 3); no learned "
-                    "preference affected this item."}
+# --------------------------------------------------------------------------
+# Phase 3: bounded influence — the record's only consumer (design §3.3)
+# --------------------------------------------------------------------------
+
+# Rule 1's band: a learned source_weight modulates the registry priority
+# from inside [WEIGHT_MIN, WEIGHT_MAX], never outside it. The clamp lives
+# here, at the single point of consumption, so a hand-edited record value
+# of 3.0 is applied as 1.5 (and the clamp is what gets frozen + explained).
+WEIGHT_MIN = 0.5
+WEIGHT_MAX = 1.5
+
+
+def learned_adjustments(record: dict) -> dict:
+    """Pure: a loaded preference record -> per-source selection adjustments.
+
+    Returns {source_id: {"weight": {"preference_id", "value"} | None,
+                         "cap": {"preference_id", "value"} | None,
+                         "pause": {"preference_id", "value", "created_at"} | None}}.
+
+    Only active source_weight / source_cap / source_pause entries appear:
+    topic_weight has no topic seam in selection and standing_note carries
+    no scoring effect by design (§3.1), so neither is returned. Weights
+    are clamped to [0.5, 1.5] HERE; caps are carried raw — the seam takes
+    min(registry cap, learned cap), so a learned cap can only ever lower
+    the registry value, never raise it. When several active entries share
+    a kind+target, the later one in the record wins: the record is
+    append-only history and the newest owner act is the current decision.
+    """
+    adjustments: dict[str, dict] = {}
+    for entry in record.get("entries", []):
+        if entry.get("status") != "active":
+            continue
+        kind = entry.get("kind")
+        if kind not in ("source_weight", "source_cap", "source_pause"):
+            continue
+        slot = adjustments.setdefault(
+            entry["target"], {"weight": None, "cap": None, "pause": None})
+        if kind == "source_weight":
+            value = min(WEIGHT_MAX, max(WEIGHT_MIN, float(entry["value"])))
+            slot["weight"] = {"preference_id": entry["id"], "value": value}
+        elif kind == "source_cap":
+            slot["cap"] = {"preference_id": entry["id"],
+                           "value": int(entry["value"])}
+        else:
+            slot["pause"] = {"preference_id": entry["id"], "value": True,
+                             "created_at": entry.get("created_at")}
+    return adjustments
+
+
+def load_learned_adjustments(record_path=None):
+    """Fail-closed loader for selection: (adjustments, error, record_version).
+
+    A corrupted or unprovenanced record yields ZERO adjustments plus the
+    error string — selection then proceeds exactly as it did before
+    Phase 3, and the caller surfaces the error in the run record
+    (design §6.8: a broken user model degrades to the pre-learning
+    system, never to strange behavior).
+    """
+    record, error = safe_load_record(record_path or RECORD_PATH)
+    if error:
+        return {}, error, None
+    return learned_adjustments(record), None, record.get("version")
+
+
+def explain(content_id: str | None = None, daily_dir="data") -> dict:
+    """Answer "why is this here, ranked here?" from the FROZEN record.
+
+    Everything reported here was frozen at selection time: registry
+    priority and cap from the run's frozen config, the gate decision and
+    score from the episode item, and each learned factor the item
+    carries (design §3.3 rule 3). The age component is recovered from
+    the frozen score — score = priority × learned weight / (1 + age) —
+    never recomputed from live state. An item frozen before Phase 3 has
+    no learned_factors key; explain says so plainly instead of guessing
+    that none applied.
+    """
+    if not content_id:
+        return {"content_id": None, "found": False,
+                "note": "Pass a content_id: explain reads the frozen "
+                        "episode item recorded for that content."}
+    db_file = Path(daily_dir) / "few.sqlite3"
+    if not db_file.is_file():
+        return {"content_id": content_id, "found": False,
+                "note": f"No daily store at {db_file}: nothing has been "
+                        "selected there, so no frozen record exists for "
+                        "this item."}
+    db = sqlite3.connect(f"file:{db_file}?mode=ro", uri=True)
+    db.row_factory = sqlite3.Row
+    try:
+        row = db.execute("""SELECT r.episode_date, r.config_json,
+                e.channel_id, ei.unit_json, sr.report_json
+            FROM episode_items ei
+            JOIN episodes e USING(episode_id)
+            JOIN runs r USING(run_id)
+            LEFT JOIN stage_runs sr
+                ON sr.run_id = r.run_id AND sr.stage = 'select'
+            WHERE ei.content_id = ?
+            ORDER BY r.episode_date DESC LIMIT 1""", (content_id,)).fetchone()
+    finally:
+        db.close()
+    if row is None:
+        return {"content_id": content_id, "found": False,
+                "note": "No frozen episode item carries this content_id: "
+                        "it was never selected (or predates the selection "
+                        "records). No learned preference affected it."}
+    unit = json.loads(row["unit_json"])
+    try:
+        cfg = json.loads(row["config_json"] or "{}")
+    except json.JSONDecodeError:
+        cfg = {}
+    source_cfg = next((s for s in cfg.get("sources", [])
+                       if s.get("source_id") == unit.get("source_id")), {})
+    priority = source_cfg.get("priority", 1)
+    factors = unit.get("learned_factors")
+    factors_frozen = factors is not None
+    factors = factors or []
+    weight = 1.0
+    for factor in factors:
+        if factor.get("kind") == "source_weight":
+            weight *= float(factor.get("value", 1.0))
+    score = unit.get("score")
+    age_days = None
+    if isinstance(score, (int, float)) and score > 0 and priority:
+        age_days = round(priority * weight / score - 1, 2)
+    result = {
+        "content_id": content_id,
+        "found": True,
+        "episode_date": row["episode_date"],
+        "channel_id": row["channel_id"],
+        "source": unit.get("source"),
+        "source_id": unit.get("source_id"),
+        "registry_priority": priority,
+        "registry_cap": source_cfg.get("max_items_per_day"),
+        "score": score,
+        "age_days": age_days,
+        "gate_priority": unit.get("gate_priority"),
+        "learned_factors": factors,
+        "factors_frozen": factors_frozen,
+    }
+    try:
+        stage_report = json.loads(row["report_json"] or "{}")
+    except (json.JSONDecodeError, TypeError):
+        stage_report = {}
+    record_error = (stage_report.get("learned") or {}).get("record_error")
+    if record_error:
+        result["record_error"] = record_error
+    if not factors_frozen:
+        if record_error:
+            result["note"] = ("The preference record failed to load during "
+                              "this item's selection run, so learned "
+                              "preferences were applied not at all "
+                              "(fail-closed); the error is in the run's "
+                              "select report.")
+        else:
+            result["note"] = ("This item was frozen before Phase 3 wired "
+                              "learned preferences into selection; no "
+                              "learned-factor record exists for it, and none "
+                              "can be reconstructed after the fact.")
+    elif not factors:
+        result["note"] = "No learned preferences affected this item."
+    else:
+        described = ", ".join(
+            f"{f['preference_id']} ({f['kind']} "
+            f"{'×' if f['kind'] == 'source_weight' else ''}{f['value']})"
+            for f in factors)
+        result["note"] = f"Learned preferences affected this item: {described}."
+    return result
 
 
 # --------------------------------------------------------------------------
@@ -788,7 +957,8 @@ def main(argv: list[str] | None = None, db_path: str | None = None) -> int:
     dismiss.add_argument("--never", action="store_true",
                          help="Exempt this target from this proposal class permanently")
     explain_cmd = sub.add_parser("explain", parents=[common],
-                                 help="Why an item was selected (Phase-1 stub)")
+                                 help="Why an item was selected, answered "
+                                      "from its frozen selection record")
     explain_cmd.add_argument("content_id", nargs="?")
     ingest = sub.add_parser("ingest", parents=[common],
                             help="Import a reader reading-summary export "
@@ -815,7 +985,8 @@ def main(argv: list[str] | None = None, db_path: str | None = None) -> int:
             print(json.dumps(result, ensure_ascii=False, indent=2))
             return 0
         if args.action == "explain":
-            print(json.dumps(explain(args.content_id), ensure_ascii=False, indent=2))
+            print(json.dumps(explain(args.content_id, args.daily_dir),
+                             ensure_ascii=False, indent=2))
             return 0
         if args.action == "ingest":
             result = ingest_reading_summary(args.export, db)
