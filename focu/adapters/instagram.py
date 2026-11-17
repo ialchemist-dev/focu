@@ -95,9 +95,13 @@ Production wiring (NOT done by this prototype — dev-main only):
    and the owner re-creates the file the same way — the adapter
    never logs in on anyone's behalf.
 3. Register the source in ``sources.yaml`` as ``type: instagram``
-   (the config validator must learn the type — a production-wiring
-   change, not made here) with ``name`` exactly "Instagram Feed" and
-   ``max_items_per_day: 1`` (it counts digest units, not posts).
+   with ``profile_url: https://www.instagram.com/`` — the type is
+   registrable: the daily config accepts it and derives the source
+   identity from the profile URL, exactly like LinkedIn — with
+   ``name`` exactly "Instagram Feed" and ``max_items_per_day: 1``
+   (it counts digest units, not posts). What remains owner-side is
+   steps 1–2 (the pinned Instaloader install and session creation)
+   and the schedule in step 4.
 4. Schedule a collector step inside the owner's plausible active
    hours: in the morning briefing job, run
    ``focu instagram-adapter emit --day <D-1> --session <path>

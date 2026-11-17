@@ -127,10 +127,13 @@ Production wiring (NOT done by this prototype — dev-main only):
    file; no part of the collector is imported, bundled, or invoked
    from here.
 2. Register the source in ``sources.yaml`` as ``type: facebook``
-   (the config validator must learn the type — a production-wiring
-   change, not made here) with ``name`` exactly "Facebook Feed" and
-   ``max_items_per_day: 1`` (it counts digest units, not posts),
-   following the LinkedIn Feed registration.
+   with ``profile_url: https://www.facebook.com/`` — the type is
+   registrable: the daily config accepts it and derives the source
+   identity from the profile URL, exactly like LinkedIn — with
+   ``name`` exactly "Facebook Feed" and ``max_items_per_day: 1``
+   (it counts digest units, not posts), following the LinkedIn Feed
+   registration. What remains owner-side is step 1's browser
+   tooling and the schedule in step 3.
 3. Schedule the emit step with the morning briefing job, exactly as
    the LinkedIn unit is handled today: run
    ``focu facebook-adapter emit --day <D-1> --export <export path>

@@ -109,9 +109,14 @@ Production wiring (NOT done by this prototype — dev-main only):
    mainland xiaohongshu.com and global rednote.com do not share
    sessions — the exporter must read the domain the owner's account
    actually lives on.)
-2. Register the source in ``sources.yaml`` with ``name`` exactly
-   "RedNote Feed" and ``max_items_per_day: 1`` (it counts digest
-   units, not notes), following the LinkedIn Feed registration.
+2. Register the source in ``sources.yaml`` as ``type: rednote``
+   with ``profile_url: https://www.xiaohongshu.com/explore`` — the
+   type is registrable: the daily config accepts it and derives
+   the source identity from the profile URL, exactly like LinkedIn
+   — with ``name`` exactly "RedNote Feed" and
+   ``max_items_per_day: 1`` (it counts digest units, not notes),
+   following the LinkedIn Feed registration. What remains
+   owner-side is step 1's exporter and the schedule in step 3.
 3. Schedule the emit step with the morning briefing job, exactly as
    the LinkedIn unit is handled today: run
    ``focu rednote-adapter emit --day <D-1> --export <export path>

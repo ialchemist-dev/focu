@@ -72,7 +72,8 @@ def collect(source, state=None):
         return rss_from_bytes(source, payload)
     if typ == "youtube":
         return collect_youtube(source)
-    return FetchResult(status="needs_auth" if typ in {"x", "linkedin"} else "unsupported",
+    return FetchResult(status="needs_auth" if typ in {"x", "linkedin", "instagram",
+                                                      "rednote", "facebook"} else "unsupported",
                        completeness="failed", error_code="collector_not_implemented",
                        message="M1 supports RSS/blog-with-feed and the experimental YouTube collector")
 
