@@ -240,3 +240,33 @@ Track per-proposal-class precision (accepted / decided) over rolling 90 days. A 
 - Feedback ledger: `focu/feedback.py` (`FeedbackStore`, kinds/targets, module CLI).
 - Profile precedent: `references/audience-profile.md`, loader `focu/audience.py` (provenance enforcement).
 - PRD items designed here: P2-1 (pruning proposals), P2-2 (feedback → selection, explain view), P2-3 (instrumentation — the ingest/export of Phase 2 is its transport); self-iteration Q7 (sparsity) and Q8 (editor boundary) answered in §6.2 and §6.7.
+
+---
+
+## Addendum — the `source_cap` proposal class: evidence design (wave 39, 2026-11-17)
+
+The record schema, the validator, the snooze table (§2.3: 60 days for caps), the statement builder, and the Phase-3 seam have supported `source_cap` entries since Phase 1, but the engine never drafted one: Phase 1 deferred the class because "the completion-rate statistics needed Phase-2 transport." That transport has existed since the reader export shipped, and selection now writes its own accounting (the `selection_accounting` stage row: per source, per run, what was considered, selected, and withheld — and why). The deferral's premises are gone. This addendum is the evidence design the class was waiting for; it invents no new signal, only reads what the system already records.
+
+**What counts as evidence.** Three recorded facts, jointly:
+
+1. **Cap pressure.** The selection accounting's `over_cap` withholdings: candidates selection scored, wanted, and turned away *solely because the source had already filled its effective daily cap*. A source with sustained `over_cap` withholdings is a source whose registry cap is the binding constraint on its presence in the briefing — the pipeline is admitting it at the maximum rate the registry allows.
+2. **Rarely finished.** The attributed completion rate (Phase-2 transport: completions are ledger kind `other`, manual archives excluded per §1.3) is low — but **nonzero**. Zero completions is the pruning pause's shape (§1.2(1), Phase-1 addendum constants `PAUSE_MIN_DELIVERED` / `PAUSE_MIN_DAYS`), and a cap value cannot be derived from zero observed consumption; the honest proposal there is the pause. A cap is proposed when the owner finishes *some* of the source's items — just far fewer than the cap admits.
+3. **No contradiction.** Any `useful` mark in the window vetoes the proposal outright, as it vetoes the pause: the owner's explicit endorsement cannot coexist with an inference that the source should shrink. A demote-shaped source (negative-feedback floors met) gets the gentler demotion instead, as with the pause.
+
+**Floors** (named constants in `focu/learn.py`, stricter than the weight floors on every shared axis — a cap rewrites how much of a source may appear *every day*, so it is held to pause-grade evidence):
+
+| Constant | Value | Rationale |
+|---|---|---|
+| `CAP_MIN_DELIVERED` | 20 delivered | The pause's volume bar; double the weight floor (10). |
+| `CAP_MIN_DAYS` | 10 delivery days | The pause's spread bar: pressure and neglect must be a pattern, not a burst. |
+| `CAP_MIN_OVER_CAP` | 10 withholdings | At the minimum shape (10 delivery days) the cap must bind roughly daily — ≥ 1 turned-away candidate per delivery day — not once. |
+| `CAP_MAX_COMPLETION_RATE` | 0.25 | At most a quarter of admitted items finished; above that, the cap is not the problem. |
+| (veto) | `useful == 0`, `completed >= 1` | Endorsement contradicts shrinkage; zero completions is the pause's evidence, not the cap's. |
+
+**The proposed value** is derived from observed consumption, never invented: `ceil(completed / days)` — the owner's observed finish rate per delivery day, rounded up — at least 1 (the record's own validator floor), and proposed **only when strictly below the registry cap** read from the newest in-window frozen run config (the config `load_config` normalized, so the cap is always a stated registry value, default 5). If observed consumption rounds up to the registry cap, the cap is not what ails the source and the engine is silent; if the registry cap is unknown (the source appears in no usable frozen config in the window), a lowering cannot be proven and the engine is silent. Accepting writes the entry; the seam already applies `min(registry, learned)`, so an accepted cap can only ever lower — §3.3 rule 1 holds by construction.
+
+**Stop-rule treatment.** Cap proposals are **not** gated by the attributed-events stop rule (`MIN_ATTRIBUTED_EVENTS`), consistent with the pruning pause and for the same reason: their evidence is delivered/completion accounting plus selection accounting, not feedback-event volume. The stop rule exists because a *weight* proposal can pass its per-source floors on a bare minimum of feedback events (3 negative marks) while the window around it is silent — the totals contradict the pass. A cap proposal cannot pass on a bare minimum of anything: its floors are ≥ 20 delivered, ≥ 10 days, ≥ 10 cap withholdings, and ≥ 1 attributed completion. The accounting volume *is* the evidence, and it is large by construction. Gating it on unrelated sources' feedback totals would be the same category error the pause exemption already rejects.
+
+**Batch discipline.** One statistics proposal per source per batch, as today. Precedence by gentleness and certainty: demotion (feedback-shaped) → pause (a fully dead source's tax is total) → cap (an over-admitted source's tax is partial) → promotion. The cap branch requires `not demotes`, like the pause branch, so a demote-shaped source in a stop-rule-shut window gets neither this batch. Dismissal snoozes the class for 60 days (§2.3, already in `SNOOZE_DAYS`); the 90-day step rule applies as it does to every kind+target.
+
+**Accounting.** The sparsity block gains the cap gates in the same count-beside-floor form as every other gate (wave 25): `over_cap` beside `CAP_MIN_OVER_CAP`, `completion_rate` beside its ceiling, plus the two facts the value derivation reads — `registry_cap` and the derived `cap_value` — so "why no cap proposal for this source" is answerable from the batch result alone, including when the answer is "the derived value is not a lowering."

@@ -66,6 +66,21 @@ below) earns a source_pause proposal — never a silent pause. The
 pause class is demote-side only, yields to a same-batch demotion for
 the same source, and is vetoed by any useful mark in the window.
 
+Cap proposals (wave 39; evidence design in learning-design.md's
+addendum) close the last designed-but-ungenerated class. The record
+schema, validator, snooze table, and Phase-3 seam supported
+source_cap since Phase 1; generation waited on Phase-2 completion
+evidence and on selection's own accounting. The canonical shape: a
+source pressing against its registry cap (sustained over_cap
+withholdings in the selection_accounting stage rows) whose admitted
+items the owner finishes rarely but not never — zero completions is
+the pause's shape, and no cap value can be derived from zero
+observed consumption. The proposed value is the owner's observed
+finish rate per delivery day, rounded up, and is proposed only when
+it is a true lowering of the registry cap (read from the newest
+in-window frozen run config). Any useful mark vetoes the class,
+exactly as it vetoes the pause.
+
 Sparsity accounting and the stop rule (wave 25, Q7) make the
 engine's silence legible. Every batch result carries a sparsity
 block — per source, the delivered count and the attributed feedback
@@ -74,14 +89,16 @@ counts beside the floor each gate applies, plus window totals — so
 from the result alone. And below MIN_ATTRIBUTED_EVENTS attributed
 events in the window, the engine drafts no source_weight proposals
 at all and records the reason in the result: silence is explained,
-never silent. Review proposals and the pruning pause rest on other
-evidence (the record; delivered/completion accounting) and are not
-gated by the stop rule.
+never silent. Review proposals, the pruning pause, and cap
+proposals rest on other evidence (the record; delivered/completion
+accounting; selection accounting) and are not gated by the stop
+rule.
 """
 from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
 import sqlite3
 from datetime import date, datetime, timedelta, timezone
@@ -128,9 +145,10 @@ PROMOTE_WEIGHT = 1.25         # promotion requires the owner's own useful marks
 # N events in 30 days"). The value is 4 because 3 would be vacuous
 # (any passing source contributes >= 3 attributed events by itself)
 # and 5 would repeal the canonical demotion shape (4 negative events
-# on one source in an otherwise quiet window). Review proposals and
-# the pruning pause are NOT gated: their evidence is the record and
-# the delivered/completion accounting, not feedback-event volume.
+# on one source in an otherwise quiet window). Review proposals, the
+# pruning pause, and cap proposals are NOT gated: their evidence is
+# the record and the delivered/completion/selection accounting, not
+# feedback-event volume.
 MIN_ATTRIBUTED_EVENTS = 4
 # Pruning proposals (PRD P2-1, design §1.2(1) + §6.2): a source_pause
 # proposal is drafted ONLY from completion-rate evidence — the Phase-2
@@ -147,6 +165,34 @@ MIN_ATTRIBUTED_EVENTS = 4
 # every other kind.
 PAUSE_MIN_DELIVERED = 20
 PAUSE_MIN_DAYS = 10
+# Cap proposals (wave 39; evidence design in learning-design.md's
+# addendum): a source_cap proposal is drafted ONLY from accounting
+# evidence — selection's own over_cap withholdings (the registry cap
+# is the binding constraint on the source's presence) joined with
+# the Phase-2 completion accounting (the owner finishes the admitted
+# items rarely). The floors are pause-grade, stricter than the
+# weight floors on every shared axis, because a cap rewrites how
+# much of a source may appear every day: at least
+# CAP_MIN_DELIVERED delivered over at least CAP_MIN_DAYS distinct
+# delivery days, at least CAP_MIN_OVER_CAP candidates withheld
+# over_cap (at the minimum shape the cap binds roughly daily), and
+# a completion rate of at most CAP_MAX_COMPLETION_RATE with at
+# least one completion — zero completions is the pause's shape,
+# and no cap value can be derived from zero observed consumption.
+# Any useful mark vetoes the class outright, as it vetoes the
+# pause. The proposed value is derived, never invented:
+# ceil(completed / days), the owner's observed finish rate per
+# delivery day rounded up, at least 1, and proposed only when
+# strictly below the registry cap (from the newest in-window
+# frozen run config) — the seam takes min(registry, learned), so a
+# proposal that is not a lowering would be a no-op wearing a
+# costume. Like the pause, the class is NOT gated by the stop
+# rule: its floors are accounting volumes, large by construction,
+# not a bare minimum of feedback events.
+CAP_MIN_DELIVERED = 20
+CAP_MIN_DAYS = 10
+CAP_MIN_OVER_CAP = 10
+CAP_MAX_COMPLETION_RATE = 0.25
 MAX_OPEN_PROPOSALS = 3        # the weekly attention budget (design §2.2)
 REVIEW_AFTER_DAYS = 90
 
@@ -438,6 +484,84 @@ def _selection_history(daily_dir, start: date, end: date):
     return delivered, content_source, episode_sources
 
 
+def _selection_accounting(daily_dir, start: date, end: date):
+    """Per-source cap pressure and registry caps from selection's own
+    records: the selection_accounting stage rows (wave 23) and the
+    frozen run configs.
+
+    Returns {source_id: {"over_cap": int, "registry_cap": int|None}}.
+    over_cap sums the window's withheld counts with reason
+    "over_cap" — candidates selection scored and turned away solely
+    because the source had filled its effective daily cap.
+    registry_cap is read from the NEWEST in-window frozen run config
+    that carries a sources list (load_config normalized it, so
+    max_items_per_day is a stated registry value, default 5): the
+    registry as it stood at the window's end is the cap a proposal
+    must lower. A source absent from that config gets None — a
+    lowering cannot be proven for it. A missing daily database, an
+    unparseable config, or a malformed accounting row contributes
+    nothing, mirroring _selection_history's discipline.
+    """
+    accounting: dict[str, dict] = {}
+    db_file = Path(daily_dir) / "few.sqlite3"
+    if not db_file.is_file():
+        return accounting
+    db = sqlite3.connect(f"file:{db_file}?mode=ro", uri=True)
+    try:
+        runs = db.execute("""SELECT episode_date, config_json FROM runs
+            WHERE episode_date >= ? AND episode_date <= ?
+            ORDER BY episode_date""",
+                          (start.isoformat(), end.isoformat())).fetchall()
+        rows = db.execute("""SELECT sr.report_json FROM stage_runs sr
+            JOIN runs r USING(run_id)
+            WHERE sr.stage = 'selection_accounting'
+              AND r.episode_date >= ? AND r.episode_date <= ?""",
+                          (start.isoformat(), end.isoformat())).fetchall()
+    finally:
+        db.close()
+    newest_caps = None
+    for _episode_date, config_json in runs:
+        try:
+            cfg = json.loads(config_json)
+        except (TypeError, json.JSONDecodeError):
+            continue
+        if not isinstance(cfg, dict) or not isinstance(cfg.get("sources"), list):
+            continue
+        caps = {}
+        for src in cfg["sources"]:
+            if not isinstance(src, dict):
+                continue
+            cap = src.get("max_items_per_day")
+            if (isinstance(src.get("source_id"), str)
+                    and isinstance(cap, int) and not isinstance(cap, bool)
+                    and cap >= 1):
+                caps[src["source_id"]] = cap
+        newest_caps = caps  # rows are date-ordered: the last usable config wins
+    for (report_json,) in rows:
+        try:
+            report = json.loads(report_json)
+        except (TypeError, json.JSONDecodeError):
+            continue
+        if not isinstance(report, dict):
+            continue
+        for entry in report.get("sources") or []:
+            if not isinstance(entry, dict) or not entry.get("source_id"):
+                continue
+            slot = accounting.setdefault(
+                entry["source_id"], {"over_cap": 0, "registry_cap": None})
+            for withheld in entry.get("withheld") or []:
+                if (isinstance(withheld, dict)
+                        and withheld.get("reason") == "over_cap"
+                        and isinstance(withheld.get("count"), int)):
+                    slot["over_cap"] += withheld["count"]
+    if newest_caps:
+        for source_id, cap in newest_caps.items():
+            slot = accounting.setdefault(
+                source_id, {"over_cap": 0, "registry_cap": None})
+            slot["registry_cap"] = cap
+    return accounting
+
+
 def _attribute_feedback(events, content_source, episode_sources, start: date, end: date):
     """Attribute feedback events to sources, honestly or not at all.
 
@@ -478,6 +602,7 @@ def compute_statistics(db_path, daily_dir, now: datetime | None = None) -> dict:
     end = now.date()
     start = end - timedelta(days=WINDOW_DAYS - 1)
     delivered, content_source, episode_sources = _selection_history(daily_dir, start, end)
+    accounting = _selection_accounting(daily_dir, start, end)
     events = FeedbackStore(db_path).list()
     per_source, unattributed = _attribute_feedback(
         events, content_source, episode_sources, start, end)
@@ -485,10 +610,15 @@ def compute_statistics(db_path, daily_dir, now: datetime | None = None) -> dict:
     for source_id in set(delivered) | set(per_source):
         slot = delivered.get(source_id, {"name": source_id, "delivered": 0, "days": 0})
         kinds = per_source.get(source_id, {})
+        acct = accounting.get(source_id, {})
         sources[source_id] = {
             "name": slot["name"],
             "delivered": slot["delivered"],
             "days": slot["days"],
+            # Selection accounting (wave 39): cap pressure and the
+            # registry cap a cap proposal would have to lower.
+            "over_cap": acct.get("over_cap", 0),
+            "registry_cap": acct.get("registry_cap"),
             "negative": {k: kinds.get(k, 0) for k in NEGATIVE_KINDS if kinds.get(k, 0)},
             "negative_total": sum(kinds.get(k, 0) for k in NEGATIVE_KINDS),
             "useful": kinds.get("useful", 0),
@@ -507,14 +637,27 @@ def compute_statistics(db_path, daily_dir, now: datetime | None = None) -> dict:
             "attributed_total": attributed_total}
 
 
+def _observed_cap_value(completed: int, days: int):
+    """The cap value a cap proposal would carry: the owner's observed
+    finish rate per delivery day (completed / days), rounded up, at
+    least 1 — derived from observed consumption, never invented.
+    None when there is no delivery day to derive a rate from."""
+    if days < 1:
+        return None
+    return max(1, math.ceil(completed / days))
+
+
 def _sparsity_block(stats):
     """Distance-to-floor accounting for the current window (wave 25, Q7).
 
     Per source: the delivered count and the attributed feedback counts
     (negative / useful / completed), each beside the floor its gate
-    applies — including the pruning pause's delivered/days floors — so
-    "how far is this source from ever generating a proposal, and why"
-    is answerable from the proposals result alone, including when
+    applies — including the pruning pause's delivered/days floors and
+    the cap class's gates (over_cap beside its floor, completion rate
+    beside its ceiling, and the two facts the cap value derivation
+    reads: the registry cap and the derived value) — so "how far is
+    this source from ever generating a proposal, and why" is
+    answerable from the proposals result alone, including when
     nothing was proposed. Window level: total attributed events beside
     the stop rule's floor, and the unattributed count the attribution
     step already tracks. Pure accounting: no decision reads this block.
@@ -535,8 +678,16 @@ def _sparsity_block(stats):
             "useful": slot["useful"],
             "useful_floor": MIN_USEFUL_EVENTS,
             "completed": slot["completed"],
+            "completion_rate": round(slot["completion_rate"], 3),
+            "completion_rate_ceiling": CAP_MAX_COMPLETION_RATE,
             "pause_delivered_floor": PAUSE_MIN_DELIVERED,
             "pause_days_floor": PAUSE_MIN_DAYS,
+            "over_cap": slot["over_cap"],
+            "over_cap_floor": CAP_MIN_OVER_CAP,
+            "cap_delivered_floor": CAP_MIN_DELIVERED,
+            "cap_days_floor": CAP_MIN_DAYS,
+            "registry_cap": slot["registry_cap"],
+            "cap_value": _observed_cap_value(slot["completed"], slot["days"]),
         }
     return {"sources": sources,
             "attributed_events": stats["attributed_total"],
@@ -647,7 +798,9 @@ def generate_proposals(db_path="data/focu.sqlite3", daily_dir="data",
     Below MIN_ATTRIBUTED_EVENTS total attributed events, no
     source_weight proposals are drafted and the result's
     signal_reason says so; every result carries the sparsity block.
-    Empty history correctly produces an empty batch."""
+    Cap proposals, like the pruning pause, rest on accounting
+    evidence and are not gated by that rule. Empty history correctly
+    produces an empty batch."""
     now = now or datetime.now(timezone.utc)
     today = now.date()
     store = ProposalStore(db_path)
@@ -677,8 +830,8 @@ def generate_proposals(db_path="data/focu.sqlite3", daily_dir="data",
     # the window's TOTAL attributed signal clears MIN_ATTRIBUTED_EVENTS.
     # The accounting below always runs (sources_below_evidence_floor and
     # the sparsity block stay truthful); only drafting is gated. Review
-    # candidates above and the pruning pause below rest on other
-    # evidence and are never gated by this rule.
+    # candidates above, the pruning pause, and cap proposals below rest
+    # on other evidence and are never gated by this rule.
     signal_reason = None
     if stats["attributed_total"] < MIN_ATTRIBUTED_EVENTS:
         signal_reason = (f"insufficient attributed signal: "
@@ -694,6 +847,7 @@ def generate_proposals(db_path="data/focu.sqlite3", daily_dir="data",
         negative = slot["negative_total"]
         demotes = (negative >= MIN_NEGATIVE_EVENTS
                    and negative / slot["delivered"] >= MIN_NEGATIVE_RATE)
+        cap_value = _observed_cap_value(slot["completed"], slot["days"])
         if statistics_open and demotes:
             breakdown = ", ".join(f"{k} ×{n}" for k, n in sorted(slot["negative"].items()))
             candidates.append({
@@ -706,12 +860,41 @@ def generate_proposals(db_path="data/focu.sqlite3", daily_dir="data",
             })
         elif statistics_open and slot["useful"] >= MIN_USEFUL_EVENTS:
             candidates.append({
-                "rank": (2, -slot["useful"], -slot["delivered"]),
+                "rank": (3, -slot["useful"], -slot["delivered"]),
                 "kind": "source_weight", "target": source_id,
                 "target_name": slot["name"], "value": PROMOTE_WEIGHT,
                 "evidence": (f"{slot['useful']} owner 'useful' marks on "
                              f"{slot['delivered']} delivered items, {WINDOW_DAYS}d "
                              f"window, n={slot['delivered']} delivered"),
+            })
+        elif (not demotes
+                and slot["useful"] == 0
+                and slot["completed"] >= 1
+                and slot["completion_rate"] <= CAP_MAX_COMPLETION_RATE
+                and slot["delivered"] >= CAP_MIN_DELIVERED
+                and slot["days"] >= CAP_MIN_DAYS
+                and slot["over_cap"] >= CAP_MIN_OVER_CAP
+                and slot["registry_cap"] is not None
+                and cap_value is not None
+                and 1 <= cap_value < slot["registry_cap"]):
+            # Cap (wave 39): the registry cap binds daily (sustained
+            # over_cap withholdings) while the owner finishes only a
+            # fraction of what it admits. Not gated by the stop rule —
+            # its evidence is accounting volume, not feedback events
+            # (see the constants block). Ranked below the pause: a
+            # fully dead source's tax is total, an over-admitted
+            # source's tax is partial; above promotion, as every
+            # demote-side class is.
+            candidates.append({
+                "rank": (2, -slot["over_cap"], -slot["delivered"]),
+                "kind": "source_cap", "target": source_id,
+                "target_name": slot["name"], "value": cap_value,
+                "evidence": (f"{slot['completed']} of {slot['delivered']} items "
+                             f"completed in {WINDOW_DAYS}d window across "
+                             f"{slot['days']} delivery days; {slot['over_cap']} "
+                             f"candidates withheld over_cap at the registry "
+                             f"cap of {slot['registry_cap']}/day, 0 useful "
+                             f"marks, n={slot['delivered']} delivered"),
             })
         elif (not demotes
                 and slot["completed"] == 0 and slot["useful"] == 0
