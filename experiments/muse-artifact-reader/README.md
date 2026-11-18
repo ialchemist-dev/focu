@@ -33,6 +33,43 @@ python3 publish.py \
 
 Confirm chronological order, ISO dates and original-file SHA-256 equality before deploying. Update the **existing** private `focu-podcast-library` Library entry with the resulting `index.html` and `assets/`. The publisher does not call Muse's build/update API, alter production cron, or touch original deliveries.
 
+## Mobile table check (P2-3)
+
+Owner report (2026-11-18): article tables overflowed the right edge on
+phone-width screens and forced page-level horizontal scrolling. The fix
+keeps the overshoot inside the table's own container:
+
+- every table renders inside `.table-scroll` (full-width block,
+  `overflow-x:auto`, `overscroll-behavior-x:contain`);
+- the layout chain (`main`, `#reader`, `#articlebody`) carries
+  `min-width:0; max-width:100%`, and `html,body` are guarded with
+  `overflow-x:hidden; overflow-x:clip` (clip does not break the sticky
+  header; hidden is the fallback);
+- at ≤480px, table cells step down (`min-width:104px`, 13px font) so
+  ordinary tables need less scrolling; the article toolbar wraps.
+
+Regression coverage: `node test_reader_behavior.js` (the "P2-3" block)
+asserts the CSS contract and that a wide 8-column table renders as
+exactly one wrapped table, never a bare `<table>` under `#articlebody`.
+
+Manual verification protocol (for a device/browser session): build a
+bundle whose article contains a wide table, e.g.
+
+```bash
+python3 publish.py --deliveries <fixture-with-wide-table> \
+  --output /tmp/focu-wide-table-bundle --skip-audio-audit
+```
+
+open the article at a 390px viewport, and confirm
+`document.documentElement.scrollWidth <= window.innerWidth` while the
+`.table-scroll` element itself reports `scrollWidth > clientWidth`
+(the table scrolls; the page does not). On 2026-11-18 this live-layout
+step was not run in the dev environment (the managed Chromium cannot be
+launched directly and the browser tool rejects loopback URLs); the
+bundle markup and the CSS/behavior contract above were verified
+instead. Run the protocol on the owner's phone after the next reader
+rebuild ships.
+
 ## Acceptance limits
 
 No original cover images were available. Controlled iPhone force-quit/reopen, lock-screen/background playback, and persistent playback position have not been verified. No daily automation or cross-device state sync is implemented. Static bundles must be rebuilt for new content. Do not publish private media URLs.

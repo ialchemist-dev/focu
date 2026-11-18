@@ -9,6 +9,8 @@
 :root{--muse-header-clearance:68px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;color:#252422;background:#fbfaf8;font-synthesis:none}
 *{box-sizing:border-box}
 body{margin:0;min-height:100vh;background:#fbfaf8}
+html,body{overflow-x:hidden;overflow-x:clip}
+main,#reader,#articlebody{min-width:0;max-width:100%}
 button{font:inherit;cursor:pointer}
 button:focus-visible,a:focus-visible{outline:3px solid #bd6258;outline-offset:3px}
 header{position:sticky;top:0;z-index:5;background:#fbfaf8ed;backdrop-filter:blur(18px);border-bottom:1px solid #ebe8e2}
@@ -53,7 +55,7 @@ main{max-width:760px;margin:0 auto;padding:25px 22px 70px}
 .readercover{width:100%;max-height:160px;object-fit:cover;border-radius:14px;margin-bottom:25px;background:#eee9e2}
 #readertitle{font-size:clamp(30px,6.5vw,45px);letter-spacing:-.055em;line-height:1.13;margin:6px 0 18px;font-weight:790}
 #readersummary{font-size:17px;color:#716b64;line-height:1.65;margin:0 0 23px}
-.readeractions{display:flex;align-items:center;gap:12px;padding:16px 0;border-top:1px solid #e9e5df;border-bottom:1px solid #e9e5df;margin-bottom:28px}
+.readeractions{display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:16px 0;border-top:1px solid #e9e5df;border-bottom:1px solid #e9e5df;margin-bottom:28px}
 .listen{border:0;background:#242424;color:#fff;border-radius:24px;padding:10px 18px;font-weight:650;font-size:14px}
 .readtime{color:#999189;font-size:12px}
 #articlebody{font-size:17px;line-height:1.9;letter-spacing:-.008em;color:#37342e}
@@ -63,8 +65,13 @@ main{max-width:760px;margin:0 auto;padding:25px 22px 70px}
 #articlebody blockquote{border-left:3px solid #d9ada0;margin:15px 0 24px;padding:0 16px;color:#68615c}
 #articlebody a{color:#a94e45;text-decoration:underline;text-underline-offset:3px;overflow-wrap:anywhere}
 #articlebody pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f0ede8;padding:14px;border-radius:10px;font-size:13px;line-height:1.65}
-#articlebody .table-scroll{max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;margin:20px 0 28px;border:1px solid #e6e1d9;border-radius:10px;background:#fffdfb}
-#articlebody .article-table{width:100%;min-width:max-content;border-collapse:collapse;font-size:14px;line-height:1.55;letter-spacing:normal}
+#articlebody img,#articlebody svg,#articlebody video{max-width:100%;height:auto}
+/* P2-3: a wide table scrolls inside .table-scroll only. The wrapper is a
+   full-width block with its own horizontal scroll + overscroll containment,
+   and the page-level overflow-x:clip guard above keeps any residual
+   overshoot from becoming page-level horizontal scrolling on phones. */
+#articlebody .table-scroll{display:block;width:100%;max-width:100%;overflow-x:auto;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch;margin:20px 0 28px;border:1px solid #e6e1d9;border-radius:10px;background:#fffdfb}
+#articlebody .article-table{width:100%;min-width:max-content;table-layout:auto;border-collapse:collapse;font-size:14px;line-height:1.55;letter-spacing:normal}
 #articlebody .article-table th,#articlebody .article-table td{padding:12px 14px;min-width:130px;max-width:330px;vertical-align:top;text-align:left;border-bottom:1px solid #e9e5de;border-right:1px solid #ece9e3;overflow-wrap:anywhere}
 #articlebody .article-table th{font-weight:700;background:#f4f1ec}
 #articlebody .article-table tr:last-child td{border-bottom:0}
@@ -106,7 +113,7 @@ body:has(#playerbar:not([hidden])) main{padding-bottom:calc(160px + var(--muse-c
 .coveredlink:focus-visible{outline:3px solid #bd6258}
 .error{color:#af443b!important}
 #articlebody .noarticle{text-align:center;color:#777;font-size:15px}
-@media(max-width:480px){.head{padding:calc(10px + var(--muse-header-clearance)) 17px 10px;min-height:64px}.brand{font-size:23px}.nav button{padding:8px 10px}main{padding:20px 18px 70px}.feedtitle{font-size:20px}.cover{width:92px;height:92px}.feedcard{gap:13px;padding:21px 0}#articlebody{font-size:16px;line-height:1.85}}
+@media(max-width:480px){.head{padding:calc(10px + var(--muse-header-clearance)) 17px 10px;min-height:64px}.brand{font-size:23px}.nav button{padding:8px 10px}main{padding:20px 18px 70px}.feedtitle{font-size:20px}.cover{width:92px;height:92px}.feedcard{gap:13px;padding:21px 0}#articlebody{font-size:16px;line-height:1.85}#articlebody .article-table{font-size:13px}#articlebody .article-table th,#articlebody .article-table td{min-width:104px;padding:10px 11px}}
 </style>
 </head>
 <body>

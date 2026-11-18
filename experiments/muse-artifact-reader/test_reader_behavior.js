@@ -352,6 +352,47 @@ assert.match(html, /\.feedcard\[hidden\]\{display:none!important\}/);
   assert.match(spoken,/Net loss attributable; Figure: −\$20.8M/);
 }
 
+// P2-3 (owner-reported): article tables must never force page-level
+// horizontal scrolling at phone widths. The table may be wider than the
+// screen, but the overshoot stays inside .table-scroll: the wrapper is a
+// full-width block with its own scroll + overscroll containment, the
+// layout chain down to it can shrink (min-width:0), the page itself is
+// guarded with overflow-x:clip (hidden as the pre-clip fallback), and at
+// <=480px cells step down so ordinary tables need less scrolling. A wide
+// 8-column table still renders as exactly one wrapped table — never a
+// bare <table> directly under #articlebody.
+{
+  assert.match(html, /html,body\{overflow-x:hidden;overflow-x:clip\}/);
+  assert.match(html, /main,#reader,#articlebody\{min-width:0;max-width:100%\}/);
+  assert.match(html, /\.table-scroll\{[^}]*display:block/);
+  assert.match(html, /\.table-scroll\{[^}]*width:100%/);
+  assert.match(html, /\.table-scroll\{[^}]*overscroll-behavior-x:contain/);
+  assert.match(html, /\.readeractions\{[^}]*flex-wrap:wrap/);
+  const mobileCss=html.slice(html.lastIndexOf('@media(max-width:480px)'));
+  assert.match(mobileCss, /#articlebody \.article-table\{font-size:13px\}/);
+  assert.match(mobileCss, /article-table th,#articlebody \.article-table td\{min-width:104px/);
+  const e=makeEnvironment();
+  const wide={
+    type:'table',
+    headers:['Metric','Q1','Q2','Q3','Change','Notes','Source','Token'],
+    align:['left','right','right','right','right','left','left','left'],
+    rows:[
+      ['Revenue','$116,000','$128,500','$141,250','+21.8%','Consolidated reconciliation','SRC-2026-Q3-0001','abcdefghijklmnopqrstuvwxyz0123456789'],
+      ['Net loss','-$20.8M','-$19.5M','-$18.1M','improvement','Income statement appendix','SRC-2026-Q3-0002','abcdefghijklmnopqrstuvwxyz0123456789']
+    ]
+  };
+  e.run('renderArticle('+JSON.stringify([wide])+',\"\")');
+  const kids=e.get('articlebody').children;
+  assert.equal(kids.length,1,'wide table renders as a single wrapped block');
+  assert.equal(kids[0].className,'table-scroll');
+  assert.ok(kids.every(n=>n.name!=='table'),'no bare table directly under #articlebody');
+  const table=kids[0].children[0];
+  assert.equal(table.name,'table');
+  assert.equal(table.children[0].children[0].children.length,8,'all 8 columns preserved inside the wrapper');
+  assert.equal(table.children[1].children.length,2);
+  console.log('Focu reader P2-3: wide tables stay inside .table-scroll; page cannot scroll sideways passed');
+}
+
 // Wave-2 (#1): one-tap Play on the card itself plus a duration chip — the
 // daily briefing must start without opening the article or scrolling.
 {
