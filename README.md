@@ -45,10 +45,14 @@ bash scripts/bootstrap.sh
 .venv/bin/python -m pip install -e '.[daily]'
 ```
 
-`bootstrap.sh` creates `.venv`, installs the package, runs
-`focu doctor`, and initializes local state under `data/`.
-Success: the doctor summary prints with no errors, and
-`.venv/bin/focu --help` lists the CLI.
+The clone takes the repository's default branch (`main`, the stable
+line). `bootstrap.sh` creates `.venv`, installs the package, runs
+`focu doctor`, and initializes local state under `data/`. The second
+pip line is **required, not optional**: it adds the daily pipeline's
+extras (YouTube download/transcript tooling) that the base install
+leaves out.
+Success: bootstrap exits 0 after printing a JSON health summary and
+the line `Focu installed.`, and `.venv/bin/focu --help` lists the CLI.
 
 ### 2. Verify with the offline demo (no network, no keys)
 
@@ -68,12 +72,13 @@ configuring anything — the demo has no external dependencies.
 ### 3. Configure sources
 
 **Ask** your user who they want to follow. Then either start from the
-recommended defaults (step 4) or write a minimal `sources.yaml`:
+recommended defaults (step 4) or write a minimal `sources.yaml` in the
+repo root (later steps pass it as `--config sources.yaml`):
 
 ```yaml
 version: 1
 timezone: "America/Denver"        # the user's IANA timezone
-output_mode: audio                # or text_only
+output_mode: text_only            # switch to audio after step 6
 
 channels:
   - id: research
@@ -109,8 +114,12 @@ verified sources in one command, deduplicated against the registry:
 ```
 
 The recommended starter is **People I Follow** (6 sources, ≈58
-posts/month). The preview prints the exact attention cost before
-anything is written; installs are reversible
+posts/month across the whole pack). The preview prints the exact
+attention cost of what it would *add to your registry* before anything
+is written. Two things to tell your user before they accept an install:
+applying a plan rewrites `sources.yaml` in canonical form — comments
+and hand formatting are not preserved, but a timestamped backup is
+written first — and installs are reversible
 (`focu pack uninstall`, `focu pack restore`).
 
 Browse all packs in the marketplace:
@@ -139,6 +148,10 @@ and withheld (each withholding named with its reason). A run that fails
 still writes its record — outcome `failed`, stage and error named.
 
 ### 6. Speech (optional)
+
+Once one of these backends works, set `output_mode: audio` in
+`sources.yaml` — until then runs stay text-only and say so in their
+day-status record.
 
 - OpenAI (primary): `.venv/bin/focu tts setup` stores the user's key
   locally (interactive terminal, user consent first), or set

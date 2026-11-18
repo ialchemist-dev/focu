@@ -462,6 +462,24 @@ def _host_set(locators):
     return hosts
 
 
+# Hosts that carry many independent publications. Sharing one of these
+# hosts says nothing about being the same publication — every YouTube
+# channel lives on youtube.com — so the host-overlap branch of the
+# duplicate warning in plan_install must not fire on them. (Found by the
+# 2026-11-18 clean-room install test: installing People I Follow next to
+# a registry holding 3Blue1Brown warned that three other distinct
+# channels would "subscribe the same publication twice". The dedupe
+# tests' own rule applies: warnings that cry wolf are an attention tax.)
+# Exact locator overlap still fires for these hosts.
+MULTI_PUBLICATION_HOSTS = {
+    "youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be",
+    "x.com", "twitter.com", "www.twitter.com", "www.x.com",
+    "substack.com", "medium.com", "wordpress.com", "blogspot.com",
+    "github.io", "ghost.io", "notion.site",
+    "linkedin.com", "www.linkedin.com",
+}
+
+
 # ---------------------------------------------------------------------------
 # Liveness (design section 6, rules 8-9). Network results are recorded,
 # never raised: a dead feed is data for the plan, not an exception.
@@ -1001,7 +1019,8 @@ def plan_install(pack, config_path, *, channel_override=None, liveness=None):
         for other in claimed:
             if sid is not None and other["source_id"] == sid:
                 continue
-            if new_locators & other["locators"] or new_hosts & other["hosts"]:
+            if new_locators & other["locators"] or (
+                    new_hosts & other["hosts"]) - MULTI_PUBLICATION_HOSTS:
                 plan["warnings"].append(
                     f"source {src['id']!r}: shares a site with "
                     f"{other['where']} source {other['name']!r} but under "

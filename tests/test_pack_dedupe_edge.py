@@ -118,5 +118,61 @@ class CrossLocatorDedupeTests(unittest.TestCase):
         self.assertEqual(plan["warnings"], [])
 
 
+YOUTUBE_CONFIG = """version: 1
+channels:
+  - id: research
+    name: Research Digest
+sources:
+  - name: Channel A
+    type: youtube
+    channel: research
+    channel_id: UCaaaaaaaaaaaaaaaaaaaaaa
+"""
+
+
+def make_youtube_source(source_id, name, channel_id):
+    source = make_source(
+        id=source_id, name=name, type="youtube",
+        homepage=f"https://www.youtube.com/channel/{channel_id}",
+        channel_id=channel_id)
+    source.pop("feed_url")
+    return source
+
+
+class PlatformHostDedupeTests(unittest.TestCase):
+    """Regression (clean-room install test, 2026-11-18): distinct
+    YouTube channels share the host youtube.com; the host-overlap
+    branch of the duplicate warning must not call them the same
+    publication. Only exact locator overlap or a non-platform shared
+    host may warn."""
+
+    def test_distinct_youtube_channels_no_warning(self):
+        pack = make_pack([
+            make_youtube_source("chan-b", "Channel B",
+                                "UCbbbbbbbbbbbbbbbbbbbbbb"),
+            make_youtube_source("chan-c", "Channel C",
+                                "UCcccccccccccccccccccccc"),
+        ])
+        plan = plan_for(YOUTUBE_CONFIG, pack)
+        self.assertEqual(len(plan["adds"]), 2)
+        joined = " ".join(plan["warnings"])
+        self.assertNotIn("shares a site", joined)
+        self.assertNotIn("different identity", joined)
+
+    def test_same_channel_other_locator_form_still_dedupes(self):
+        # The pack names the registry's channel by handle URL instead
+        # of channel_id: a genuinely different identity for the same
+        # channel must still surface (locator/host logic untouched for
+        # exact matches is covered elsewhere; here the channel_id form
+        # in the pack dedupes outright).
+        pack = make_pack([
+            make_youtube_source("chan-a2", "Channel A Again",
+                                "UCaaaaaaaaaaaaaaaaaaaaaa"),
+        ])
+        plan = plan_for(YOUTUBE_CONFIG, pack)
+        self.assertEqual(plan["adds"], [])
+        self.assertEqual(len(plan["duplicates"]), 1)
+
+
 if __name__ == "__main__":
     unittest.main()
