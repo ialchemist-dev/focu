@@ -33,6 +33,31 @@ python3 publish.py \
 
 Confirm chronological order, ISO dates and original-file SHA-256 equality before deploying. Update the **existing** private `focu-podcast-library` Library entry with the resulting `index.html` and `assets/`. The publisher does not call Muse's build/update API, alter production cron, or touch original deliveries.
 
+## Cover images (P2-4)
+
+Every article in a bundle gets exactly one cover, in priority order:
+a real source image already in the delivery, an opt-in fetched source
+image, an opt-in AI cover, and finally a **procedural PNG** generated
+by `cover_art.procedural_cover_png` — so no article ships coverless.
+
+The procedural cover is deterministic (seeded by title + summary),
+pure-stdlib, 1200×900 (4:3): flat clay-paper shapes in the house
+palette (warm cream, soft teal, muted amber, terracotta, restrained
+coral, graphite) with subtle seeded grain. It contains **no text and
+no faces by construction** and is never clickbait — the full style
+contract lives in `docs/cover-style.md` (repo root) and the AI-cover
+prompt embeds the same spec. It replaces the retired typographic SVG
+(`offline_art`), which rendered the article title inside the image.
+
+Reader behaviour: covers with origin `procedural_art` show in the
+feed card and at the top of the article, like source/AI covers.
+Bundles already built with `offline_art` SVG placeholders keep their
+previous behaviour (the reader still hides that origin), so existing
+items keep working unchanged. Regression coverage:
+`python3 -m unittest test_publish.py` (determinism, PNG structure,
+palette, build integration) and `node test_reader_behavior.js`
+(the "P2-4" block: procedural shown, legacy hidden).
+
 ## Mobile table check (P2-3)
 
 Owner report (2026-11-18): article tables overflowed the right edge on

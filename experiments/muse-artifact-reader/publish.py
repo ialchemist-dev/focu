@@ -11,7 +11,7 @@ import shutil
 import sys
 import tempfile
 from editorial import editorial, compose_article_with_openai, markdown_from_html
-from cover_art import typographic_svg, candidate_source_image, fetch_source_cover, generate_ai_cover
+from cover_art import procedural_cover_png, candidate_source_image, fetch_source_cover, generate_ai_cover
 from focu.media_integrity import inspect_mp3, transcode_ios_cbr, MediaIntegrityError
 from focu.audience import load_profile, calibration, mismatch_report, detect_domain
 from focu.briefing import find_boilerplate
@@ -318,11 +318,17 @@ def build(deliveries, output, template, limit, *, fetch_source_covers=False, gen
                 except (OSError, ValueError, RuntimeError) as exc:
                     warnings.append(episode_id + ": AI cover generation unavailable: " + str(exc))
             if not item.get("cover_url"):
-                dest = assets / "covers" / (safe_id + ".svg")
-                dest.write_bytes(typographic_svg(item["title"], item.get("summary", "")))
+                # Every article gets a cover (P2-4): a deterministic
+                # procedural PNG in the house style (docs/cover-style.md)
+                # — soft abstract shapes, warm palette, subtle grain, no
+                # text, no faces, never bait. Origin "procedural_art" is
+                # shown by the reader; the retired "offline_art" SVG
+                # placeholders in older bundles stay hidden, as before.
+                dest = assets / "covers" / (safe_id + ".png")
+                dest.write_bytes(procedural_cover_png(item["title"], item.get("summary", "")))
                 item["cover_url"] = "assets/covers/" + dest.name
                 checksums[item["cover_url"]] = sha256(dest)
-                origin = "offline_art"
+                origin = "procedural_art"
             stable_id = metadata.get("content_id", episode_id)
             if not isinstance(stable_id, str) or not re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.:-]{0,119}", stable_id):
                 raise ValueError("Invalid content_id for " + episode_id)

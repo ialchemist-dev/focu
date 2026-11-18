@@ -393,6 +393,37 @@ assert.match(html, /\.feedcard\[hidden\]\{display:none!important\}/);
   console.log('Focu reader P2-3: wide tables stay inside .table-scroll; page cannot scroll sideways passed');
 }
 
+// P2-4: every article gets a cover. The publisher's procedural PNG
+// (origin 'procedural_art') is a real cover and must show in the feed
+// card and at the top of the article — unlike the retired 'offline_art'
+// typographic SVG placeholders, which existing bundles carry and which
+// must keep their previous hidden behaviour.
+{
+  const findImg=(node)=>{
+    if(!node||typeof node!=='object')return null;
+    if(node.name==='img'&&node.className==='cover')return node;
+    for(const child of node.children||[]){const hit=findImg(child);if(hit)return hit}
+    return null;
+  };
+  const e=makeEnvironment();
+  e.run("render(["+
+    "{id:'proc-1',origin:'daily_compilation',title:'Procedural story',summary:'',date:'2026-11-18',source:'Focu',cover_url:'assets/covers/proc.png',cover_origin:'procedural_art',covered_content_ids:[],blocks:[{type:'paragraph',text:'Body'}],reading_minutes:1},"+
+    "{id:'legacy-1',origin:'daily_compilation',title:'Legacy story',summary:'',date:'2026-11-17',source:'Focu',cover_url:'assets/covers/legacy.svg',cover_origin:'offline_art',covered_content_ids:[],blocks:[{type:'paragraph',text:'Body'}],reading_minutes:1}"+
+  "],'')");
+  const cards=e.get('grid').children;
+  assert.equal(cards.length,2);
+  const procImg=findImg(cards[0]);
+  assert.ok(procImg,'procedural cover renders on the feed card');
+  assert.equal(procImg.src,'assets/covers/proc.png');
+  assert.equal(findImg(cards[1]),null,'legacy offline_art placeholder stays hidden on the card');
+  e.run("openItem('proc-1')");
+  assert.equal(e.get('readercover').hidden,false,'procedural cover shows at the top of the article');
+  assert.equal(e.get('readercover').src,'assets/covers/proc.png');
+  e.run("openItem('legacy-1')");
+  assert.equal(e.get('readercover').hidden,true,'legacy offline_art placeholder stays hidden in the article');
+  console.log('Focu reader P2-4: procedural covers show; legacy offline_art stays hidden passed');
+}
+
 // Wave-2 (#1): one-tap Play on the card itself plus a duration chip — the
 // daily briefing must start without opening the article or scrolling.
 {

@@ -227,6 +227,11 @@ Research reports follow the frozen-facts workflow in
 `docs/research-reports/`: every number classified and cited, pages built
 only from frozen claims.
 
+Every published article gets a cover image: a real source image when
+one exists, otherwise a deterministic procedural PNG in the house
+style — soft abstract shapes on warm cream, no text, no faces, never
+clickbait. The style contract is `docs/cover-style.md`.
+
 ## Development
 
 Active development integrates on the `dev-main` branch; `main` is the

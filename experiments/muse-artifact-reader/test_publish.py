@@ -8,7 +8,7 @@ from unittest.mock import patch
 import unittest
 from publish import build, sha256, episode_date
 from editorial import editorial, blocks_from_markdown, compose_article_with_openai, clean
-from cover_art import typographic_svg
+from cover_art import procedural_cover_png, COVER_WIDTH, COVER_HEIGHT
 
 class PublisherTests(unittest.TestCase):
     def test_build_and_checksum(self):
@@ -257,13 +257,47 @@ class PublisherTests(unittest.TestCase):
             self.assertLessEqual(len(items["story-20261110"]["gist"]), 90)
             self.assertNotIn("gist", items["audio-20261110"])
 
-    def test_offline_covers_are_deterministic_and_distinct(self):
-        first = typographic_svg("Pando memory architecture", "AI research")
-        self.assertEqual(first, typographic_svg("Pando memory architecture", "AI research"))
-        self.assertNotEqual(first, typographic_svg("Geothermal rock physics", "Energy"))
-        self.assertTrue(first.startswith(b"<svg"))
-        self.assertIn(b"Pando memory", first)
-        self.assertIn(b"architecture", first)
+    def test_procedural_covers_are_deterministic_and_distinct(self):
+        # P2-4: the fallback cover is a deterministic procedural PNG in
+        # the docs/cover-style.md palette — no text, no faces, no SVG.
+        import struct, zlib
+        first = procedural_cover_png("Pando memory architecture", "AI research")
+        self.assertEqual(first, procedural_cover_png("Pando memory architecture", "AI research"))
+        self.assertNotEqual(first, procedural_cover_png("Geothermal rock physics", "Energy"))
+        self.assertTrue(first.startswith(b"\x89PNG\r\n\x1a\n"))
+        self.assertNotIn(b"<svg", first)
+        self.assertNotIn(b"Pando", first)  # the title is a seed, never rendered
+        # Parse the PNG: IHDR carries the 4:3 size; IDAT must decode to
+        # filter-prefixed RGB rows; every sampled colour must sit near
+        # the approved palette family (cream/teal/amber/terracotta/
+        # coral/graphite, allowing gradient + grain drift).
+        pos, idat = 8, b""
+        width = height = None
+        while pos < len(first):
+            length = struct.unpack(">I", first[pos:pos + 4])[0]
+            kind = first[pos + 4:pos + 8]
+            if kind == b"IHDR":
+                width, height = struct.unpack(">II", first[pos + 8:pos + 16])
+            if kind == b"IDAT":
+                idat += first[pos + 8:pos + 8 + length]
+            pos += 12 + length
+        self.assertEqual((width, height), (COVER_WIDTH, COVER_HEIGHT))
+        raw = zlib.decompress(idat)
+        stride = width * 3 + 1
+        self.assertEqual(len(raw), stride * height)
+        palette = [(246, 238, 222), (238, 224, 199), (95, 141, 132),
+                   (65, 112, 106), (217, 164, 65), (196, 113, 75),
+                   (211, 128, 106), (67, 72, 77)]
+        def near(rgb):
+            return any(all(abs(rgb[c] - p[c]) <= 46 for c in range(3)) for p in palette)
+        checked = 0
+        for y in range(0, height, 37):
+            row = raw[y * stride + 1:(y + 1) * stride]
+            for x in range(0, width, 41):
+                rgb = tuple(row[x * 3:x * 3 + 3])
+                self.assertTrue(near(rgb), f"off-palette pixel {rgb} at {x},{y}")
+                checked += 1
+        self.assertGreater(checked, 500)
 
     def test_build_stages_markdown_and_cover_without_network(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -282,8 +316,10 @@ class PublisherTests(unittest.TestCase):
             build(root / "deliveries", output, Path(__file__).with_name("index.html"), 15)
             item = json.loads((output / "assets/episodes.json").read_text())["items"][0]
             self.assertIn("cooling design", item["title"])
-            self.assertEqual(item["cover"]["origin"], "offline_art")
+            self.assertEqual(item["cover"]["origin"], "procedural_art")
+            self.assertTrue(item["cover"]["path"].endswith(".png"))
             self.assertTrue((output / item["cover"]["path"]).is_file())
+            self.assertTrue((output / item["cover"]["path"]).read_bytes().startswith(b"\x89PNG\r\n\x1a\n"))
             self.assertGreater(len(item["article_blocks"]), 1)
             self.assertEqual((output / item["audio_url"]).read_bytes(), b"original-bytes")
             embedded = (output / "index.html").read_text()
