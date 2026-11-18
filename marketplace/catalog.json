@@ -1,0 +1,165 @@
+{
+  "schema_version": 1,
+  "slogan": "Focu: the way to digest information in the agentic age.",
+  "repo_url": "https://github.com/ialchemist-dev/focu",
+  "site_url": "https://aipraxislab.com/focu",
+  "recommended_pack_id": "followed-people",
+  "packs": [
+    {
+      "id": "anthropic-personal-blogs",
+      "name": "Anthropic · Personal blogs",
+      "title": "Anthropic · Personal blogs",
+      "description": "Writing from the people building Claude, on their own sites: product engineering, interpretability, alignment, security and philosophy. Eleven verified authors; eight with working feeds. This v1.1.0 refresh adds Andrej Karpathy (joined Anthropic in May 2026) and re-checks every v1.0.0 feed. Schema-v1 successor to the v0.1.0 site pack of the same id.",
+      "version": "1.1.0",
+      "verified_at": "2026-11-17",
+      "tags": [
+        "ai-labs",
+        "personal-blogs",
+        "anthropic",
+        "people"
+      ],
+      "curator": {
+        "name": "AI Praxis Lab (Jerry Yu)",
+        "url": "https://aipraxislab.com/sources/"
+      },
+      "source_count": 11,
+      "enabled_source_count": 8,
+      "posts_per_month": 6.1,
+      "attention_estimate": {
+        "basis": "Sum of enabled sources' cadence estimates on 2026-11-17. One weekly newsletter (Import AI) is ~4.3 of the 6.1; Karpathy adds ~0.6; the other six enabled sources together add roughly one post a month. Two enabled sources (Olah, Askell) are dormant archives that currently add nothing, and two more (Olah again, Carlsmith) have feeds focu cannot currently consume — see their readiness notes.",
+        "posts_per_month": 6.1
+      },
+      "pack_file": "focu/source_packs/anthropic-personal-blogs.json",
+      "recommended": false,
+      "preview_command": ".venv/bin/focu pack preview focu/source_packs/anthropic-personal-blogs.json --config sources.yaml",
+      "install_command": ".venv/bin/focu pack install focu/source_packs/anthropic-personal-blogs.json --config sources.yaml --yes",
+      "uninstall_command": ".venv/bin/focu pack uninstall anthropic-personal-blogs --config sources.yaml"
+    },
+    {
+      "id": "followed-people",
+      "name": "People I Follow",
+      "title": "People I Follow",
+      "description": "The people the owner demonstrably follows, on their own sites and channels: Simon Willison's blog, Grant Sanderson's 3Blue1Brown, Dwarkesh Patel's interviews, Lex Fridman's podcast, 北美王路飞's market courses and 硅谷101's deep interviews. Six verified sources — two blogs and four YouTube channels; the YouTube sources also prove the pack system carries youtube-type sources end to end.",
+      "version": "1.0.0",
+      "verified_at": "2026-11-17",
+      "tags": [
+        "people",
+        "follows",
+        "blogs",
+        "youtube",
+        "ai",
+        "mathematics",
+        "finance"
+      ],
+      "curator": {
+        "name": "Jerry Yu (owner)",
+        "url": "https://aipraxislab.com/sources/"
+      },
+      "source_count": 6,
+      "enabled_source_count": 6,
+      "posts_per_month": 58.4,
+      "attention_estimate": {
+        "basis": "Sum of enabled sources' cadence estimates on 2026-11-17: 8.0 (Simon Willison) + 2.5 (3Blue1Brown) + 4.4 (Dwarkesh Patel) + 1.8 (Lex Fridman) + 32.6 (北美王路飞) + 9.1 (硅谷101) = 58.4. 北美王路飞 alone is over half the total — his public feed's newest 15 videos span only 14 days, most of them livestream clips; the install preview's dominance flag on him is expected and priced here, not hidden.",
+        "posts_per_month": 58.4
+      },
+      "pack_file": "focu/source_packs/followed-people.json",
+      "recommended": true,
+      "preview_command": ".venv/bin/focu pack preview focu/source_packs/followed-people.json --config sources.yaml",
+      "install_command": ".venv/bin/focu pack install focu/source_packs/followed-people.json --config sources.yaml --yes",
+      "uninstall_command": ".venv/bin/focu pack uninstall followed-people --config sources.yaml"
+    },
+    {
+      "id": "geothermal-industry",
+      "name": "Geothermal Industry",
+      "title": "Geothermal Industry",
+      "description": "The geothermal industry's own paper trail: the trade-press wire, association policy and market news, and project and company announcements from EGS, closed-loop and conventional developers — every source fetched live and dated on 2026-11-17.",
+      "version": "1.0.0",
+      "verified_at": "2026-11-17",
+      "tags": [
+        "geothermal",
+        "energy",
+        "industry",
+        "trade-press",
+        "egs"
+      ],
+      "curator": {
+        "name": "AI Praxis Lab (Jerry Yu)",
+        "url": "https://aipraxislab.com/sources/"
+      },
+      "source_count": 12,
+      "enabled_source_count": 7,
+      "posts_per_month": 92.4,
+      "attention_estimate": {
+        "basis": "Sum of enabled sources' cadence estimates on 2026-11-17: 92.4 posts/month, of which ≈78 is ThinkGeoEnergy's full news wire (≈2.6 items/day; its max_items_per_day of 5 and the briefing's selection budget bound what actually surfaces). The other six enabled sources together add ≈14/month. Five further verified publications are listed disabled (no working feed) and add nothing until an HTML adapter lands.",
+        "posts_per_month": 92.4
+      },
+      "pack_file": "focu/source_packs/geothermal-industry.json",
+      "recommended": false,
+      "preview_command": ".venv/bin/focu pack preview focu/source_packs/geothermal-industry.json --config sources.yaml",
+      "install_command": ".venv/bin/focu pack install focu/source_packs/geothermal-industry.json --config sources.yaml --yes",
+      "uninstall_command": ".venv/bin/focu pack uninstall geothermal-industry --config sources.yaml"
+    },
+    {
+      "id": "openai-personal-blogs",
+      "name": "OpenAI · Personal blogs",
+      "title": "OpenAI · Personal blogs",
+      "description": "Writing from the people building ChatGPT and OpenAI's models, on their own sites: company direction, recursive self-improvement, systems performance, training optimization and AI safety. Six verified authors; three with working feeds. Built to the same schema v1 and verification standard as the Anthropic people pack.",
+      "version": "1.0.0",
+      "verified_at": "2026-11-17",
+      "tags": [
+        "ai-labs",
+        "personal-blogs",
+        "openai",
+        "people"
+      ],
+      "curator": {
+        "name": "AI Praxis Lab (Jerry Yu)",
+        "url": "https://aipraxislab.com/sources/"
+      },
+      "source_count": 6,
+      "enabled_source_count": 3,
+      "posts_per_month": 0.9,
+      "attention_estimate": {
+        "basis": "Sum of enabled sources' cadence estimates on 2026-11-17: Altman 0.4 + Brockman 0.1 + Gregg 0.4 = 0.9. Three verified authors are disabled for lack of a verified feed (Weng 0.3, Jordan 0.3, Barak 0.1) and would add roughly 0.7 posts a month if an HTML adapter lands.",
+        "posts_per_month": 0.9
+      },
+      "pack_file": "focu/source_packs/openai-personal-blogs.json",
+      "recommended": false,
+      "preview_command": ".venv/bin/focu pack preview focu/source_packs/openai-personal-blogs.json --config sources.yaml",
+      "install_command": ".venv/bin/focu pack install focu/source_packs/openai-personal-blogs.json --config sources.yaml --yes",
+      "uninstall_command": ".venv/bin/focu pack uninstall openai-personal-blogs --config sources.yaml"
+    },
+    {
+      "id": "silicon-valley-startups",
+      "name": "Silicon Valley Startups · Engineering Blogs",
+      "title": "Silicon Valley Startups · Engineering Blogs",
+      "description": "Engineering, research and product blogs of the current generation of Bay Area startups — AI infrastructure, developer tools, fintech and agent platforms. Every feed was fetched live and dated on 2026-11-17, and every source states its attention cost up front.",
+      "version": "1.0.0",
+      "verified_at": "2026-11-17",
+      "tags": [
+        "silicon-valley",
+        "startups",
+        "engineering-blogs",
+        "ai-infrastructure",
+        "dev-tools",
+        "fintech"
+      ],
+      "curator": {
+        "name": "AI Praxis Lab (Jerry Yu)",
+        "url": "https://aipraxislab.com/sources/"
+      },
+      "source_count": 18,
+      "enabled_source_count": 13,
+      "posts_per_month": 127.3,
+      "attention_estimate": {
+        "basis": "Sum of enabled sources' cadence estimates on 2026-11-17: ≈127 posts/month. Two bursty wires dominate — LangChain ≈31.5 and Socket ≈19 (a security-news burst rate) — and both carry max_items_per_day 2; the other eleven enabled sources together add ≈77/month. The briefing's selection budget bounds what actually surfaces. Five further verified blogs are listed disabled (no consumable feed) and add nothing until an HTML adapter or a smaller feed exists.",
+        "posts_per_month": 127.3
+      },
+      "pack_file": "focu/source_packs/silicon-valley-startups.json",
+      "recommended": false,
+      "preview_command": ".venv/bin/focu pack preview focu/source_packs/silicon-valley-startups.json --config sources.yaml",
+      "install_command": ".venv/bin/focu pack install focu/source_packs/silicon-valley-startups.json --config sources.yaml --yes",
+      "uninstall_command": ".venv/bin/focu pack uninstall silicon-valley-startups --config sources.yaml"
+    }
+  ]
+}

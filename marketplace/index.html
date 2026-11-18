@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Focu — Source Library</title>
+<style>
+:root {
+  --paper: #fbf6ef; --card: #fffdf9; --ink: #2b211c; --muted: #6b5d54;
+  --terra: #b85c38; --terra-soft: #f3ddd0; --border: #e8dccf;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--paper); color: var(--ink);
+  font-family: Georgia, 'Times New Roman', serif; line-height: 1.55; }
+main { max-width: 760px; margin: 0 auto; padding: 32px 20px 64px; }
+h1 { font-size: 1.9rem; line-height: 1.2; margin: 0 0 8px; }
+.slogan { color: var(--terra); font-style: italic; margin: 0 0 16px; }
+.lede { color: var(--muted); }
+.card { background: var(--card); border: 1px solid var(--border);
+  border-radius: 12px; padding: 20px; margin: 20px 0; }
+.card h2 { font-size: 1.25rem; margin: 0 0 6px; }
+.badge { background: var(--terra-soft); color: var(--terra);
+  border-radius: 999px; padding: 2px 10px; font-size: 0.75rem;
+  vertical-align: middle; white-space: nowrap; }
+.meta { color: var(--muted); font-size: 0.9rem; margin: 0 0 10px; }
+.tags { margin: 8px 0; }
+.tag { background: var(--terra-soft); border-radius: 999px;
+  padding: 1px 8px; margin-right: 6px; font-size: 0.8rem; }
+.label { color: var(--muted); font-size: 0.85rem; margin: 14px 0 4px; }
+pre { background: var(--paper); border: 1px solid var(--border);
+  border-radius: 8px; padding: 10px 12px; overflow-x: auto; margin: 0; }
+code { font-family: ui-monospace, Menlo, monospace; font-size: 0.82rem; }
+a { color: var(--terra); }
+footer { color: var(--muted); font-size: 0.9rem; margin-top: 32px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Focu — Source Library</h1>
+  <p class="slogan">Focu: the way to digest information in the agentic age.</p>
+  <p class="lede">Curated source packs for Focu. You choose the people
+  and publications; Focu digests what they publish into one short daily
+  briefing. Every pack states its attention cost up front, in
+  posts/month, and installs only after a preview. No ranking, no
+  engagement metrics, nothing installed silently.</p>
+  <p class="lede">The machine-readable catalog is
+  <a href="catalog.json">catalog.json</a>; the recommended default is
+  <a href="default.json">default.json</a>.</p>
+    <article class="card">
+      <h2>People I Follow <span class="badge">Recommended starter</span></h2>
+      <p class="meta">6 sources &middot; &asymp;58.4 posts/month &middot; verified 2026-11-17 &middot; v1.0.0</p>
+      <p>The people the owner demonstrably follows, on their own sites and channels: Simon Willison&#x27;s blog, Grant Sanderson&#x27;s 3Blue1Brown, Dwarkesh Patel&#x27;s interviews, Lex Fridman&#x27;s podcast, 北美王路飞&#x27;s market courses and 硅谷101&#x27;s deep interviews. Six verified sources — two blogs and four YouTube channels; the YouTube sources also prove the pack system carries youtube-type sources end to end.</p>
+      <p class="tags"><span class="tag">people</span><span class="tag">follows</span><span class="tag">blogs</span><span class="tag">youtube</span><span class="tag">ai</span><span class="tag">mathematics</span><span class="tag">finance</span></p>
+      <p class="label">Preview, then install</p>
+      <pre><code>.venv/bin/focu pack preview focu/source_packs/followed-people.json --config sources.yaml
+.venv/bin/focu pack install focu/source_packs/followed-people.json --config sources.yaml --yes</code></pre>
+      <p class="label">Remove</p>
+      <pre><code>.venv/bin/focu pack uninstall followed-people --config sources.yaml</code></pre>
+    </article>
+    <article class="card">
+      <h2>Anthropic · Personal blogs </h2>
+      <p class="meta">11 sources &middot; &asymp;6.1 posts/month &middot; verified 2026-11-17 &middot; v1.1.0</p>
+      <p>Writing from the people building Claude, on their own sites: product engineering, interpretability, alignment, security and philosophy. Eleven verified authors; eight with working feeds. This v1.1.0 refresh adds Andrej Karpathy (joined Anthropic in May 2026) and re-checks every v1.0.0 feed. Schema-v1 successor to the v0.1.0 site pack of the same id.</p>
+      <p class="tags"><span class="tag">ai-labs</span><span class="tag">personal-blogs</span><span class="tag">anthropic</span><span class="tag">people</span></p>
+      <p class="label">Preview, then install</p>
+      <pre><code>.venv/bin/focu pack preview focu/source_packs/anthropic-personal-blogs.json --config sources.yaml
+.venv/bin/focu pack install focu/source_packs/anthropic-personal-blogs.json --config sources.yaml --yes</code></pre>
+      <p class="label">Remove</p>
+      <pre><code>.venv/bin/focu pack uninstall anthropic-personal-blogs --config sources.yaml</code></pre>
+    </article>
+    <article class="card">
+      <h2>Geothermal Industry </h2>
+      <p class="meta">12 sources &middot; &asymp;92.4 posts/month &middot; verified 2026-11-17 &middot; v1.0.0</p>
+      <p>The geothermal industry&#x27;s own paper trail: the trade-press wire, association policy and market news, and project and company announcements from EGS, closed-loop and conventional developers — every source fetched live and dated on 2026-11-17.</p>
+      <p class="tags"><span class="tag">geothermal</span><span class="tag">energy</span><span class="tag">industry</span><span class="tag">trade-press</span><span class="tag">egs</span></p>
+      <p class="label">Preview, then install</p>
+      <pre><code>.venv/bin/focu pack preview focu/source_packs/geothermal-industry.json --config sources.yaml
+.venv/bin/focu pack install focu/source_packs/geothermal-industry.json --config sources.yaml --yes</code></pre>
+      <p class="label">Remove</p>
+      <pre><code>.venv/bin/focu pack uninstall geothermal-industry --config sources.yaml</code></pre>
+    </article>
+    <article class="card">
+      <h2>OpenAI · Personal blogs </h2>
+      <p class="meta">6 sources &middot; &asymp;0.9 posts/month &middot; verified 2026-11-17 &middot; v1.0.0</p>
+      <p>Writing from the people building ChatGPT and OpenAI&#x27;s models, on their own sites: company direction, recursive self-improvement, systems performance, training optimization and AI safety. Six verified authors; three with working feeds. Built to the same schema v1 and verification standard as the Anthropic people pack.</p>
+      <p class="tags"><span class="tag">ai-labs</span><span class="tag">personal-blogs</span><span class="tag">openai</span><span class="tag">people</span></p>
+      <p class="label">Preview, then install</p>
+      <pre><code>.venv/bin/focu pack preview focu/source_packs/openai-personal-blogs.json --config sources.yaml
+.venv/bin/focu pack install focu/source_packs/openai-personal-blogs.json --config sources.yaml --yes</code></pre>
+      <p class="label">Remove</p>
+      <pre><code>.venv/bin/focu pack uninstall openai-personal-blogs --config sources.yaml</code></pre>
+    </article>
+    <article class="card">
+      <h2>Silicon Valley Startups · Engineering Blogs </h2>
+      <p class="meta">18 sources &middot; &asymp;127.3 posts/month &middot; verified 2026-11-17 &middot; v1.0.0</p>
+      <p>Engineering, research and product blogs of the current generation of Bay Area startups — AI infrastructure, developer tools, fintech and agent platforms. Every feed was fetched live and dated on 2026-11-17, and every source states its attention cost up front.</p>
+      <p class="tags"><span class="tag">silicon-valley</span><span class="tag">startups</span><span class="tag">engineering-blogs</span><span class="tag">ai-infrastructure</span><span class="tag">dev-tools</span><span class="tag">fintech</span></p>
+      <p class="label">Preview, then install</p>
+      <pre><code>.venv/bin/focu pack preview focu/source_packs/silicon-valley-startups.json --config sources.yaml
+.venv/bin/focu pack install focu/source_packs/silicon-valley-startups.json --config sources.yaml --yes</code></pre>
+      <p class="label">Remove</p>
+      <pre><code>.venv/bin/focu pack uninstall silicon-valley-startups --config sources.yaml</code></pre>
+    </article>
+  <footer>
+    <p><a href="https://github.com/ialchemist-dev/focu">Focu on GitHub</a> &middot;
+    <a href="https://aipraxislab.com/">AI Praxis Lab</a></p>
+    <p>Attention returned, never attention captured.</p>
+  </footer>
+</main>
+</body>
+</html>

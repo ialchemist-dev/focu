@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "slogan": "Focu: the way to digest information in the agentic age.",
+  "recommended_pack_id": "followed-people",
+  "pack_file": "focu/source_packs/followed-people.json",
+  "name": "People I Follow",
+  "description": "The people the owner demonstrably follows, on their own sites and channels: Simon Willison's blog, Grant Sanderson's 3Blue1Brown, Dwarkesh Patel's interviews, Lex Fridman's podcast, 北美王路飞's market courses and 硅谷101's deep interviews. Six verified sources — two blogs and four YouTube channels; the YouTube sources also prove the pack system carries youtube-type sources end to end.",
+  "source_count": 6,
+  "posts_per_month": 58.4,
+  "preview_command": ".venv/bin/focu pack preview focu/source_packs/followed-people.json --config sources.yaml",
+  "install_command": ".venv/bin/focu pack install focu/source_packs/followed-people.json --config sources.yaml --yes",
+  "uninstall_command": ".venv/bin/focu pack uninstall followed-people --config sources.yaml",
+  "rationale": "People I Follow is the recommended starter because it is people, not platforms: six verified sources the curator demonstrably follows, on their own sites and channels. It is a recommendation only when the user asked their agent to choose; it is never installed silently.",
+  "swap": [
+    "Preview the replacement first: .venv/bin/focu pack preview <replacement pack_file> --config sources.yaml",
+    "Remove the default: .venv/bin/focu pack uninstall followed-people --config sources.yaml",
+    "Install the replacement with its own install_command from marketplace/catalog.json.",
+    "Exactly one starter pack at a time; installing a pack enables nothing else."
+  ]
+}

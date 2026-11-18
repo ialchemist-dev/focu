@@ -126,7 +126,21 @@ Browse all packs in the marketplace:
 **https://aipraxislab.com/focu** — or locally in `focu/source_packs/`
 (Anthropic people, OpenAI people, Silicon Valley startups, geothermal
 industry, People I Follow). The machine-readable catalog is
-`marketplace/catalog.json` in this repo.
+`marketplace/catalog.json` in this repo (generated from the pack files
+by `scripts/build_marketplace.py` — never hand-edit it), the static
+page source is `marketplace/index.html`, and the machine-readable
+recommended default is `marketplace/default.json` (exactly one pack:
+`followed-people`).
+
+**Swap the default** for another pack — preview first, then remove,
+then install; exactly one starter pack at a time, and installing a
+pack enables nothing else:
+
+```bash
+.venv/bin/focu pack preview focu/source_packs/<other-pack>.json --config sources.yaml
+.venv/bin/focu pack uninstall followed-people --config sources.yaml
+.venv/bin/focu pack install focu/source_packs/<other-pack>.json --config sources.yaml --yes
+```
 
 ### 5. First real run
 
