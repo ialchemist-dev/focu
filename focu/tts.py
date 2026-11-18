@@ -10,6 +10,15 @@ paragraph/sentence boundaries, synthesizes the chunks in order with the same
 voice/model, and concatenates them into one MP3 with normalized
 chunk-boundary silences. A failed chunk aborts the whole synthesis and no
 partial MP3 is left behind.
+
+``synthesize_long_with_fallback`` wraps ``synthesize_long`` with the owner's
+standing fallback policy (decided 2026-11-17): when the primary provider
+fails because its prepaid credits/quota are exhausted (HTTP 429 with an
+insufficient-quota error), the whole script is re-synthesized with a
+fallback ``speech_fn`` (on the production host, local Kokoro) so the
+episode still ships with audio. Any other primary failure propagates
+unchanged — the fallback exists for the quota case only, never as a
+general retry. The result dict records which engine produced the audio.
 """
 from __future__ import annotations
 
@@ -269,6 +278,51 @@ def synthesize_long(input_path: str | Path, output_path: str | Path, *,
         os.replace(final, output)
     return {"status": "generated", "output": str(output), "bytes": total_bytes,
             "chunks": len(chunks), "long_form": len(chunks) > 1}
+
+
+# Markers that identify a provider failure as exhausted prepaid credits /
+# quota, as opposed to a transient or content failure. Matched case-
+# insensitively against the exception text, which on the production host
+# carries the provider's error body (e.g. "credit_balance_exhausted",
+# "insufficient_quota") or an HTTP 429 status.
+QUOTA_FAILURE_MARKERS = (
+    "insufficient_quota",
+    "credit_balance_exhausted",
+    "http 429",
+    "error code: 429",
+    '"status": 429',
+    "status_code=429",
+)
+
+
+def is_quota_failure(exc: BaseException) -> bool:
+    """True when an exception reads as provider quota/credit exhaustion."""
+    text = str(exc).lower()
+    return any(marker in text for marker in QUOTA_FAILURE_MARKERS)
+
+
+def synthesize_long_with_fallback(input_path: str | Path, output_path: str | Path, *,
+                                  model: str = "gpt-4o-mini-tts", voice: str = "alloy",
+                                  speech_fn=None, fallback_fn=None) -> dict:
+    """synthesize_long with a quota-only fallback to a second speech_fn.
+
+    The primary runs first. If it fails and the failure is quota/credit
+    exhaustion (is_quota_failure) and a fallback_fn was supplied, the whole
+    script is synthesized again with the fallback and the result records
+    ``engine: "fallback"`` plus the triggering error under
+    ``fallback_reason``. A successful primary records ``engine: "primary"``.
+    Non-quota failures, and any failure of the fallback itself, propagate.
+    """
+    try:
+        result = synthesize_long(input_path, output_path, model=model,
+                                 voice=voice, speech_fn=speech_fn)
+    except (RuntimeError, ValueError, OSError) as exc:
+        if fallback_fn is None or not is_quota_failure(exc):
+            raise
+        result = synthesize_long(input_path, output_path, model=model,
+                                 voice=voice, speech_fn=fallback_fn)
+        return {**result, "engine": "fallback", "fallback_reason": str(exc)[:300]}
+    return {**result, "engine": "primary"}
 
 
 def main(argv: list[str] | None = None) -> int:
