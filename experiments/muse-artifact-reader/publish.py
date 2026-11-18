@@ -148,6 +148,18 @@ def build(deliveries, output, template, limit, *, fetch_source_covers=False, gen
                 raise ValueError("Registered-source article cannot receive its own daily podcast")
             if content_origin == "user_initiated":
                 item["source"] = "Your research"
+            # Sweep N2: when a delivery records its source's name
+            # (content.json source_name), pass it through so cards and
+            # bylines can name the actual source — triage by source is
+            # impossible while every registered item is labelled "Focu".
+            # Purely additive: the name must be plain text (a URL or any
+            # non-string value is ignored), and when it is absent the
+            # item keeps exactly the source label it carries today.
+            recorded_name = metadata.get("source_name")
+            if (isinstance(recorded_name, str) and recorded_name.strip()
+                    and "http" not in recorded_name.lower()
+                    and "://" not in recorded_name):
+                item["source"] = recorded_name.strip()
             item["origin"] = content_origin
             item["podcast_mode"] = mode
             if metadata.get("podcast_requested_at"):
@@ -162,6 +174,15 @@ def build(deliveries, output, template, limit, *, fetch_source_covers=False, gen
             # blocks a bad MP3. No audio format or Listen is invented.
             if covered:
                 item["covered_content_ids"] = covered
+            # The compression ladder's top rung: when the delivery itself
+            # records where the item came from (content.json source_url,
+            # carried by registered-source deliveries), pass it through so
+            # the reader can offer the original. Purely additive and
+            # data-driven — a missing or non-HTTP(S) value emits nothing,
+            # never an invented URL, and items without one are unchanged.
+            origin_url = metadata.get("source_url")
+            if isinstance(origin_url, str) and origin_url.strip().lower().startswith(("http://", "https://")):
+                item["original_url"] = origin_url.strip()
             # Markdown is the canonical reading format; never evaluate untrusted HTML
             # inside the reader WebView. Existing article.html remains a legacy asset.
             markdown_path = folder / "article.md"
@@ -236,6 +257,8 @@ def build(deliveries, output, template, limit, *, fetch_source_covers=False, gen
             if markdown:
                 item["title"] = info["title"]
                 item["summary"] = info["summary"]
+                if info.get("gist"):
+                    item["gist"] = info["gist"]
                 item["article_blocks"] = info["article_blocks"]
                 item["reading_minutes"] = info["reading_minutes"]
             else:
@@ -243,6 +266,8 @@ def build(deliveries, output, template, limit, *, fetch_source_covers=False, gen
                     item["title"] = metadata["title"].strip()
                 if isinstance(metadata.get("summary"), str):
                     item["summary"] = metadata["summary"].strip()
+                if info.get("gist"):
+                    item["gist"] = info["gist"]
             formats = {"audio": {"path": item["audio_url"], "mime_type": "audio/mpeg"}} if audio else {}
             if audio and episode_id in audio_audit:
                 formats["audio"]["duration_seconds"] = audio_audit[episode_id]["decoded_duration_seconds"]

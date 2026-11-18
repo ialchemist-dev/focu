@@ -56,8 +56,24 @@ VISUAL_REF = re.compile(r"\b" + VISUAL_LABEL + r"\b", re.I)
 # Dotted version identifiers (v1.0.0, 2.5.1) are product identifiers, not
 # measured quantities; without this, NUMBER extracts a partial tail such as
 # "0.0" from "1.0.0" and coverage QC demands it in the script.
+#
+# A version token is a dotted digit run glued to a name, not only the
+# free-standing v1.2.3 form: "Kimi K3.1", "Qwen2.5", "GPT-5.2", "v2.0"
+# all name a release, and none of their digits is a measured quantity
+# (promotion rehearsal, defect D2a — key_figures once extracted a bare
+# "1" from "K3.1" while the presence check refused to count that "1" as
+# present, so no script could ever pass QC for such an item). Extractor
+# and checker share this one notion: a dotted digit run is a version
+# when it has two or more dot segments anywhere, or when it is glued
+# to a letter or to a name's hyphen (K3.1, GPT-5.2). A standalone
+# decimal (space-delimited "3.1" in "grew by 3.1 points") is not glued
+# to anything and remains a figure.
 URL_REF = re.compile(r"(?:https?://|www\.)\S+", re.I)
-VERSION_REF = re.compile(r"\bv?\d+(?:\.\d+){2,}\b", re.I)
+VERSION_REF = re.compile(
+    r"\bv?\d+(?:\.\d+){2,}\b"
+    r"|(?<=[A-Za-z])v?\d+(?:\.\d+)+\b"
+    r"|(?<=[A-Za-z]-)v?\d+(?:\.\d+)+\b",
+    re.I)
 
 
 def strip_urls(text):

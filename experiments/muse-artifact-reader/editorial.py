@@ -1,12 +1,14 @@
 """Evidence-preserving editorial extraction for the static Focu reader.
 
-No model calls and no invented research: titles and summaries are extracted from
-existing research or explicit content.json. Structured article blocks are safe
-to render with textContent in an untrusted-source WebView.
+No model calls and no invented research: titles, summaries and glance gists
+are extracted from existing research or explicit content.json. Structured
+article blocks are safe to render with textContent in an untrusted-source
+WebView.
 """
 import re
 from html.parser import HTMLParser
 from focu.audience import writing_guidance, detect_domain
+from focu.briefing import strip_urls
 
 
 class _HTMLReader(HTMLParser):
@@ -103,6 +105,116 @@ def shorten(text, limit):
     if len(prefix) < limit // 2:
         prefix = text[:limit]
     return prefix.rstrip(" ,;:.") + "…"
+
+
+GIST_LIMIT = 90
+GIST_MIN = 15
+_SENTENCE_END = re.compile(r"[.!?。！？]")
+
+
+def _first_sentence(text):
+    match = _SENTENCE_END.search(text)
+    return text[:match.end()].strip() if match else text
+
+
+def make_gist(*sources):
+    """Extract the glance-layer gist from the item's own text.
+
+    Extractive only: every character comes from the supplied synopsis,
+    claim, or lead paragraph, cut at a sentence boundary when one fits and
+    at a word boundary otherwise (``shorten`` marks the trim with an
+    ellipsis). Nothing is generated or paraphrased. Returns "" when no
+    source yields an honest gist, so callers omit the field entirely
+    rather than publish a fragment or a repeat of the title.
+    """
+    for source in sources:
+        text = clean(source or "")
+        if len(text) < GIST_MIN:
+            continue
+        if len(text) <= GIST_LIMIT:
+            return text
+        first = _first_sentence(text)
+        if len(first) >= 10:
+            return first if len(first) <= GIST_LIMIT else shorten(first, GIST_LIMIT)
+        return shorten(text, GIST_LIMIT)
+    return ""
+
+
+AGENDA_LEAD = re.compile(r"^here(?:'s| is) what came in$", re.IGNORECASE)
+AGENDA_COUNT = re.compile(r"^(?:\w+|\d+) items? today$", re.IGNORECASE)
+
+
+def agenda_gist(blocks):
+    """Build a daily briefing's gist from its own agenda, never the lead.
+
+    Since the agenda opening was adopted, a briefing's lead paragraph is
+    the formula "Here's what came in" — and the ordinary extractive
+    pipeline published exactly that as the gist, a glance line that says
+    nothing about the day. The agenda that follows it is the article's
+    own words: a count paragraph ("Four items today") and one bullet per
+    covered item ("Title — Source"). Join the count phrase and the item
+    titles (each bullet's title part, before its source suffix) and trim
+    with shorten(), so every character still comes from the article
+    itself. Returns "" when the blocks are not the agenda shape, so the
+    caller keeps the ordinary gist.
+    """
+    lead_seen = False
+    count = ""
+    titles = []
+    for block in blocks:
+        if block["type"] == "heading":
+            if block.get("level") == 1 and not lead_seen and not titles:
+                continue  # the article's own title, not a section
+            break
+        if not lead_seen:
+            if block["type"] == "paragraph" and AGENDA_LEAD.match(clean(block["text"])):
+                lead_seen = True
+            continue
+        if block["type"] == "paragraph" and not count and not titles:
+            text = clean(block["text"])
+            if AGENDA_COUNT.match(text):
+                count = text
+            continue
+        if block["type"] == "bullet":
+            text = clean(block["text"])
+            if " — " in text:
+                text = text.rsplit(" — ", 1)[0]
+            if text:
+                titles.append(text)
+    if not lead_seen or not titles:
+        return ""
+    joined = "; ".join(titles)
+    if count:
+        joined = count + ": " + joined
+    return shorten(joined, GIST_LIMIT)
+
+
+BULLET_DIGEST_MIN = 3
+
+
+def bullet_fallback_text(blocks):
+    """The first bullet's own text for a bullet-shaped body, locator-free.
+
+    A digest unit (the LinkedIn feed shape) is a list of entries, not
+    prose: it carries no synopsis, no Findings claim and no lead
+    paragraph, so the ordinary glance/scan extraction publishes nothing
+    at all and the card renders title + price only. When the body is
+    bullet-shaped — at least three bullet blocks, which is what
+    blocks_from_markdown makes of ``-``/``*`` items and of the numbered
+    ``1.`` lines the digest units are written in — the first bullet is
+    the honest extractive fallback: its own words, URLs removed first
+    (locators are not content; focu.briefing.strip_urls keeps markdown
+    link labels and drops bare or parenthesised URLs), then cleaned
+    like any other gist source. Only the first bullet is ever used: if
+    it is unusable (a bare URL, a fragment under GIST_MIN), the
+    fallback yields "" rather than manufacturing a line from a later
+    entry.
+    """
+    bullets = [block for block in blocks if block["type"] == "bullet"]
+    if len(bullets) < BULLET_DIGEST_MIN:
+        return ""
+    text = clean(strip_urls(bullets[0]["text"]))
+    return text if len(text) >= GIST_MIN else ""
 
 
 def _pipe_cells(line):
@@ -267,12 +379,40 @@ def editorial(markdown, metadata=None):
     synopsis = metadata.get("summary")
     if not isinstance(synopsis, str) or not synopsis.strip():
         synopsis = summary or claim
+    gist = make_gist(synopsis, claim, summary)
+    # A compiled briefing whose lead is the agenda formula would publish
+    # that formula as its gist (see agenda_gist). Prefer the agenda's own
+    # contents — but only for compilations, and only when the publisher
+    # was not given an explicit synopsis to extract from instead, so
+    # every other item's gist stays exactly as before.
+    explicit_synopsis = isinstance(metadata.get("summary"), str) and metadata["summary"].strip()
+    if metadata.get("origin") == "daily_compilation" and not explicit_synopsis:
+        agenda = agenda_gist(blocks)
+        if agenda:
+            gist = agenda
     title = shorten(choice, 82) or "Untitled research"
     summary = shorten(synopsis, 270)
     if isinstance(synopsis, str) and len(clean(synopsis)) <= 270 and synopsis.rstrip().endswith((".", "!", "?")):
         summary += synopsis.rstrip()[-1]
+    # A bullet-shaped body (a digest unit) reaches here with no gist
+    # and no summary: there was no synopsis, claim, or lead paragraph
+    # to extract from. Fall back to the first bullet's own text for
+    # both fields — the gist through make_gist's ordinary rules, the
+    # summary through the ordinary shorten — so the item is never
+    # published with both fields empty. The gate is both-fields-empty,
+    # so any item the existing paths served keeps its exact output;
+    # and the gist is still omitted when it would merely repeat the
+    # item's title.
+    if not gist and not summary:
+        bullet = bullet_fallback_text(blocks)
+        if bullet:
+            gist = make_gist(bullet)
+            if gist == title or gist == heading:
+                gist = ""
+            summary = shorten(bullet, 270)
     word_count = len(re.findall(r"\b[\w'-]+\b", markdown or ""))
-    return {"title": title, "summary": summary, "article_blocks": blocks,
+    return {"title": title, "summary": summary, "gist": gist,
+            "article_blocks": blocks,
             "reading_minutes": max(1, round(word_count / 220))}
 
 

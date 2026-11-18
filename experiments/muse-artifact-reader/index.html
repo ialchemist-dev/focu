@@ -17,16 +17,25 @@ header{position:sticky;top:0;z-index:5;background:#fbfaf8ed;backdrop-filter:blur
 .nav{display:flex;gap:5px;align-items:center}
 .nav button,.smallbutton{border:0;background:transparent;color:#77716b;padding:9px 12px;border-radius:12px;font-size:14px}
 .nav button.active{color:#222;font-weight:700;background:#ece8e2}
-.nav #refresh{padding:8px;font-size:17px}
 main{max-width:760px;margin:0 auto;padding:25px 22px 70px}
 .sectiontitle{font-size:12px;font-weight:700;color:#999189;letter-spacing:.13em;text-transform:uppercase;margin:0 0 15px}
 #status{font-size:13px;color:#938b82;margin-bottom:21px}
+#status[hidden]{display:none!important}
 .feed{display:flex;flex-direction:column;gap:0}
 .feedcard{border:0;border-bottom:1px solid #ebe8e3;background:transparent;padding:18px 0;display:flex;gap:14px;width:100%;text-align:left;color:inherit;align-items:flex-start}
 .feedcard:first-child{padding-top:2px}
 .feed-open{display:flex;align-items:flex-start;gap:14px;flex:1;min-width:0;border:0;background:transparent;color:inherit;text-align:left;padding:0;width:100%;font:inherit}
 .card-action{border:1px solid #e4e0db;border-radius:12px;background:transparent;color:#716c65;padding:7px 12px;font-size:12px;font-weight:600;min-height:36px}
 .card-action:hover{background:#f0ece7;color:#332d28}
+#readeroriginal{text-decoration:none}
+#readeroriginal:not([hidden]){display:inline-flex;align-items:center}
+.costchip{margin-top:7px;color:#716c65;font-weight:600}
+.play-action{background:#242424;color:#fff;border-color:#242424}
+.play-action:hover{background:#3a3733;color:#fff}
+.quiet-action{border:0;background:transparent;color:#999189;padding:7px 8px;font-size:12px;min-height:36px}
+.quiet-action:hover{color:#716c65;text-decoration:underline}
+.archivefoot{margin-top:26px;padding-top:16px;border-top:1px solid #e9e5df;text-align:center}
+#archivefoot[hidden]{display:none!important}
 .card-controls{display:flex;justify-content:flex-end;flex-shrink:0}
 .reader-archive{margin-left:auto}
 @media(max-width:480px){.feedcard{flex-wrap:wrap}.card-controls{width:100%;justify-content:flex-end}}
@@ -36,11 +45,12 @@ main{max-width:760px;margin:0 auto;padding:25px 22px 70px}
 .cardmeta,.byline{font-size:12px;color:#968e85;letter-spacing:.02em}
 .feedtitle{font-size:20px;font-weight:690;letter-spacing:-.03em;line-height:1.35;margin:7px 0}
 .feedsummary{font-size:14px;color:#77716b;line-height:1.55;margin:7px 0 0;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+.feedgist{font-size:14px;color:#77716b;line-height:1.55;margin:7px 0 0}
 .cover{width:88px;height:88px;object-fit:cover;border-radius:10px;flex-shrink:0;background:#eeeae5}
 .empty{padding:60px 15px;text-align:center;color:#8e857b;line-height:1.7}
 #reader[hidden],#feed[hidden],#playerbar[hidden],#toolbar[hidden]{display:none!important}
 .readerback{border:0;background:none;color:#787067;padding:6px 0;margin-bottom:27px;font-size:14px}
-.readercover{width:100%;max-height:340px;object-fit:cover;border-radius:14px;margin-bottom:25px;background:#eee9e2}
+.readercover{width:100%;max-height:160px;object-fit:cover;border-radius:14px;margin-bottom:25px;background:#eee9e2}
 #readertitle{font-size:clamp(30px,6.5vw,45px);letter-spacing:-.055em;line-height:1.13;margin:6px 0 18px;font-weight:790}
 #readersummary{font-size:17px;color:#716b64;line-height:1.65;margin:0 0 23px}
 .readeractions{display:flex;align-items:center;gap:12px;padding:16px 0;border-top:1px solid #e9e5df;border-bottom:1px solid #e9e5df;margin-bottom:28px}
@@ -75,6 +85,9 @@ body:has(#playerbar:not([hidden])) main{padding-bottom:calc(160px + var(--muse-c
 #closeaudio{border:0;background:none;color:#827d76;font-size:22px;min-width:44px;min-height:44px}
 #recoveraudio{border:0;background:transparent;color:#3e6e66;font-size:12px;min-height:44px;padding:6px 8px;margin-left:auto;white-space:nowrap}
 #recoveraudio:focus-visible{outline:3px solid #bd6258}
+#recoveraudio[hidden]{display:none!important}
+.skipbtn{height:44px;min-width:44px;border:0;border-radius:50%;background:transparent;color:#282522;font-size:13px;font-weight:650;padding:0 4px;flex:none}
+.skipbtn:focus-visible{outline:3px solid #bd6258}
 #player{display:none}
 .playcontrols{display:flex;align-items:center;gap:10px;min-height:48px}
 #playpause{height:44px;width:44px;flex:none;border:0;border-radius:50%;background:#282522;color:white;font-size:20px}
@@ -85,6 +98,8 @@ body:has(#playerbar:not([hidden])) main{padding-bottom:calc(160px + var(--muse-c
 #seekbar::-webkit-slider-thumb{-webkit-appearance:none;width:24px;height:24px;margin-top:-9px;border:3px solid #fff;border-radius:50%;background:#3e6e66;box-shadow:0 1px 4px #0004}
 #seekbar::-moz-range-thumb{width:20px;height:20px;border:3px solid #fff;border-radius:50%;background:#3e6e66}
 #seekbar:disabled{opacity:.45;cursor:default}
+.sourcestoggle{display:block;width:100%;text-align:left;border:0;border-top:1px solid #e9e5df;background:transparent;padding:15px 0;color:#716c65;font-size:13px;font-weight:600}
+.sourcestoggle:focus-visible{outline:3px solid #bd6258}
 .coveredsection{margin:26px 0;padding-top:20px;border-top:1px solid #e9e5df}
 .coveredsection h2{font-size:17px;margin:0 0 10px}
 .coveredlink{display:block;width:100%;text-align:left;padding:12px 8px;border:0;border-bottom:1px solid #e9e5df;background:transparent;color:#985449;line-height:1.45}
@@ -95,16 +110,16 @@ body:has(#playerbar:not([hidden])) main{padding-bottom:calc(160px + var(--muse-c
 </style>
 </head>
 <body>
-<header><div class="head"><div class="brand">focu<span class="dot">.</span></div><nav class="nav" aria-label="Library"><button id="briefingtab" class="active">Daily Briefing</button><button id="researchtab">Research</button><button id="archive">Archive</button><button id="refresh" aria-label="Refresh" title="Refresh">↻</button></nav></div></header>
+<header><div class="head"><div class="brand">focu<span class="dot">.</span></div><nav class="nav" aria-label="Library"><button id="briefingtab" class="active">Daily Briefing</button><button id="researchtab">Research</button><button id="archive">Archive</button></nav></div></header>
 <main>
-<section id="feed"><h1 class="sectiontitle" id="feedheading">Daily Briefing</h1><div id="status" aria-live="polite">Loading…</div><div class="feed" id="grid"></div></section>
+<section id="feed"><h1 class="sectiontitle" id="feedheading">Daily Briefing</h1><div id="status" aria-live="polite" hidden></div><div id="archivefoot" class="archivefoot" hidden><button id="exportsummary" class="smallbutton" type="button">Share reading summary</button></div><div class="feed" id="grid"></div></section>
 <section id="reader" hidden>
 <button id="back" class="readerback">← Back to Inbox</button>
-<img id="readercover" class="readercover" hidden alt="">
 <div class="byline" id="readerbyline"></div><button id="coveredby" class="smallbutton" type="button" hidden></button>
 <h1 id="readertitle"></h1>
 <p id="readersummary"></p>
-<div class="readeractions" id="toolbar"><button id="listen" class="listen" hidden>▶ Listen</button><button id="readaloud" class="listen" hidden>▶ Read aloud</button><span id="readtime" class="readtime"></span><button id="readerarchive" class="card-action reader-archive" type="button">Archive</button><button id="restore" class="card-action reader-archive" type="button" hidden>Restore</button></div>
+<div class="readeractions" id="toolbar"><button id="listen" class="listen" hidden>▶ Listen</button><button id="readaloud" class="listen" hidden>▶ Read aloud</button><span id="readtime" class="readtime"></span><button id="readerarchive" class="card-action reader-archive" type="button">Archive</button><button id="restore" class="card-action reader-archive" type="button" hidden>Restore</button><button id="readernotforme" class="card-action" type="button" hidden>Not for me</button><button id="readeruseful" class="card-action" type="button" hidden>Useful</button><a id="readeroriginal" class="card-action" target="_blank" rel="noopener" hidden>Original</a></div>
+<img id="readercover" class="readercover" hidden alt="">
 <div id="articlebody"></div>
 <div id="coveredsection" class="coveredsection" hidden><h2>Articles covered in this briefing</h2><div id="coveredarticles"></div></div>
 <div class="readend" id="readend">End of article</div>
@@ -112,11 +127,11 @@ body:has(#playerbar:not([hidden])) main{padding-bottom:calc(160px + var(--muse-c
 
 </section>
 </main>
-<div id="playerbar" hidden><div class="playinner"><div class="playtop"><span id="nowplaying"></span><button id="recoveraudio" type="button" title="If audio becomes silent while time advances, restart the media decoder from this position">↻ Recover audio</button><button id="closeaudio" type="button" aria-label="Close player">×</button></div><div class="playcontrols"><button id="playpause" type="button" aria-label="Play or pause audio">▶</button><span id="elapsed" class="playtime">0:00</span><input id="seekbar" type="range" min="0" max="1000" value="0" step="1" aria-label="Seek audio position" disabled><span id="remaining" class="playtime">−0:00</span></div><audio id="player" preload="metadata"></audio></div></div>
+<div id="playerbar" hidden><div class="playinner"><div class="playtop"><span id="nowplaying"></span><button id="recoveraudio" type="button" hidden title="If audio becomes silent while time advances, restart the media decoder from this position">↻ Recover audio</button><button id="closeaudio" type="button" aria-label="Close player">×</button></div><div class="playcontrols"><button id="skipback" class="skipbtn" type="button" aria-label="Back 15 seconds">−15s</button><button id="playpause" type="button" aria-label="Play or pause audio">▶</button><button id="skipfwd" class="skipbtn" type="button" aria-label="Forward 30 seconds">+30s</button><span id="elapsed" class="playtime">0:00</span><input id="seekbar" type="range" min="0" max="1000" value="0" step="1" aria-label="Seek audio position" disabled><span id="remaining" class="playtime">−0:00</span></div><audio id="player" preload="metadata"></audio></div></div>
 <script id="embedded-episodes" type="application/json">{"episodes":[]}</script>
 <script>
 'use strict';
-const grid=document.getElementById('grid'),status=document.getElementById('status'),refresh=document.getElementById('refresh');
+const grid=document.getElementById('grid'),status=document.getElementById('status');
 const feed=document.getElementById('feed'),reader=document.getElementById('reader'),articleBody=document.getElementById('articlebody');
 const player=document.getElementById('player'),playerbar=document.getElementById('playerbar'),readend=document.getElementById('readend');
 const seekbar=document.getElementById('seekbar'),playpause=document.getElementById('playpause'),elapsed=document.getElementById('elapsed'),remaining=document.getElementById('remaining');
@@ -130,16 +145,26 @@ if(requestedClearance!==null&&/^\d{1,3}$/.test(requestedClearance)&&Number(reque
  document.documentElement.style.setProperty('--muse-chrome-clearance',requestedClearance+'px');
 }
 const STORE_KEY='focu:content-consumption:v1';
-let view='briefing',allItems=[],allRequests=[],storageOK=true,currentId=null,readMs=0,maxDepth=0,bottomSeen=false,contentAvailable=false;
+let view='briefing',allItems=[],allRequests=[],storageOK=true,currentId=null,readMs=0,maxDepth=0,bottomSeen=false,contentAvailable=false,lastLoadAt=0,loadInFlight=false;
 const feedPositions={briefing:0,research:0,archive:0},articlePositions={},articleTrail=[];
-let tickAt=Date.now(),lastNote='',playingId=null,lastAudioPosition=null,listenedSeconds=0,pendingRecoveryTime=null;
+let sourcesExpanded=false;
+let tickAt=Date.now(),lastNote='',playingId=null,lastAudioPosition=null,listenedSeconds=0,pendingRecoveryTime=null,pendingResumeTime=null,lastSavedPos=-1,autoRecoveryUsed=false;
 let speechId=null,speechSegments=[],speechIndex=0,speechRunning=false,speechPaused=false,failedAudioId=null,speechEpoch=0;
 function canNarrate(){return !!(typeof speechSynthesis!=='undefined'&&typeof SpeechSynthesisUtterance!=='undefined')}
 function readStates(){try{const obj=JSON.parse(localStorage.getItem(STORE_KEY)||'{}');return obj&&typeof obj==='object'&&!Array.isArray(obj)?obj:{}}catch(e){storageOK=false;return {}}}
 let states=readStates();
-function saveStates(){try{const value=JSON.stringify(states);localStorage.setItem(STORE_KEY,value);storageOK=localStorage.getItem(STORE_KEY)===value}catch(e){storageOK=false}if(!storageOK)status.textContent='Reading history cannot be saved on this device'}
+function saveStates(){try{const value=JSON.stringify(states);localStorage.setItem(STORE_KEY,value);storageOK=localStorage.getItem(STORE_KEY)===value}catch(e){storageOK=false}if(!storageOK){status.hidden=false;status.textContent='Reading history cannot be saved on this device'}}
 function isDone(id){return states[id]?.status==='consumed'}
-function markDone(id,via){if(!id||isDone(id))return;states[id]={status:'consumed',via,updated_at:new Date().toISOString()};saveStates();render(allItems,lastNote);updateReaderState()}
+function markDone(id,via){
+ if(!id||isDone(id))return;
+ const entry={status:'consumed',via,updated_at:new Date().toISOString()};
+ // A useful mark is durable evidence (Learning Phase 2): finishing an
+ // item the owner endorsed must not erase the endorsement, so it is the
+ // one field carried across this wholesale entry replacement.
+ const prev=savedEntry(id);
+ if(prev&&prev.useful&&typeof prev.useful==='object')entry.useful=prev.useful;
+ states[id]=entry;saveStates();render(allItems,lastNote);updateReaderState();
+}
 function markUnread(id){delete states[id];saveStates();render(allItems,lastNote);updateReaderState()}
 function manualArchive(id){
  if(!id)return;
@@ -150,6 +175,193 @@ function manualArchive(id){
    setView('inbox');
  }
 }
+function isNotForMe(id){const s=savedEntry(id);return !!(s&&s.not_for_me&&typeof s.not_for_me==='object')}
+function markNotForMe(id){
+ // The unambiguous negative act (Learning Phase 2). Archive means "done"
+ // (via "manual" conflates finished, read-elsewhere and dismissed), so a
+ // manual archive is unusable as learning evidence. This act is separate:
+ // the item leaves every feed view WITHOUT a consumed status, rests in
+ // Archive where Restore can reverse it, and the mark carries its own
+ // timestamp plus the item's source so the signal survives export intact.
+ if(!id||isDone(id)||isNotForMe(id))return;
+ const item=allItems.find(x=>x.id===id);
+ const at=new Date().toISOString();
+ const entry=savedEntry(id)||{};
+ entry.not_for_me={at,source:item?String(item.source||''):''};
+ entry.updated_at=at;
+ states[id]=entry;
+ saveStates();render(allItems,lastNote);updateReaderState();
+}
+function readerNotForMe(id){
+ if(!id)return;
+ markNotForMe(id);
+ if(currentId===id){
+   if(speechRunning)stopNarration();
+   if(playingId===id){player.pause();playerbar.hidden=true}
+   setView(view);
+ }
+}
+function isUseful(id){const s=savedEntry(id);return !!(s&&s.useful&&typeof s.useful==='object')}
+function markUseful(id){
+ // The unambiguous positive act (Learning Phase 2), twin of Not for me:
+ // the ONLY signal that may ever support promoting a source (promotion
+ // requires the owner's own useful marks; finishing an item can never
+ // promote — completion is not endorsement). Unlike Not for me it is a
+ // pure signal: the item stays in the feed, no status is written, and
+ // any saved positions are preserved. Marking an already-marked item is
+ // a strict no-op — the first mark's timestamp stands, so exactly one
+ // mark per item ever reaches the export. A dismissed (not-for-me) item
+ // cannot be endorsed; Restore is the path back from a dismissal.
+ if(!id||isUseful(id)||isNotForMe(id))return;
+ const item=allItems.find(x=>x.id===id);
+ const at=new Date().toISOString();
+ const entry=savedEntry(id)||{};
+ entry.useful={at,source:item?String(item.source||''):''};
+ entry.updated_at=at;
+ states[id]=entry;
+ saveStates();render(allItems,lastNote);updateReaderState();
+}
+function savedEntry(id){const s=states[id];return s&&typeof s==='object'?s:null}
+function audioPosOf(id){const s=savedEntry(id);const v=s?Number(s.audio_pos):NaN;return Number.isFinite(v)&&v>0?v:0}
+function articlePosOf(id){const s=savedEntry(id);const v=s?Number(s.article_pos):NaN;return Number.isFinite(v)&&v>0?v:0}
+function writePos(id,fields){
+ const cur=savedEntry(id),target=cur||{};let changed=false;
+ for(const key of Object.keys(fields)){if(target[key]!==fields[key]){target[key]=fields[key];changed=true}}
+ if(!changed)return;
+ if(!cur)states[id]=target;
+ saveStates();
+}
+function clearAudioPosition(id){
+ const cur=savedEntry(id);
+ if(cur&&'audio_pos' in cur){delete cur.audio_pos;saveStates()}
+ if(id===playingId)lastSavedPos=-1;
+}
+function saveAudioPosition(force){
+ if(!playingId||isDone(playingId)||!Number.isFinite(player.currentTime))return;
+ const pos=Math.floor(player.currentTime);
+ const dur=Number.isFinite(player.duration)&&player.duration>0?player.duration:0;
+ if(dur&&player.currentTime>=dur-1){clearAudioPosition(playingId);return}
+ if(pos<=2)return;
+ if(!force&&Math.abs(pos-lastSavedPos)<5)return;
+ lastSavedPos=pos;
+ writePos(playingId,{audio_pos:pos});
+}
+function noteArticlePosition(id,y){
+ if(!id||!Number.isFinite(y))return;
+ articlePositions[id]=y;
+ if(Math.abs(y-articlePosOf(id))>=50||y===0)writePos(id,{article_pos:Math.floor(Math.max(0,y))});
+}
+// ---------------------------------------------------------------------------
+// Reading summary export — the Learning Phase 2 transport.
+//
+// The consumption store lives only in this device's localStorage; the
+// pipeline on the VM can see none of it. The ONLY path across is this
+// owner-initiated export: the owner taps "Share reading summary" in the
+// Archive view, receives one JSON file, and hands it to his agent, which
+// ingests it (`focu learn ingest`, idempotent by content_id + updated_at).
+// The app sends nothing anywhere: no network calls, no background sync —
+// the file moves only because the owner carries it. That is a sovereignty
+// property of the design, not a workaround.
+//
+// Format "focu-reading-summary", version 1:
+// {
+//   "format": "focu-reading-summary",
+//   "version": 1,
+//   "exported_at": "<ISO 8601 UTC timestamp>",
+//   "items": [
+//     {
+//       "content_id": "<store key>",
+//       "source": "<item source, from the reader's item data>",
+//       "status": "consumed" | "not_for_me" | "in_progress",
+//       "via": "audio" | "article" | "device_voice" | "manual" | null,
+//       "archived": true | false,
+//       "not_for_me": { "at": "<ISO 8601>", "source": "<source>" } | null,
+//       "useful": { "at": "<ISO 8601>", "source": "<source>" } | null,
+//       "audio": "completed" | "partial" | null,
+//       "audio_pos_seconds": <number> | null,
+//       "article_pos_px": <number> | null,
+//       "updated_at": "<ISO 8601>" | null,
+//       "covered_content_ids": ["<unit content_id>", ...]   // compilations only
+//     }
+//   ]
+// }
+// "in_progress" means an entry exists without consumption or dismissal:
+// a saved position, a useful mark, or both.
+// "archived" means the item rests in the Archive view (consumed, or marked
+// not-for-me). "audio" summarizes the listen position: "completed" when
+// the item was consumed via audio, "partial" when a position is saved on
+// an unfinished item. Positions travel raw; per the learning design the
+// pipeline may use article_pos only as a binary "started" fact, never as
+// a depth percentage. Items are sorted by content_id so exports diff
+// cleanly. The per-item fields extend the store's own fields with the
+// item's source (which the store does not carry) — nothing else is added.
+// "useful" is the owner's endorsement mark (the promotion signal of the
+// learning design); it is orthogonal to "status" — an item can be
+// consumed AND useful. The field is additive within version 1: exports
+// written before the Useful act existed carry no "useful" key at all,
+// and ingest must read a missing key as null, exactly as it reads null.
+// "covered_content_ids" is likewise additive within version 1, and is
+// present ONLY on compiled daily briefings: the unit content ids the
+// briefing compiled, taken from the reader item's own coverage list.
+// Every other item omits the key entirely, so its export is unchanged.
+// The field exists for attribution: a mark on a briefing is evidence
+// about the units inside it, so ingest fans a compilation's signals
+// out to one ledger event per covered unit (each noting the
+// compilation it came via). Without it, briefing marks could never be
+// attributed to a source — a compilation id is not a unit id.
+// ---------------------------------------------------------------------------
+const READING_SUMMARY_FORMAT='focu-reading-summary';
+function buildReadingSummary(){
+ const items=[];
+ for(const id of Object.keys(states).sort()){
+  const entry=savedEntry(id);if(!entry)continue;
+  const item=allItems.find(x=>x.id===id);
+  const nfm=entry.not_for_me&&typeof entry.not_for_me==='object'?entry.not_for_me:null;
+  const use=entry.useful&&typeof entry.useful==='object'?entry.useful:null;
+  const done=entry.status==='consumed';
+  const audioPos=Number(entry.audio_pos),articlePos=Number(entry.article_pos);
+  const hasAudioPos=Number.isFinite(audioPos)&&audioPos>0,hasArticlePos=Number.isFinite(articlePos)&&articlePos>0;
+  const row={
+   content_id:id,
+   source:item?String(item.source||''):(nfm?String(nfm.source||''):(use?String(use.source||''):'')),
+   status:done?'consumed':(nfm?'not_for_me':'in_progress'),
+   via:done?(entry.via||null):null,
+   archived:done||!!nfm,
+   not_for_me:nfm?{at:String(nfm.at||''),source:String(nfm.source||'')}:null,
+   useful:use?{at:String(use.at||''),source:String(use.source||'')}:null,
+   audio:done&&entry.via==='audio'?'completed':(hasAudioPos?'partial':null),
+   audio_pos_seconds:hasAudioPos?Math.floor(audioPos):null,
+   article_pos_px:hasArticlePos?Math.floor(articlePos):null,
+   updated_at:entry.updated_at||(nfm?nfm.at:null)||(use?use.at:null)||null
+  };
+  const covered=item&&Array.isArray(item.covered_content_ids)?item.covered_content_ids.filter(x=>typeof x==='string'&&x):[];
+  if(covered.length)row.covered_content_ids=covered;
+  items.push(row);
+ }
+ return {format:READING_SUMMARY_FORMAT,version:1,exported_at:new Date().toISOString(),items};
+}
+function exportReadingSummary(){
+ const text=JSON.stringify(buildReadingSummary(),null,2);
+ try{
+  const blob=new Blob([text],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const link=document.createElement('a');
+  link.href=url;link.download='focu-reading-summary.json';
+  if(document.body)document.body.append(link);
+  link.click();
+  if(document.body)link.remove();
+  if(typeof setTimeout==='function')setTimeout(()=>{try{URL.revokeObjectURL(url)}catch(e){}},1000);
+  status.hidden=false;status.className='';status.textContent='Reading summary downloaded — hand the file to your agent';scheduleStatusHide();
+ }catch(e){
+  status.hidden=false;status.className='error';status.textContent='Reading summary export is unavailable in this browser';
+ }
+}
+function durationLabel(seconds){
+ const total=Number(seconds);
+ if(!Number.isFinite(total)||total<=0)return '';
+ if(total<60)return Math.max(1,Math.floor(total))+' sec';
+ return Math.round(total/60)+' min';
+}
 function el(tag,text,cls){const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n}
 function safeUrl(value){if(typeof value!=='string'||!value.trim())return null;const v=value.trim();if(v.startsWith('//')){try{const u=new URL('https:'+v);return ['https:','http:','blob:'].includes(u.protocol)?v:null}catch{return null}}if(/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(v)){try{const u=new URL(v);return ['https:','http:','blob:'].includes(u.protocol)?v:null}catch{return null}}if(v.startsWith('/')||v.startsWith('\\\\')||v.includes('\\\\'))return null;return v}
 function normalize(data){
@@ -158,13 +370,13 @@ function normalize(data){
  const seen=new Set();
  return a.filter(x=>{const id=x&&(x.content_id||x.id);if(typeof id!=='string'||!id.trim()||seen.has(id))return false;seen.add(id);return true}).slice(0,500).map(x=>{
  const id=x.content_id||x.id;
- return {id,title:x.title||'Untitled',summary:x.summary||'',date:x.published_at||x.date||'',source:typeof x.source==='string'?x.source:(x.source?.kind||'Focu'),cover_url:x.cover?.path||x.cover_url||'',cover_origin:x.cover?.origin||'',audio_url:x.formats?.audio?.path||x.audio_url||'',audio_duration:Number(x.formats?.audio?.duration_seconds)||null,podcast_mode:x.podcast_mode||null,origin:x.origin||null,covered_content_ids:Array.isArray(x.covered_content_ids)?x.covered_content_ids:[],article_url:x.formats?.article?.path||'',blocks:Array.isArray(x.article_blocks)?x.article_blocks:[],reading_minutes:Number(x.reading_minutes)||0};
+ return {id,title:x.title||'Untitled',summary:x.summary||'',gist:typeof x.gist==='string'?x.gist:'',date:x.published_at||x.date||'',source:typeof x.source==='string'?x.source:(x.source?.kind||'Focu'),cover_url:x.cover?.path||x.cover_url||'',cover_origin:x.cover?.origin||'',audio_url:x.formats?.audio?.path||x.audio_url||'',audio_duration:Number(x.formats?.audio?.duration_seconds)||null,podcast_mode:x.podcast_mode||null,origin:x.origin||null,covered_content_ids:Array.isArray(x.covered_content_ids)?x.covered_content_ids:[],original_url:typeof x.original_url==='string'?x.original_url:'',article_url:x.formats?.article?.path||'',blocks:Array.isArray(x.article_blocks)?x.article_blocks:[],reading_minutes:Number(x.reading_minutes)||0};
  });
 }
 function setView(which){
  if(which==='inbox')which='briefing'; // legacy navigation alias
  if(!['briefing','research','archive'].includes(which))return;
- if(currentId)articlePositions[currentId]=scrollY;
+ if(currentId)noteArticlePosition(currentId,scrollY);
  else feedPositions[view]=scrollY;
  view=which;currentId=null;articleTrail.length=0;reader.hidden=true;feed.hidden=false;
  // Switching tabs does not stop Podcast playback or device read-aloud.
@@ -200,47 +412,41 @@ function appendResearchQueue(){
 function compilationFor(id){
  return allItems.find(item=>Array.isArray(item.covered_content_ids)&&item.covered_content_ids.includes(id))||null;
 }
-function render(items,note){
- allItems=items;lastNote=note;grid.replaceChildren();
- let visible=[];
- if(view==='archive'){
-   visible=items.filter(x=>isDone(x.id)).sort(newestFirst);
- }else if(view==='research'){
-   visible=items.filter(x=>!isDone(x.id)&&itemKind(x)==='research').sort(newestFirst);
- }else{
-   const briefs=items.filter(x=>!isDone(x.id)&&itemKind(x)==='briefing').sort(newestFirst);
-   // Uncompiled registered-source articles remain reachable without mixing
-   // commissioned research reports into the Daily Briefing stream.
-   const uncovered=items.filter(x=>!isDone(x.id)&&itemKind(x)==='source'&&!compilationFor(x.id)).sort(newestFirst);
-   visible=[...briefs,...uncovered];
- }
- status.textContent=visible.length+' '+(view==='archive'?'archived items':view==='research'?'research reports':'briefings and uncovered sources')+
-   (note?' · '+note:'')+(!storageOK?' · Reading state cannot be saved':'');
- if(!visible.length&&!(view==='research'&&allRequests.length)){
-   grid.append(el('p',view==='archive'?'Nothing archived yet.':view==='research'?'No research reports yet.':'You are all caught up.','empty'));
-   return;
- }
- let sourceHeadingShown=false;
- for(const item of visible){
-  if(view==='briefing'&&itemKind(item)==='source'&&!sourceHeadingShown){
-    grid.append(el('h2','Source updates not yet in a briefing','sectiontitle'));
-    sourceHeadingShown=true;
-  }
+function appendCard(item){
  const card=el('div',undefined,'feedcard');
  const open=el('button',undefined,'feed-open');open.type='button';open.setAttribute('aria-label','Read '+item.title);open.onclick=()=>openItem(item.id);
  const body=el('div',undefined,'cardbody');
- body.append(el('div',[item.source,item.date].filter(Boolean).join('  ·  '),'cardmeta'));
+ const metaParts=[item.source,item.date].filter(Boolean);
+ // Archive holds two different kinds of done and the card says which:
+ // the predicates are already evaluated for the view's filter, so the
+ // label costs no new state — it only names what render() acted on.
+ if(view==='archive'){if(isDone(item.id))metaParts.push('Finished');else if(isNotForMe(item.id))metaParts.push('Not for me')}
+ body.append(el('div',metaParts.join('  ·  '),'cardmeta'));
  body.append(el('h2',item.title,'feedtitle'));
- if(item.summary)body.append(el('p',item.summary,'feedsummary'));
+ // Glance layer: a complete-at-its-length gist when the pipeline emitted
+ // one; legacy bundles have no gist and keep the clamped summary exactly
+ // as before. The summary itself stays at scan level (top of the reader).
+ if(item.gist)body.append(el('p',item.gist,'feedgist'));
+ else if(item.summary)body.append(el('p',item.summary,'feedsummary'));
+ // A compilation card states its size at the same glance: the covered
+ // count comes from the coverage list the payload already carries, so
+ // the owner can price the briefing before opening it.
+ const coveredCount=(item.covered_content_ids||[]).length;
+ if(coveredCount)body.append(el('div',coveredCount+' item'+(coveredCount===1?'':'s'),'cardmeta coveredcount'));
  const compiled=compilationFor(item.id);
  if(compiled)body.append(el('div','In '+(compiled.date||'daily')+' briefing','cardmeta'));
+ const cardAudioUrl=safeUrl(item.audio_url);
+ let price='';
+ if(cardAudioUrl&&item.audio_duration)price='▶ '+durationLabel(item.audio_duration);
+ else if(item.reading_minutes)price=item.reading_minutes+' min read';
+ if(price)body.append(el('div',price,'cardmeta costchip'));
 
  open.append(body);
  const cover=safeUrl(item.cover_url);
  if(cover&&item.cover_origin!=='offline_art'){const img=el('img',undefined,'cover');img.src=cover;img.alt='';img.loading='lazy';img.onerror=()=>img.remove();open.append(img)}
  card.append(open);
  const controls=el('div',undefined,'card-controls');
- const action=el('button',view==='archive'?'Restore':'Archive','card-action');action.type='button';
+ const action=el('button',view==='archive'?'Restore':'Archive','quiet-action');action.type='button';
  action.setAttribute('aria-label',(view==='archive'?'Restore ':'Archive ')+item.title);
  action.onclick=event=>{
    if(event){event.preventDefault();event.stopPropagation()}
@@ -252,7 +458,81 @@ function render(items,note){
    if(view==='archive')markUnread(item.id);
    else manualArchive(item.id);
  };
- controls.append(action);card.append(controls);grid.append(card);
+ if(cardAudioUrl&&failedAudioId!==item.id){
+   const savedPos=audioPosOf(item.id);
+   const play=el('button',savedPos>0?(item.audio_duration?'▸ Continue · '+audioClock(Math.max(0,item.audio_duration-savedPos))+' left':'▸ Continue'):'▶ Play','card-action play-action');
+   play.type='button';
+   play.setAttribute('aria-label',(savedPos>0?'Continue listening to ':'Play ')+item.title);
+   play.onclick=event=>{
+     if(event){event.preventDefault();event.stopPropagation()}
+     playItem(item);
+   };
+   controls.append(play);
+ }
+ controls.append(action);
+ if(view!=='archive'){
+   // A quiet text action beside Archive — no border, no badge, no count.
+   // It is the distinct negative act Archive cannot express (see
+   // markNotForMe): one tap, and the item rests in Archive, reversible.
+   const nfm=el('button','Not for me','quiet-action');nfm.type='button';
+   nfm.setAttribute('aria-label','Not for me: '+item.title);
+   nfm.onclick=event=>{
+     if(event){event.preventDefault();event.stopPropagation()}
+     card.hidden=true;
+     card.remove();
+     markNotForMe(item.id);
+   };
+   controls.append(nfm);
+   // The positive twin, in the same quiet register: one tap records the
+   // owner's endorsement and nothing else happens — the card stays in
+   // the feed, still unread if it was unread, and the action re-renders
+   // as a muted "Useful ✓" so the mark is visible. No count, no badge.
+   const marked=isUseful(item.id);
+   const use=el('button',marked?'Useful ✓':'Useful','quiet-action');use.type='button';
+   use.setAttribute('aria-label',(marked?'Marked useful: ':'Mark useful: ')+item.title);
+   use.onclick=event=>{
+     if(event){event.preventDefault();event.stopPropagation()}
+     markUseful(item.id);
+   };
+   controls.append(use);
+ }
+ card.append(controls);grid.append(card);
+}
+function render(items,note){
+ allItems=items;lastNote=note;grid.replaceChildren();
+ document.getElementById('archivefoot').hidden=view!=='archive';
+ let visible=[],briefs=[],uncovered=[];
+ if(view==='archive'){
+   // Archive holds both completions and not-for-me dismissals; Restore
+   // (markUnread) reverses either by deleting the store entry.
+   visible=items.filter(x=>isDone(x.id)||isNotForMe(x.id)).sort(newestFirst);
+ }else if(view==='research'){
+   visible=items.filter(x=>!isDone(x.id)&&!isNotForMe(x.id)&&itemKind(x)==='research').sort(newestFirst);
+ }else{
+   briefs=items.filter(x=>!isDone(x.id)&&!isNotForMe(x.id)&&itemKind(x)==='briefing').sort(newestFirst);
+   // Uncompiled registered-source articles remain reachable without mixing
+   // commissioned research reports into the Daily Briefing stream, and
+   // without competing with the compiled briefing at full weight: they rest
+   // behind one collapsed row until the owner asks for them.
+   uncovered=items.filter(x=>!isDone(x.id)&&!isNotForMe(x.id)&&itemKind(x)==='source'&&!compilationFor(x.id)).sort(newestFirst);
+   visible=[...briefs,...uncovered];
+ }
+ if(!visible.length&&!(view==='research'&&allRequests.length)){
+   grid.append(el('p',view==='archive'?'Nothing archived yet.':view==='research'?'No research reports yet.':'You are all caught up.','empty'));
+   return;
+ }
+ if(view==='briefing'){
+   for(const item of briefs)appendCard(item);
+   if(uncovered.length){
+     const toggle=el('button',(sourcesExpanded?'▾ ':'▸ ')+uncovered.length+' source update'+(uncovered.length===1?'':'s')+' not yet in a briefing','sourcestoggle');
+     toggle.type='button';
+     toggle.setAttribute('aria-expanded',sourcesExpanded?'true':'false');
+     toggle.onclick=()=>{sourcesExpanded=!sourcesExpanded;render(allItems,lastNote)};
+     grid.append(toggle);
+     if(sourcesExpanded)for(const item of uncovered)appendCard(item);
+   }
+ }else{
+   for(const item of visible)appendCard(item);
  }
  if(view==='research')appendResearchQueue();
 }
@@ -319,14 +599,23 @@ function renderArticle(blocks,legacyUrl){
 function updateReaderState(){
  if(!currentId)return;
  const done=isDone(currentId);
- document.getElementById('readerstate').textContent=done?'Finished · Saved in Archive':'';
- document.getElementById('restore').hidden=!done;
- document.getElementById('readerarchive').hidden=done;
+ const nfm=!done&&isNotForMe(currentId);
+ document.getElementById('readerstate').textContent=done?'Finished · Saved in Archive':(nfm?'Not for me · Saved in Archive':'');
+ document.getElementById('restore').hidden=!done&&!nfm;
+ document.getElementById('readerarchive').hidden=done||nfm;
+ document.getElementById('readernotforme').hidden=done||nfm;
+ // Useful stays offered on a finished item — endorsing after reading is
+ // the signal's strongest form — and on an unfinished one; only a
+ // dismissed item loses it (Restore is that item's way back). The label
+ // carries the mark itself, in the same muted register as the cards.
+ const usefulButton=document.getElementById('readeruseful');
+ usefulButton.hidden=nfm;
+ usefulButton.textContent=isUseful(currentId)?'Useful ✓':'Useful';
 }
 function openItem(id,viaLink=false){
  const item=allItems.find(x=>x.id===id);if(!item)return;
  if(currentId&&currentId!==id){
-   articlePositions[currentId]=scrollY;
+   noteArticlePosition(currentId,scrollY);
    if(viaLink)articleTrail.push(currentId);
  }else if(!currentId){
    feedPositions[view]=scrollY;
@@ -344,6 +633,12 @@ function openItem(id,viaLink=false){
  if(linked){coveredButton.textContent='In the '+(linked.date||'daily')+' briefing';
  coveredButton.onclick=()=>openItem(linked.id,true)}
  document.getElementById('readtime').textContent=item.reading_minutes?item.reading_minutes+' min read':'';
+ // The ladder's top rung lives here, at the point of the full read: one
+ // quiet door to the original, only when the item's data carries one.
+ const original=document.getElementById('readeroriginal'),originalUrl=safeUrl(item.original_url);
+ const door=originalUrl&&/^https?:\/\//i.test(originalUrl)?originalUrl:null;
+ original.hidden=!door;
+ if(door)original.href=door;else original.removeAttribute('href');
  const cover=item.cover_origin==='offline_art'?null:safeUrl(item.cover_url),img=document.getElementById('readercover');img.hidden=!cover;
  if(cover){img.src=cover;img.onerror=()=>{img.hidden=true}}else img.removeAttribute('src');
  const listen=document.getElementById('listen'),readaloud=document.getElementById('readaloud');
@@ -366,7 +661,9 @@ function openItem(id,viaLink=false){
    }
  }
  coveredSection.hidden=!links.children.length;
- updateReaderState();window.scrollTo(0,articlePositions[id]||0);
+ updateReaderState();
+ if(articlePositions[id]==null)articlePositions[id]=articlePosOf(id);
+ window.scrollTo(0,articlePositions[id]||0);
 }
 document.getElementById('back').onclick=()=>{
  if(articleTrail.length)openItem(articleTrail.pop(),false);
@@ -374,6 +671,9 @@ document.getElementById('back').onclick=()=>{
 };
 document.getElementById('restore').onclick=()=>{if(currentId)markUnread(currentId)};
 document.getElementById('readerarchive').onclick=()=>manualArchive(currentId);
+document.getElementById('readernotforme').onclick=()=>readerNotForMe(currentId);
+document.getElementById('readeruseful').onclick=()=>markUseful(currentId);
+document.getElementById('exportsummary').onclick=()=>exportReadingSummary();
 function stopNarration(){
  speechRunning=false;speechPaused=false;speechId=null;speechSegments=[];speechIndex=0;speechEpoch++;
  if(canNarrate())speechSynthesis.cancel();
@@ -466,60 +766,92 @@ seekbar.addEventListener('input',()=>{
  if(!playingId||!Number.isFinite(player.duration)||player.duration<=0)return;
  player.currentTime=player.duration*Number(seekbar.value)/1000;
  lastAudioPosition=null;
+ saveAudioPosition(true);
  syncPlayerUI();
 });
 player.addEventListener('durationchange',syncPlayerUI);
 player.addEventListener('play',syncPlayerUI);
-player.addEventListener('pause',syncPlayerUI);
+player.addEventListener('pause',()=>{saveAudioPosition(true);syncPlayerUI()});
 player.addEventListener('seeked',syncPlayerUI);
-document.getElementById('listen').onclick=()=>{
- const item=allItems.find(x=>x.id===currentId);if(!item)return;
+function playItem(item){
  const url=safeUrl(item.audio_url);
  if(!url||failedAudioId===item.id){readAloud(item);return}
  stopNarration();
- if(playingId!==item.id){player.src=url;playingId=item.id;listenedSeconds=0;lastAudioPosition=null}
+ if(playingId&&playingId!==item.id)saveAudioPosition(true);
+ if(playingId!==item.id){
+   player.src=url;playingId=item.id;listenedSeconds=0;lastAudioPosition=null;lastSavedPos=-1;
+   const resume=audioPosOf(item.id);
+   pendingResumeTime=resume>0?resume:null;
+ }
+ document.getElementById('recoveraudio').hidden=true;autoRecoveryUsed=false;
  playerbar.hidden=false;document.getElementById('nowplaying').textContent=item.title;
  syncPlayerUI();
  player.play().then(syncPlayerUI).catch(()=>{document.getElementById('nowplaying').textContent='Tap Play to start audio';syncPlayerUI()});
+}
+document.getElementById('listen').onclick=()=>{
+ const item=allItems.find(x=>x.id===currentId);if(!item)return;
+ playItem(item);
 };
-document.getElementById('recoveraudio').onclick=()=>{
+function recoverAudio(auto){
  // WebKit sometimes reports playing/currentTime even though audible output
- // is silent. No Web Audio output inspection is reliable in a host WebView;
- // recovery must therefore be a user-initiated decoder reset.
+ // is silent. No Web Audio output inspection is reliable in a host WebView,
+ // so recovery is a decoder reset from the current position: attempted
+ // automatically once after a stall, then offered as a button if that fails.
  const item=allItems.find(x=>x.id===playingId);
  const url=item?safeUrl(item.audio_url):null;
- if(!url){document.getElementById('nowplaying').textContent='No audio source available to recover';return}
+ if(!url){document.getElementById('nowplaying').textContent='No audio source available to recover';return false}
  pendingRecoveryTime=Number.isFinite(player.currentTime)?Math.max(0,player.currentTime):0;
  lastAudioPosition=null; // seeking/reloading is not evidence of listening
- document.getElementById('nowplaying').textContent='Reconnecting audio near '+audioClock(pendingRecoveryTime)+'…';
+ document.getElementById('nowplaying').textContent=auto?'Audio glitch — restarting where you left off…':'Reconnecting audio near '+audioClock(pendingRecoveryTime)+'…';
  player.pause();
  player.removeAttribute('src');
  player.load();
  player.src=url;
  player.load(); // loadedmetadata will seek and resume
  syncPlayerUI();
+ return true;
+}
+document.getElementById('recoveraudio').onclick=()=>{
+ document.getElementById('recoveraudio').hidden=true;
+ autoRecoveryUsed=true; // a further stall without progress re-offers the button
+ recoverAudio(false);
 };
-document.getElementById('closeaudio').onclick=()=>{pendingRecoveryTime=null;player.pause();playerbar.hidden=true;syncPlayerUI()};
+document.getElementById('skipback').onclick=()=>{
+ if(!playingId)return;
+ player.currentTime=Math.max(0,(Number.isFinite(player.currentTime)?player.currentTime:0)-15);
+ lastAudioPosition=null;saveAudioPosition(true);syncPlayerUI();
+};
+document.getElementById('skipfwd').onclick=()=>{
+ if(!playingId)return;
+ const now=Number.isFinite(player.currentTime)?player.currentTime:0;
+ const dur=Number.isFinite(player.duration)&&player.duration>0?player.duration:Infinity;
+ player.currentTime=Math.min(now+30,dur);
+ lastAudioPosition=null;saveAudioPosition(true);syncPlayerUI();
+};
+document.getElementById('closeaudio').onclick=()=>{saveAudioPosition(true);pendingRecoveryTime=null;pendingResumeTime=null;player.pause();playerbar.hidden=true;syncPlayerUI()};
 player.addEventListener('seeking',()=>{lastAudioPosition=null});
 player.addEventListener('timeupdate',()=>{
  if(player.paused||player.seeking||!Number.isFinite(player.currentTime))return;
  const current=player.currentTime;
- if(lastAudioPosition!==null){const diff=current-lastAudioPosition;if(diff>0&&diff<60)listenedSeconds+=diff}
+ if(lastAudioPosition!==null){const diff=current-lastAudioPosition;if(diff>0){autoRecoveryUsed=false;if(diff<60)listenedSeconds+=diff}}
  lastAudioPosition=current;
+ if(Math.abs(current-lastSavedPos)>=5)saveAudioPosition();
  syncPlayerUI();
 });
 player.addEventListener('ended',()=>{
  syncPlayerUI();
+ if(playingId)clearAudioPosition(playingId);
  const item=allItems.find(x=>x.id===playingId);
  if(item&&Number.isFinite(item.audio_duration)&&item.audio_duration>0&&
     player.currentTime<item.audio_duration*0.95){
-   document.getElementById('nowplaying').textContent='Audio ended earlier than the verified file duration. Please report this playback problem.';
+   document.getElementById('nowplaying').textContent='The audio ended early — not archived.';
    return;
  }
- if(playingId&&Number.isFinite(player.duration)&&player.duration>0&&Math.max(listenedSeconds,playedCoverage())>=player.duration*0.8){markDone(playingId,'audio')}
+ if(playingId&&Number.isFinite(player.duration)&&player.duration>0&&Math.max(listenedSeconds,playedCoverage())>=player.duration*0.8){const endedId=playingId;markDone(playingId,'audio');if(typeof setTimeout==='function')setTimeout(()=>{if(playingId===endedId&&player.paused)playerbar.hidden=true},4000)}
  else document.getElementById('nowplaying').textContent='Playback ended · Not enough listening time to archive';
 });
 player.addEventListener('loadedmetadata',()=>{
+ const resumeAt=pendingResumeTime;pendingResumeTime=null;
  if(pendingRecoveryTime!==null){
    const target=pendingRecoveryTime;
    pendingRecoveryTime=null;
@@ -531,24 +863,40 @@ player.addEventListener('loadedmetadata',()=>{
    player.play().then(syncPlayerUI).catch(()=>{
      document.getElementById('nowplaying').textContent='Tap Play to resume after audio recovery';
    });
+ }else if(resumeAt!==null&&Number.isFinite(player.duration)&&player.duration>0){
+   player.currentTime=Math.min(resumeAt,Math.max(0,player.duration-0.25));
+   document.getElementById('nowplaying').textContent=
+       (allItems.find(x=>x.id===playingId)?.title||'Audio')+' · Resumed at '+audioClock(player.currentTime);
  }
  syncPlayerUI();
  const item=allItems.find(x=>x.id===playingId);
  if(item&&item.audio_duration&&Number.isFinite(player.duration)&&
     Math.abs(player.duration-item.audio_duration)>Math.max(4,item.audio_duration*0.05)){
-    document.getElementById('nowplaying').textContent='Player duration differs from verified audio · Try reopening if playback cuts off';
+    document.getElementById('nowplaying').textContent="This episode's audio looks shorter than expected";
  }
 });
-player.addEventListener('stalled',()=>{document.getElementById('nowplaying').textContent='Playback stalled · Waiting for audio data'});
+player.addEventListener('stalled',()=>{
+ if(!playingId||player.paused||pendingRecoveryTime!==null)return; // a recovery is already in flight
+ if(!autoRecoveryUsed){autoRecoveryUsed=true;recoverAudio(true);return}
+ document.getElementById('recoveraudio').hidden=false; // auto-recovery did not hold; offer the manual reset
+});
 
 player.addEventListener('error',()=>{
  pendingRecoveryTime=null;
  failedAudioId=playingId;
  document.getElementById('nowplaying').textContent='Podcast audio unavailable. You can still read the article.';
- if(currentId===playingId&&allItems.some(x=>x.id===currentId&&x.blocks.length)){
+ const failedItem=allItems.find(x=>x.id===playingId);
+ if(currentId===playingId&&failedItem&&failedItem.blocks.length){
+    // The card path never asks the owner to pick an engine: playItem
+    // falls back to device voice on its own for a failed item. The
+    // reader does the same — narration starts by itself, the one
+    // remaining listen control is the narration's own pause button,
+    // and the state line states the fact without an instruction.
     document.getElementById('listen').hidden=true;
     document.getElementById('readaloud').hidden=false;
-    document.getElementById('readerstate').textContent='Cached audio could not load. Try device read-aloud instead.';
+    readAloud(failedItem);
+    if(speechRunning&&speechId===failedItem.id)
+      document.getElementById('readerstate').textContent='Playing with device voice — the recorded audio could not load.';
  }
 });
 function updateScroll(){
@@ -558,6 +906,7 @@ function updateScroll(){
  if(readend.getBoundingClientRect().top<innerHeight-55)bottomSeen=true;
 }
 window.addEventListener('scroll',updateScroll,{passive:true});
+window.addEventListener('scroll',()=>{if(currentId&&!reader.hidden)noteArticlePosition(currentId,scrollY)},{passive:true});
 function playedCoverage(){let count=0;try{for(let i=0;i<player.played.length;i++)count+=player.played.end(i)-player.played.start(i)}catch(e){}return count}
 function readingTick(){
  const now=Date.now(),delta=Math.min(2000,Math.max(0,now-tickAt));tickAt=now;
@@ -572,11 +921,41 @@ function readingTick(){
  if(bottomSeen&&readMs>=minMs)markDone(currentId,'article');
 }
 setInterval(readingTick,1000);
-document.addEventListener('visibilitychange',()=>{tickAt=Date.now()});
-async function load(){refresh.disabled=true;status.className='';status.textContent='Loading stories…';try{let data,note='';const raw=document.getElementById('embedded-episodes').textContent;const snapshot=JSON.parse(raw);const embedded=normalize(snapshot);let current=snapshot;const manifest=params.get('manifest')||'assets/episodes.json';try{const url=safeUrl(manifest);if(!url)throw Error('Invalid manifest URL');const response=await fetch(url,{cache:'no-store'});if(!response.ok)throw Error('HTTP '+response.status);const received=await response.json();data=normalize(received);current=received}catch(e){data=embedded;note='embedded snapshot (manifest unavailable)';if(!data.length)note='manifest unavailable; no embedded stories'}
-allRequests=Array.isArray(current.research_requests)?current.research_requests.filter(r=>r&&typeof r.intent_id==='string'&&['queued','researching','failed','completed'].includes(r.status)).slice(0,100):[];
-render(data,note)}catch(e){grid.replaceChildren();status.textContent='Unable to load stories: '+e.message;status.className='error'}finally{refresh.disabled=false}}
-refresh.addEventListener('click',load);load();
+document.addEventListener('visibilitychange',()=>{tickAt=Date.now();if(document.hidden){saveAudioPosition(true);if(currentId&&!reader.hidden)noteArticlePosition(currentId,scrollY)}else reloadIfStale()});
+function noteContentChange(beforeIds,items){return items.some(item=>!beforeIds.has(item.id))}
+function scheduleStatusHide(){
+ if(typeof setTimeout!=='function')return;
+ const shown=status.textContent;
+ setTimeout(()=>{if(status.textContent===shown)status.hidden=true},4000);
+}
+function reloadIfStale(){
+ // Freshness is the system's job: when the app becomes visible again with
+ // data older than five minutes, reload without being asked.
+ if(!lastLoadAt||Date.now()-lastLoadAt<=5*60*1000)return false;
+ return load(true);
+}
+async function load(){
+ if(loadInFlight)return;loadInFlight=true;
+ const firstLoad=!lastLoadAt;
+ if(firstLoad){status.hidden=false;status.className='';status.textContent='Loading stories…'}
+ try{
+  let data,note='';
+  const raw=document.getElementById('embedded-episodes').textContent;
+  const snapshot=JSON.parse(raw);const embedded=normalize(snapshot);let current=snapshot;
+  const manifest=params.get('manifest')||'assets/episodes.json';
+  try{const url=safeUrl(manifest);if(!url)throw Error('Invalid manifest URL');const response=await fetch(url,{cache:'no-store'});if(!response.ok)throw Error('HTTP '+response.status);const received=await response.json();data=normalize(received);current=received}
+  catch(e){data=embedded;note='embedded snapshot (manifest unavailable)';if(!data.length)note='manifest unavailable; no embedded stories'}
+  if(note)console.info('Focu reader:',note); // plumbing belongs in the console, not the resting UI
+  allRequests=Array.isArray(current.research_requests)?current.research_requests.filter(r=>r&&typeof r.intent_id==='string'&&['queued','researching','failed','completed'].includes(r.status)).slice(0,100):[];
+  const beforeIds=new Set(allItems.map(x=>x.id));
+  render(data,note);
+  lastLoadAt=Date.now();
+  if(!firstLoad&&noteContentChange(beforeIds,allItems)){status.hidden=false;status.className='';status.textContent='New briefing ready';scheduleStatusHide()}
+  else if(firstLoad){status.hidden=true;status.textContent=''}
+ }catch(e){grid.replaceChildren();status.hidden=false;status.textContent='Unable to load stories: '+e.message;status.className='error'}
+ finally{loadInFlight=false}
+}
+load();
 </script>
 </body>
 </html>

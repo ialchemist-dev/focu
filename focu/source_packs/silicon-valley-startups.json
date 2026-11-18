@@ -1,0 +1,534 @@
+{
+ "attention_estimate": {
+  "basis": "Sum of enabled sources' cadence estimates on 2026-11-17: ≈127 posts/month. Two bursty wires dominate — LangChain ≈31.5 and Socket ≈19 (a security-news burst rate) — and both carry max_items_per_day 2; the other eleven enabled sources together add ≈77/month. The briefing's selection budget bounds what actually surfaces. Five further verified blogs are listed disabled (no consumable feed) and add nothing until an HTML adapter or a smaller feed exists.",
+  "posts_per_month": 127.3
+ },
+ "categories": [
+  "Startups",
+  "Engineering blogs"
+ ],
+ "coverage": "Verified pass on 2026-11-17: every main-list feed was fetched live, its item dates read, and cadences computed from those dates; blogs without feeds were read from their own indexes and are listed disabled, never silently included. Scope is deliberate: independent, still-private startups headquartered in the San Francisco Bay Area, weighted to AI infrastructure, developer tools and fintech. That excludes excellent blogs on geography alone (Modal and Hugging Face are New York companies — see 'unverified'), companies no longer independent (Cursor, acquired by SpaceX in August 2026), public companies, and the frontier labs, which have their own packs. Blogs whose feeds are changelog or PR wires were excluded on content, with the evidence stated per candidate. Robotics is thin by evidence, not by choice: the sector's one research-blog candidate (Physical Intelligence) could not be verified from this network, and the rest publish announcements rather than engineering writing.",
+ "curator": {
+  "name": "AI Praxis Lab (Jerry Yu)",
+  "url": "https://aipraxislab.com/sources/"
+ },
+ "description": "Engineering, research and product blogs of the current generation of Bay Area startups — AI infrastructure, developer tools, fintech and agent platforms. Every feed was fetched live and dated on 2026-11-17, and every source states its attention cost up front.",
+ "id": "silicon-valley-startups",
+ "name": "Silicon Valley Startups · Engineering Blogs",
+ "schema_version": 1,
+ "sources": [
+  {
+   "cadence": {
+    "as_of": "2026-11-17",
+    "basis": "Feed fetched 2026-11-17 holds 100 items dated 2026-08-26 to 2026-11-17; the newest 30 (2026-10-19 to 2026-11-17) imply ≈31.5/month. max_items_per_day is set to 2 so the briefing takes the essays and leaves most release notes behind.",
+    "posts_per_month": 31.5
+   },
+   "channel": "research",
+   "enabled": true,
+   "feed_url": "https://www.langchain.com/blog/rss.xml",
+   "homepage": "https://www.langchain.com/blog",
+   "id": "langchain",
+   "last_post_at": "2026-11-17",
+   "max_items_per_day": 2,
+   "name": "LangChain",
+   "notes": "The most-read agent-engineering blog of this generation: context engineering, evals and Deep Agents internals, mixed with LangSmith release notes and customer stories. The daily cap keeps the essays and drops most of the changelog.",
+   "org": "LangChain",
+   "platform": "Self-hosted",
+   "readiness": "RSS verified live 2026-11-17 (100 items, newest 2026-11-17).",
+   "site_url": "https://www.langchain.com/blog",
+   "type": "rss",
+   "verified_at": "2026-11-17"
+  },
+  {
+   "cadence": {
+    "as_of": "2026-11-17",
+    "basis": "Feed fetched 2026-11-17 holds only its 10 newest items, dated 2026-10-29 to 2026-11-14 — ≈19/month in that window, a security-news burst rate. max_items_per_day is set to 2.",
+    "posts_per_month": 19.0
+   },
+   "channel": "research",
+   "enabled": true,
+   "feed_url": "https://socket.dev/api/blog/feed.atom",
+   "homepage": "https://socket.dev/blog",
+   "id": "socket",
+   "last_post_at": "2026-11-14",
+   "max_items_per_day": 2,
+   "name": "Socket",
+   "notes": "Supply-chain security research and npm-ecosystem malware reporting — the Shai-Hulud worm coverage ran here first. A news-paced blog; the cadence is a current burst rate, not a long-run average.",
+   "org": "Socket",
+   "platform": "Self-hosted",
+   "readiness": "Atom feed verified live 2026-11-17 (10 items, newest 2026-11-14).",
+   "site_url": "https://socket.dev/blog",
+   "type": "rss",
+   "verified_at": "2026-11-17"
+  },
+  {
+   "cadence": {
+    "as_of": "2026-11-17",
+    "basis": "Feed fetched 2026-11-17 holds 25 items dated 2026-09-10 to 2026-11-11 — ≈12.3/month over that window.",
+    "posts_per_month": 12.3
+   },
+   "channel": "research",
+   "enabled": true,
+   "feed_url": "https://planetscale.com/blog/feed.atom",
+   "homepage": "https://planetscale.com/blog",
+   "id": "planetscale",
+   "last_post_at": "2026-11-11",
+   "max_items_per_day": 5,
+   "name": "PlanetScale",
+   "notes": "Database engineering at its best: Vitess internals, failover and switchover design, migration war stories. Arguably the strongest pure-engineering feed in this pack.",
+   "org": "PlanetScale",
+   "platform": "Self-hosted",
+   "readiness": "Atom feed verified live 2026-11-17 (25 items, newest 2026-11-11).",
+   "site_url": "https://planetscale.com/blog",
+   "type": "rss",
+   "verified_at": "2026-11-17"
+  },
+  {
+   "cadence": {
+    "as_of": "2026-11-17",
+    "basis": "Feed fetched 2026-11-17 holds 326 items (the full archive); the newest 30 are dated 2026-08-25 to 2026-11-12 — ≈11.6/month.",
+    "posts_per_month": 11.6
+   },
+   "channel": "research",
+   "enabled": true,
+   "feed_url": "https://semgrep.dev/blog/rss/",
+   "homepage": "https://semgrep.dev/blog",
+   "id": "semgrep",
+   "last_post_at": "2026-11-12",
+   "max_items_per_day": 5,
+   "name": "Semgrep",
+   "notes": "Application-security engineering: program analysis, agentic AppSec and vulnerability research from the team behind Semgrep.",
+   "org": "Semgrep",
+   "platform": "Self-hosted",
+   "readiness": "RSS verified live 2026-11-17 (326 items, newest 2026-11-12).",
+   "site_url": "https://semgrep.dev/blog",
+   "type": "rss",
+   "verified_at": "2026-11-17"
+  },
+  {
+   "cadence": {
+    "as_of": "2026-11-17",
+    "basis": "Feed fetched 2026-11-17 holds 448 items; the newest 30 are dated 2026-08-05 to 2026-11-10 — ≈9.4/month over that window. Launch weeks run denser: the newest 20 alone imply ≈21.7/month.",
+    "posts_per_month": 9.4
+   },
+   "channel": "research",
+   "enabled": true,
+   "feed_url": "https://supabase.com/rss.xml",
+   "homepage": "https://supabase.com/blog",
+   "id": "supabase",
+   "last_post_at": "2026-11-10",
+   "max_items_per_day": 5,
+   "name": "Supabase",
+   "notes": "The Postgres platform's own stream: database internals (OrioleDB, Multigres), MCP and auth engineering, and launch posts. Product-dense but technically substantive.",
+   "org": "Supabase",
+   "platform": "Self-hosted",
+   "readiness": "RSS verified live 2026-11-17 (448 items, newest 2026-11-10). The feed is Supabase's site-wide stream; its items are the blog's engineering and product posts.",
+   "site_url": "https://supabase.com/blog",
+   "type": "rss",
+   "verified_at": "2026-11-17"
+  },
+  {
+   "cadence": {
+    "as_of": "2026-11-17",
+    "basis": "Feed fetched 2026-11-17 holds 30 items dated 2026-08-06 to 2026-11-16 — ≈9.0/month over that window (the newest 20 imply ≈13/month; the pace has picked up with Sentry's AI tooling posts).",
+    "posts_per_month": 9.0
+   },
+   "channel": "research",
+   "enabled": true,
+   "feed_url": "https://blog.sentry.io/feed.xml",
+   "homepage": "https://blog.sentry.io",
+   "id": "sentry",
+   "last_post_at": "2026-11-16",
+   "max_items_per_day": 5,
+   "name": "Sentry",
+   "notes": "Error-monitoring engineering: SDK internals, semantic conventions, CI performance and AI tooling, from the team that builds Sentry.",
+   "org": "Sentry",
+   "platform": "Self-hosted",
+   "readiness": "RSS verified live 2026-11-17 (30 items, newest 2026-11-16).",
+   "site_url": "https://blog.sentry.io",
+   "type": "rss",
+   "verified_at": "2026-11-17"
+  },
+  {
+   "cadence": {
+    "as_of": "2026-11-17",
+    "basis": "Feed fetched 2026-11-17 holds 50 items; the newest 20 are dated 2026-09-02 to 2026-11-10 — ≈8.8/month.",
+    "posts_per_month": 8.8
+   },
+   "channel": "research",
+   "enabled": true,
+   "feed_url": "https://www.honeycomb.io/rss/blog.xml",
+   "homepage": "https://www.honeycomb.io/blog",
+   "id": "honeycomb",
+   "last_post_at": "2026-11-10",
+   "max_items_per_day": 5,
+   "name": "Honeycomb",
+   "notes": "Observability engineering and the practice around it: instrumentation, LLM cost patterns, SRE culture. Some of the most-cited observability writing on the web runs here.",
+   "org": "Honeycomb",
+   "platform": "Self-hosted",
+   "readiness": "RSS verified live 2026-11-17 (50 items, newest 2026-11-10).",
+   "site_url": "https://www.honeycomb.io/blog",
+   "type": "rss",
+   "verified_at": "2026-11-17"
+  },
+  {
+   "cadence": {
+    "as_of": "2026-11-17",
+    "basis": "Feed fetched 2026-11-17 holds 100 items; the newest 30 are dated 2026-07-29 to 2026-11-16 — ≈8.3/month.",
+    "posts_per_month": 8.3
+   },
+   "channel": "research",
+   "enabled": true,
+   "feed_url": "https://www.together.ai/blog/rss.xml",
+   "homepage": "https://www.together.ai/blog",
+   "id": "together",
+   "last_post_at": "2026-11-16",
+   "max_items_per_day": 5,
+   "name": "Together AI",
+   "notes": "Open-model inference engineering: kernels, the Together Compiler, and making open models work for long-horizon agentic workloads.",
+   "org": "Together AI",
+   "platform": "Self-hosted",
+   "readiness": "RSS verified live 2026-11-17 (100 items, newest 2026-11-16).",
+   "site_url": "https://www.together.ai/blog",
+   "type": "rss",
+   "verified_at": "2026-11-17"
+  },
+  {
+   "cadence": {
+    "as_of": "2026-11-17",
+    "basis": "Feed fetched 2026-11-17 holds 112 items; the newest 30 are dated 2026-05-01 to 2026-11-17 — ≈4.6/month.",
+    "posts_per_month": 4.6
+   },
+   "channel": "research",
+   "enabled": true,
+   "feed_url": "https://render.com/blog/feed.rss",
+   "homepage": "https://render.com/blog",
+   "id": "render",
+   "last_post_at": "2026-11-17",
+   "max_items_per_day": 5,
+   "name": "Render",
+   "notes": "Cloud-platform engineering from the PaaS: sandboxes, OIDC, scoped API keys, and what 'production' means in the era of agentic development.",
+   "org": "Render",
+   "platform": "Self-hosted",
+   "readiness": "RSS verified live 2026-11-17 (112 items, newest 2026-11-17).",
+   "site_url": "https://render.com/blog",
+   "type": "rss",
+   "verified_at": "2026-11-17"
+  },
+  {
+   "cadence": {
+    "as_of": "2026-11-17",
+    "basis": "Feed fetched 2026-11-17 holds 86 items; the newest 20 are dated 2026-06-10 to 2026-11-10 — ≈4.0/month. The pace rose through 2026 as agent-sandbox adoption grew.",
+    "posts_per_month": 4.0
+   },
+   "channel": "research",
+   "enabled": true,
+   "feed_url": "https://e2b.dev/rss.xml",
+   "homepage": "https://e2b.dev/blog",
+   "id": "e2b",
+   "last_post_at": "2026-11-10",
+   "max_items_per_day": 5,
+   "name": "E2B",
+   "notes": "Agent-sandbox infrastructure: how coding agents run inside E2B sandboxes, workload identity, and the infrastructure underneath agent products.",
+   "org": "E2B",
+   "platform": "Self-hosted",
+   "readiness": "RSS verified live 2026-11-17 (86 items, newest 2026-11-10).",
+   "site_url": "https://e2b.dev/blog",
+   "type": "rss",
+   "verified_at": "2026-11-17"
+  },
+  {
+   "cadence": {
+    "as_of": "2026-11-17",
+    "basis": "Feed fetched 2026-11-17 holds 30 items dated 2026-03-20 to 2026-11-16 — ≈3.8/month.",
+    "posts_per_month": 3.8
+   },
+   "channel": "research",
+   "enabled": true,
+   "feed_url": "https://sourcegraph.com/blog/feed.rss",
+   "homepage": "https://sourcegraph.com/blog",
+   "id": "sourcegraph",
+   "last_post_at": "2026-11-16",
+   "max_items_per_day": 5,
+   "name": "Sourcegraph",
+   "notes": "Code intelligence in the agent era: review expectations, the Cody sunset and what replaces it, and security research (php2shell).",
+   "org": "Sourcegraph",
+   "platform": "Self-hosted",
+   "readiness": "RSS verified live 2026-11-17 (30 items, newest 2026-11-16).",
+   "site_url": "https://sourcegraph.com/blog",
+   "type": "rss",
+   "verified_at": "2026-11-17"
+  },
+  {
+   "cadence": {
+    "as_of": "2026-11-17",
+    "basis": "Feed fetched 2026-11-17 holds 20 items dated 2026-04-20 to 2026-11-11 — ≈3.0/month.",
+    "posts_per_month": 3.0
+   },
+   "channel": "research",
+   "enabled": true,
+   "feed_url": "https://www.moderntreasury.com/journal/rss.xml",
+   "homepage": "https://www.moderntreasury.com/journal",
+   "id": "modern-treasury",
+   "last_post_at": "2026-11-11",
+   "max_items_per_day": 5,
+   "name": "Modern Treasury",
+   "notes": "Payments-infrastructure essays from Modern Treasury's Journal: ledgers, stablecoin wallets, bank operations, and the rails money actually moves on (FedNow, checks, push-to-card).",
+   "org": "Modern Treasury",
+   "platform": "Self-hosted",
+   "readiness": "RSS verified live 2026-11-17 (20 items, newest 2026-11-11).",
+   "site_url": "https://www.moderntreasury.com/journal",
+   "type": "rss",
+   "verified_at": "2026-11-17"
+  },
+  {
+   "cadence": {
+    "as_of": "2026-11-17",
+    "basis": "Feed fetched 2026-11-17 holds 65 items reaching back to 2019; the newest 10 are dated 2026-06-12 to 2026-11-10 — ≈2.0/month. Linear publishes in bursts around releases.",
+    "posts_per_month": 2.0
+   },
+   "channel": "research",
+   "enabled": true,
+   "feed_url": "https://linear.app/rss/now.xml",
+   "homepage": "https://linear.app/now",
+   "id": "linear",
+   "last_post_at": "2026-11-10",
+   "max_items_per_day": 5,
+   "name": "Linear",
+   "notes": "Linear's combined post stream ('Now'): product essays and engineering deep-dives (the Delta sync read-path rebuild, how Linear built its agent) in release-driven bursts.",
+   "org": "Linear",
+   "platform": "Self-hosted",
+   "readiness": "RSS verified live 2026-11-17 (65 items, newest 2026-11-10). Item URLs are linear.app/now/… — this is Linear's current publication stream.",
+   "site_url": "https://linear.app/now",
+   "type": "rss",
+   "verified_at": "2026-11-17"
+  },
+  {
+   "cadence": {
+    "as_of": "2026-11-17",
+    "basis": "Engineering index fetched 2026-11-17 lists 16 posts dated 2026-02-09 to 2026-11-02 — ≈1.8/month in 2026 (128 posts in the full index).",
+    "posts_per_month": 1.8
+   },
+   "channel": "research",
+   "enabled": false,
+   "homepage": "https://stripe.com/blog/engineering",
+   "id": "stripe",
+   "last_post_at": "2026-11-02",
+   "max_items_per_day": 5,
+   "name": "Stripe · Dev Blog",
+   "notes": "The canonical fintech engineering blog: a data plane built from scratch, the 25-million-line rubyfmt migration, Stripe's Minions coding agents, selective test execution in a 50M-line monorepo. Listed disabled only because Stripe exposes no feed.",
+   "org": "Stripe",
+   "platform": "Self-hosted",
+   "readiness": "Blog live (engineering index fetched 2026-11-17). No RSS/Atom feed exists — /blog/feed.xml, /blog/rss.xml, /blog/atom.xml and /feed.xml all return 404 — HTML adapter needed, so listed disabled.",
+   "site_url": "https://stripe.com/blog/engineering",
+   "type": "blog",
+   "verified_at": "2026-11-17"
+  },
+  {
+   "cadence": {
+    "as_of": "2026-11-17",
+    "basis": "Blog index fetched 2026-11-17 lists the blog's complete run: 8 posts dated 2025-09-10 to 2026-11-13, five of them in the last twelve months — ≈0.5/month.",
+    "posts_per_month": 0.5
+   },
+   "channel": "research",
+   "enabled": false,
+   "homepage": "https://thinkingmachines.ai/blog",
+   "id": "thinking-machines",
+   "last_post_at": "2026-11-13",
+   "max_items_per_day": 5,
+   "name": "Thinking Machines Lab · Connectionism",
+   "notes": "Connectionism, the lab's research blog: 'Defeating Nondeterminism in LLM Inference', 'LoRA Without Regret', on-policy distillation, 4-bit training. Rare and dense — every post is an event.",
+   "org": "Thinking Machines Lab",
+   "platform": "Self-hosted",
+   "readiness": "Blog live (index fetched 2026-11-17). No RSS/Atom feed at any standard path — HTML adapter needed, so listed disabled.",
+   "site_url": "https://thinkingmachines.ai/blog",
+   "type": "blog",
+   "verified_at": "2026-11-17"
+  },
+  {
+   "cadence": {
+    "as_of": "2026-11-17",
+    "basis": "Blog index fetched 2026-11-17 shows 32 dated posts from 2026-06-02 to 2026-11-04 — ≈6.3/month. Roughly half are substantive engineering or research posts; the rest are partnership, hiring and milestone announcements.",
+    "posts_per_month": 6.3
+   },
+   "channel": "research",
+   "enabled": false,
+   "homepage": "https://cognition.ai/blog",
+   "id": "cognition",
+   "last_post_at": "2026-11-04",
+   "max_items_per_day": 5,
+   "name": "Cognition",
+   "notes": "Devin's engineering blog: agent-architecture lessons ('Multi-Agents: What's Actually Working', 'What We Learned Building Cloud Agents'), model launches (SWE-2) and verification-at-scale posts, mixed with partnership and milestone PR.",
+   "org": "Cognition",
+   "platform": "Self-hosted",
+   "readiness": "Blog live (index fetched 2026-11-17). No RSS/Atom feed at any standard path — HTML adapter needed, so listed disabled.",
+   "site_url": "https://cognition.ai/blog",
+   "type": "blog",
+   "verified_at": "2026-11-17"
+  },
+  {
+   "cadence": {
+    "as_of": "2026-11-17",
+    "basis": "Blog index fetched 2026-11-17 shows 15 posts dated 2026-10-23 to 2026-11-16 on its first page — ≈19/month in that window.",
+    "posts_per_month": 19.0
+   },
+   "channel": "research",
+   "enabled": false,
+   "homepage": "https://vercel.com/blog",
+   "id": "vercel",
+   "last_post_at": "2026-11-16",
+   "max_items_per_day": 5,
+   "name": "Vercel",
+   "notes": "Engineering posts (Workflow SDK, Vercel CI, runtime caching, agent evals) alongside product and customer stories, at a high pace. The blog exposes no feed of its own.",
+   "org": "Vercel",
+   "platform": "Self-hosted",
+   "readiness": "Blog live (index fetched 2026-11-17). The blog itself has no feed; Vercel's only feed is the changelog Atom stream at vercel.com/atom (100 items dated 2026-10-23 to 2026-11-16 — product-update noise), which this pack deliberately does not subscribe to. Listed disabled.",
+   "site_url": "https://vercel.com/blog",
+   "type": "blog",
+   "verified_at": "2026-11-17"
+  },
+  {
+   "cadence": {
+    "as_of": "2026-11-17",
+    "basis": "Measured by a one-off full read on 2026-11-17 (the feed exceeds focu's 2 MB fetch cap, so the validator cannot read it): 265 items; the newest 20 are dated 2026-08-19 to 2026-11-12 — ≈7.2/month.",
+    "posts_per_month": 7.2
+   },
+   "channel": "research",
+   "enabled": false,
+   "feed_url": "https://posthog.com/feed.xml",
+   "homepage": "https://posthog.com/blog",
+   "id": "posthog",
+   "last_post_at": "2026-11-12",
+   "max_items_per_day": 5,
+   "name": "PostHog",
+   "notes": "Product-analytics engineering with unusually honest writing: evaluating agents at scale, moving their warehouse off DuckDB, the modern data stack's obituary.",
+   "org": "PostHog",
+   "platform": "Self-hosted",
+   "readiness": "Feed measured 2026-11-17 (265 items, newest 2026-11-12) but not consumable: the document is 3,296,701 bytes, over focu's 2 MB fetch cap, so the collector cannot read it. Listed disabled until PostHog offers a smaller feed or the cap is revisited.",
+   "site_url": "https://posthog.com/blog",
+   "type": "rss",
+   "verified_at": "2026-11-17"
+  }
+ ],
+ "tags": [
+  "silicon-valley",
+  "startups",
+  "engineering-blogs",
+  "ai-infrastructure",
+  "dev-tools",
+  "fintech"
+ ],
+ "title": "Silicon Valley Startups · Engineering Blogs",
+ "unverified": [
+  {
+   "checked_at": "2026-11-17",
+   "homepage": "https://modal.com/blog",
+   "name": "Modal",
+   "reason": "Feed verified live 2026-11-17 (Atom, 157 items, newest 2026-11-13) and the engineering writing is excellent — but Modal Labs is headquartered in New York City (its own company page lists the NYC headquarters address; PitchBook concurs, checked 2026-11-17). San Francisco is an office, not the HQ, so Modal is outside this pack's Silicon Valley scope."
+  },
+  {
+   "checked_at": "2026-11-17",
+   "homepage": "https://huggingface.co/blog",
+   "name": "Hugging Face",
+   "reason": "Feed verified live 2026-11-17 (908 items) but Hugging Face is headquartered in Brooklyn, New York City (Wikipedia, checked 2026-11-17) — outside this pack's geographic scope — and on 2026-09-03 Nvidia announced a definitive agreement to acquire it, so it is also no longer an independent startup."
+  },
+  {
+   "checked_at": "2026-11-17",
+   "homepage": "https://cursor.com/blog",
+   "name": "Cursor (Anysphere)",
+   "reason": "No longer an independent startup: Cursor's own blog announced 'Cursor is now a part of SpaceX' on 2026-08-14 (checked 2026-11-17), and the blog now carries xAI model announcements. It also exposes no RSS/Atom feed at any standard path."
+  },
+  {
+   "checked_at": "2026-11-17",
+   "homepage": "https://www.databricks.com/blog",
+   "name": "Databricks",
+   "reason": "Feed verified live 2026-11-17, but it is the whole company wire — customer stories, product launches and event marketing, 10 items dated 2026-11-13 to 2026-11-17 alone (≈76/month in that window). The engineering posts are not separately subscribable, and at this volume and mix the wire fails this pack's signal bar."
+  },
+  {
+   "checked_at": "2026-11-17",
+   "homepage": "https://sierra.ai/blog",
+   "name": "Sierra",
+   "reason": "Whole-site feed verified live 2026-11-17 (147 items), but among the 25 newest titles the majority are company PR — executive hires, an acquisition, certifications, marketplace listings — alongside genuinely substantive agent-engineering posts (Personal Agent Protocol, the τ benchmarks). No engineering-only feed exists to subscribe to instead."
+  },
+  {
+   "checked_at": "2026-11-17",
+   "homepage": "https://clerk.com/blog",
+   "name": "Clerk",
+   "reason": "Feed verified live 2026-11-17 (192 items), but the blog is product feature announcements and integration how-tos ('Customizing <UserButton />', 'Accountless setup for Clerk in Next.js') — changelog-grade, not engineering writing."
+  },
+  {
+   "checked_at": "2026-11-17",
+   "homepage": "https://www.yugabyte.com/blog",
+   "name": "Yugabyte",
+   "reason": "Feed verified live 2026-11-17 (10 items, newest 2026-11-16), but recent posts are partner how-tos and marketplace/launch announcements rather than engineering writing."
+  },
+  {
+   "checked_at": "2026-11-17",
+   "homepage": "https://lambda.ai/blog",
+   "name": "Lambda",
+   "reason": "Feed verified live 2026-11-17 (10 items, newest 2026-11-16), but the posts are press-release-style announcements ('Lambda announces…', 'Lambda delivers…'), not engineering writing."
+  },
+  {
+   "checked_at": "2026-11-17",
+   "homepage": "https://blog.convex.dev",
+   "name": "Convex",
+   "reason": "A feed exists (news.convex.dev/rss/, verified 2026-11-17: 15 items dated 2025-09-17 to 2026-09-21) but it is a company-news stream — funding, launches, events. Convex's engineering publication, Stack (stack.convex.dev), exposes no feed at any standard path."
+  },
+  {
+   "checked_at": "2026-11-17",
+   "homepage": "https://www.baseten.co/blog",
+   "name": "Baseten",
+   "reason": "Blog live and substantive (inference-engineering posts; index fetched 2026-11-17), but no RSS/Atom feed exists at any standard path and the blog index exposes no post dates, so no cadence could be grounded."
+  },
+  {
+   "checked_at": "2026-11-17",
+   "homepage": "https://www.physicalintelligence.company/blog",
+   "name": "Physical Intelligence",
+   "reason": "Unverifiable from this network: every fetch to physicalintelligence.company and to pi.website returned HTTP 429 on 2026-11-17, so neither the research blog nor any feed could be checked. The pack's one robotics research-blog candidate awaits a reachable check."
+  },
+  {
+   "checked_at": "2026-11-17",
+   "homepage": "https://replit.com/blog",
+   "name": "Replit",
+   "reason": "Unverifiable from this network: replit.com returned HTTP 403 or dropped connections on every fetch on 2026-11-17, so its blog feed could not be verified."
+  },
+  {
+   "checked_at": "2026-11-17",
+   "homepage": "https://scale.com/blog",
+   "name": "Scale AI",
+   "reason": "No subscribable feed: scale.com/blog feed paths return the HTML web app, not XML (checked 2026-11-17). There is also a scope question — Meta took a 49% stake in June 2025 and Scale's founder departed to Meta, so it is no longer a straightforward independent startup."
+  },
+  {
+   "checked_at": "2026-11-17",
+   "homepage": "https://wandb.ai/site/articles",
+   "name": "Weights & Biases",
+   "reason": "No working feed: wandb.ai blog and article paths return the JavaScript app or 404 at every standard feed path tried on 2026-11-17; its long-form content is not exposed as RSS/Atom."
+  },
+  {
+   "checked_at": "2026-11-17",
+   "homepage": "https://retool.com/blog",
+   "name": "Retool",
+   "reason": "Feed verified live 2026-11-17 (50 items, ≈3.8/month), but the recent mix — marketplace listings and product-governance marketing alongside engineering-adjacent posts — falls below this pack's signal bar."
+  },
+  {
+   "checked_at": "2026-11-17",
+   "homepage": "https://www.mux.com/blog",
+   "name": "Mux",
+   "reason": "Feed verified live 2026-11-17 (15 items, newest 2026-11-12), but recent posts are product launches and culture pieces; the deep video-engineering writing that made this blog notable (encoding, QoE, playback internals) has thinned out."
+  },
+  {
+   "checked_at": "2026-11-17",
+   "homepage": "https://fireworks.ai/blog",
+   "name": "Fireworks AI",
+   "reason": "Blog live (fetched 2026-11-17) but no RSS/Atom feed at any standard path (/blog/feed, /blog/rss, /blog/atom.xml and /rss.xml all return 404)."
+  },
+  {
+   "checked_at": "2026-11-17",
+   "homepage": "https://www.anyscale.com/blog",
+   "name": "Anyscale",
+   "reason": "The blog is substantive (Ray and KubeRay engineering), but its only feed endpoint, anyscale.com/rss.xml, is nondeterministic: repeated fetches on 2026-11-17 alternately returned the current 18-item feed (newest 2026-11-12), a 3-item variant dated 2024, and a 1-item variant dated 2022. A collector cannot trust it, and no other feed path exists. Worth re-checking if Anyscale fixes its feed serving."
+  }
+ ],
+ "verified_at": "2026-11-17",
+ "version": "1.0.0"
+}

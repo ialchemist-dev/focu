@@ -1,0 +1,328 @@
+{
+  "$defs": {
+    "candidate": {
+      "additionalProperties": false,
+      "properties": {
+        "checked_at": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        "homepage": {
+          "pattern": "^https://",
+          "type": "string"
+        },
+        "name": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "reason": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "reason",
+        "checked_at"
+      ],
+      "type": "object"
+    },
+    "source": {
+      "additionalProperties": false,
+      "properties": {
+        "affiliation_evidence": {
+          "pattern": "^https://",
+          "type": "string"
+        },
+        "affiliation_status": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "cadence": {
+          "additionalProperties": false,
+          "properties": {
+            "as_of": {
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "type": "string"
+            },
+            "basis": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "posts_per_month": {
+              "minimum": 0,
+              "type": "number"
+            }
+          },
+          "required": [
+            "posts_per_month",
+            "basis",
+            "as_of"
+          ],
+          "type": "object"
+        },
+        "channel": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$",
+          "type": "string"
+        },
+        "channel_id": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "company_page": {
+          "pattern": "^https://",
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "feed_url": {
+          "pattern": "^https://",
+          "type": "string"
+        },
+        "handle": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "homepage": {
+          "pattern": "^https://",
+          "type": "string"
+        },
+        "id": {
+          "pattern": "^[a-z0-9][a-z0-9-]{0,63}$",
+          "type": "string"
+        },
+        "last_post_at": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        "max_items_per_day": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "name": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "notes": {
+          "type": "string"
+        },
+        "org": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "person": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "platform": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "profile_url": {
+          "pattern": "^https://",
+          "type": "string"
+        },
+        "readiness": {
+          "type": "string"
+        },
+        "role": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "site_url": {
+          "description": "Same datum as homepage; emitted alongside it for the current reader code path. Must agree with homepage when both are present.",
+          "pattern": "^https://",
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "rss",
+            "blog",
+            "youtube",
+            "x",
+            "linkedin"
+          ],
+          "type": "string"
+        },
+        "username": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "verified_at": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "type",
+        "channel",
+        "platform",
+        "verified_at",
+        "enabled"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "anyOf": [
+        {
+          "required": [
+            "title"
+          ]
+        },
+        {
+          "required": [
+            "name"
+          ]
+        }
+      ]
+    },
+    {
+      "anyOf": [
+        {
+          "required": [
+            "tags"
+          ]
+        },
+        {
+          "required": [
+            "categories"
+          ]
+        }
+      ]
+    },
+    {
+      "if": {
+        "required": [
+          "curator"
+        ]
+      },
+      "then": {
+        "properties": {
+          "sources": {
+            "items": {
+              "required": [
+                "cadence"
+              ]
+            }
+          }
+        }
+      }
+    }
+  ],
+  "description": "Curated, versioned set of sources (schema v1) for the Focu source-pack marketplace. Canonical field names are title/tags/homepage; the legacy aliases name/categories/site_url are accepted on read and must agree with the canonical field when both are present. The normative runtime checks live in focu/packs.py; this schema is the portable contract.",
+  "properties": {
+    "attention_estimate": {
+      "additionalProperties": false,
+      "properties": {
+        "basis": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "posts_per_month": {
+          "minimum": 0,
+          "type": "number"
+        }
+      },
+      "required": [
+        "posts_per_month",
+        "basis"
+      ],
+      "type": "object"
+    },
+    "categories": {
+      "description": "Display labels from the site packs. Folded into tags on read only when tags is absent; when both are present, categories stays as display metadata (the two vocabularies differ: labels vs slugs).",
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "coverage": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "curator": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "url": {
+          "pattern": "^https://",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
+    "description": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "id": {
+      "pattern": "^[a-z0-9][a-z0-9-]{1,63}$",
+      "type": "string"
+    },
+    "name": {
+      "description": "Legacy alias of title (site packs). Must agree with title when both are present.",
+      "minLength": 1,
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "sources": {
+      "items": {
+        "$ref": "#/$defs/source"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "tags": {
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "title": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "unverified": {
+      "items": {
+        "$ref": "#/$defs/candidate"
+      },
+      "type": "array"
+    },
+    "verified_at": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+    },
+    "version": {
+      "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\\+([0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?$",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "id",
+    "version",
+    "description",
+    "coverage",
+    "verified_at",
+    "sources"
+  ],
+  "title": "Source Pack",
+  "type": "object"
+}

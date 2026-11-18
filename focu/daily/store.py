@@ -7,6 +7,8 @@ from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from pathlib import Path
 
+from focu.learn import load_learned_adjustments
+
 from .config import enabled_sources
 from .errors import FewError
 from .identity import IDENTITY_VERSION, content_identity
@@ -149,15 +151,39 @@ class Store:
                 report_json=excluded.report_json, updated_at=excluded.updated_at""",
                 (run_id, stage, status, json.dumps(report), now_utc()))
 
-    def select(self, run, cfg, gate_priorities=None):
+    def select(self, run, cfg, gate_priorities=None, learned_record_path=None):
         """Freeze selections once; later compose/TTS retries reuse these rows."""
         existing = self.db.execute("SELECT 1 FROM stage_runs WHERE run_id=? AND stage='select' AND status='success'",
                                    (run["run_id"],)).fetchone()
         if existing:
             return self.episodes(run["run_id"])
         with self.db:
+            # Day-status accounting (self-iteration Q5): selection records,
+            # per source, exactly what it considered, claimed, and withheld
+            # — and why — so the run's assembled day status can reconcile
+            # counts instead of trusting a bare selected total. Written as
+            # its own stage row inside this transaction; the 'select'
+            # report keeps its exact prior shape.
+            accounting = {}
+
+            def _acct(source_id, name):
+                return accounting.setdefault(source_id, {
+                    "source_id": source_id, "source": name, "considered": 0,
+                    "selected": 0, "withheld": {}, "not_ready": {}})
+
+            def _add(counter, reason, n=1):
+                counter[reason] = counter.get(reason, 0) + n
+
+            stamp = now_utc()
+            for source_id, name, n in self.db.execute("""SELECT s.source_id,s.name,count(DISTINCT c.content_id)
+                    FROM candidates k JOIN contents c USING(content_id)
+                    JOIN observations o ON o.content_id=c.content_id
+                    JOIN sources s USING(source_id) JOIN subscriptions sub USING(source_id)
+                    WHERE k.state='pending' AND k.expires_at < ? AND sub.enabled=1
+                    GROUP BY s.source_id""", (stamp,)):
+                _add(_acct(source_id, name)["not_ready"], "expired", n)
             self.db.execute("UPDATE candidates SET state='expired' WHERE state='pending' AND expires_at < ?",
-                            (now_utc(),))
+                            (stamp,))
             rows = self.db.execute("""SELECT c.content_id,c.canonical_url,c.podcast_mode,r.*,s.source_id,s.name,
                      sub.channel_id,sub.settings_json
                 FROM candidates k JOIN contents c USING(content_id)
@@ -169,14 +195,65 @@ class Store:
                 AND NOT EXISTS (SELECT 1 FROM episode_items ei JOIN episodes ep USING(episode_id)
                     WHERE ei.content_id=c.content_id AND ep.status != 'finalized')
                 GROUP BY c.content_id,s.source_id""").fetchall()
+            # Pending candidates the pool query above excludes on readiness
+            # grounds: provisional items, and items whose latest revision
+            # has no body yet (a title-only YouTube discovery awaiting its
+            # transcript, an article awaiting its body) — needs_enrichment
+            # in store.status() vocabulary. Counted here so they are named
+            # in the day status instead of silently absent from selection.
+            for provisional, ready, source_id, name in self.db.execute(
+                    """SELECT c.provisional,length(trim(r.body))>0,s.source_id,s.name
+                    FROM candidates k JOIN contents c USING(content_id)
+                    JOIN content_revisions r ON r.revision_id=c.latest_revision_id
+                    JOIN observations o ON o.content_id=c.content_id
+                    JOIN sources s USING(source_id) JOIN subscriptions sub USING(source_id)
+                    WHERE k.state='pending' AND sub.enabled=1
+                    AND NOT EXISTS (SELECT 1 FROM coverage cv WHERE cv.content_id=c.content_id)
+                    AND NOT EXISTS (SELECT 1 FROM episode_items ei JOIN episodes ep USING(episode_id)
+                        WHERE ei.content_id=c.content_id AND ep.status != 'finalized')
+                    GROUP BY c.content_id,s.source_id"""):
+                if provisional:
+                    _add(_acct(source_id, name)["not_ready"], "provisional")
+                elif not ready:
+                    _add(_acct(source_id, name)["not_ready"], "needs_enrichment")
+            # Learned influence (learning Phase 3, design §3.3): the ONLY
+            # consumer of the preference record. Fail-closed — a corrupted
+            # record yields no adjustments and its error is frozen into the
+            # stage report below; selection then runs exactly as before.
+            # Registry values are never replaced: a learned weight is a
+            # clamped multiplier applied after the registry priority, a
+            # learned cap can only lower the registry cap, and a pause
+            # exists only as an owner-written record entry.
+            adjustments, learn_error, record_version = load_learned_adjustments(
+                learned_record_path)
             candidates = []
+            paused, paused_seen = [], set()
             now = datetime.now(timezone.utc)
             channel_order = {ch["id"]: i for i, ch in enumerate(cfg["channels"])}
             for row in rows:
                 row = dict(row)
+                acct = _acct(row["source_id"], row["name"])
+                acct["considered"] += 1
                 settings = json.loads(row.pop("settings_json"))
+                adj = adjustments.get(row["source_id"]) or {}
+                if adj.get("pause"):
+                    _add(acct["withheld"], "paused_by_learning")
+                    if row["source_id"] not in paused_seen:
+                        paused_seen.add(row["source_id"])
+                        paused.append({
+                            "source_id": row["source_id"], "source": row["name"],
+                            "preference_id": adj["pause"]["preference_id"],
+                            "created_at": adj["pause"].get("created_at")})
+                    continue
                 age = max(0, (now - datetime.fromisoformat(row["published_at"] or row["fetched_at"])).total_seconds() / 86400)
-                row["score"] = settings.get("priority", 1) / (1 + age)
+                factors = []
+                weight = 1.0
+                if adj.get("weight"):
+                    weight = adj["weight"]["value"]
+                    if weight != 1.0:
+                        factors.append({"preference_id": adj["weight"]["preference_id"],
+                                        "kind": "source_weight", "value": weight})
+                row["score"] = settings.get("priority", 1) * weight / (1 + age)
                 # Active gate only reorders revision-matched candidates; it never
                 # deletes, suppresses or claims coverage for a source.
                 signal = (gate_priorities or {}).get(row["content_id"], {})
@@ -185,7 +262,15 @@ class Store:
                                         else "normal")
                 row["gate_rank"] = {"promote": 1, "normal": 0, "defer": -1}.get(
                     row["gate_priority"], 0)
-                row["cap"] = settings.get("max_items_per_day", 5)
+                cap = settings.get("max_items_per_day", 5)
+                if adj.get("cap"):
+                    lowered = min(cap, adj["cap"]["value"])
+                    if lowered < cap:
+                        factors.append({"preference_id": adj["cap"]["preference_id"],
+                                        "kind": "source_cap", "value": lowered})
+                    cap = lowered
+                row["cap"] = cap
+                row["learned_factors"] = factors
                 candidates.append(row)
             candidates.sort(key=lambda r: (-r["gate_rank"], -r["score"], -(len(r["body"])),
                                             channel_order[r["channel_id"]], r["content_id"]))
@@ -194,7 +279,12 @@ class Store:
             grouped, used_words = {}, {}
             for row in candidates:
                 cid, sid, ch = row["content_id"], row["source_id"], row["channel_id"]
-                if cid in claimed or source_counts.get(sid, 0) >= row["cap"]:
+                acct = _acct(sid, row["name"])
+                if cid in claimed:
+                    _add(acct["withheld"], "already_selected")
+                    continue
+                if source_counts.get(sid, 0) >= row["cap"]:
+                    _add(acct["withheld"], "over_cap")
                     continue
                 # This M1 composer is a skeleton, not an LLM summary. Size
                 # selection against its actual text; never truncate the body.
@@ -202,8 +292,10 @@ class Store:
                 words = sum(1 for c in text if '\u3400' <= c <= '\u9fff') + len(text.split()) + 12
                 budget = channels[ch]["max_minutes"] * channels[ch]["words_per_minute"] - 30
                 if used_words.get(ch, 0) + words > budget:
+                    _add(acct["withheld"], "over_budget")
                     continue
                 claimed.add(cid)
+                acct["selected"] += 1
                 source_counts[sid] = source_counts.get(sid, 0) + 1
                 used_words[ch] = used_words.get(ch, 0) + words
                 unit = {"id": cid, "content_id": cid, "revision_id": row["revision_id"],
@@ -211,6 +303,15 @@ class Store:
                         "title": row["title"], "body": row["body"], "url": row["canonical_url"],
                         "published_at": row["published_at"], "kind": row["kind"], "score": row["score"],
                         "gate_priority": row["gate_priority"]}
+                # Freeze the learned factors that actually applied to this
+                # item (design §3.3 rule 3): focu learn explain answers from
+                # exactly this list. When any adjustment was in force the
+                # key is frozen even when empty for this item, so explain
+                # can tell a Phase-3 run from a pre-Phase-3 item; with an
+                # empty record no key appears at all and the frozen units
+                # stay byte-identical to the pre-Phase-3 engine.
+                if row["learned_factors"] or adjustments:
+                    unit["learned_factors"] = row["learned_factors"]
                 grouped.setdefault(ch, []).append(unit)
             for ch, units in grouped.items():
                 episode_id = "ep_" + uuid.uuid4().hex
@@ -219,8 +320,34 @@ class Store:
                 for pos, unit in enumerate(units):
                     self.db.execute("INSERT INTO episode_items VALUES (?,?,?,?,?)",
                                     (episode_id, unit["content_id"], unit["revision_id"], pos, json.dumps(unit, ensure_ascii=False)))
+            select_report = {"selected": len(claimed)}
+            learned_block = {}
+            if learn_error:
+                learned_block["record_error"] = learn_error
+            if adjustments:
+                learned_block["record_version"] = record_version
+            if paused:
+                # A pause is never silent (Phase-3 acceptance): the run
+                # record carries the one-line announcement the briefing
+                # status surfaces, naming the day the owner recorded it.
+                learned_block["paused"] = [
+                    {**entry, "announcement":
+                     f"Paused by you on {entry['created_at']}: {entry['source']}"}
+                    for entry in paused]
+            if learned_block:
+                select_report["learned"] = learned_block
             self.db.execute("INSERT INTO stage_runs VALUES (?,'select','success',?,?)",
-                            (run["run_id"], json.dumps({"selected": len(claimed)}), now_utc()))
+                            (run["run_id"], json.dumps(select_report), now_utc()))
+            accounting_report = {"sources": [
+                {"source_id": a["source_id"], "source": a["source"],
+                 "considered": a["considered"], "selected": a["selected"],
+                 "withheld": [{"reason": r, "count": n}
+                              for r, n in sorted(a["withheld"].items())],
+                 "not_ready": [{"reason": r, "count": n}
+                               for r, n in sorted(a["not_ready"].items())]}
+                for a in (accounting[sid] for sid in sorted(accounting))]}
+            self.db.execute("INSERT INTO stage_runs VALUES (?,'selection_accounting','success',?,?)",
+                            (run["run_id"], json.dumps(accounting_report), now_utc()))
         return self.episodes(run["run_id"])
 
     def episodes(self, run_id):

@@ -1,0 +1,359 @@
+{
+ "attention_estimate": {
+  "basis": "Sum of enabled sources' cadence estimates on 2026-11-17: 92.4 posts/month, of which ≈78 is ThinkGeoEnergy's full news wire (≈2.6 items/day; its max_items_per_day of 5 and the briefing's selection budget bound what actually surfaces). The other six enabled sources together add ≈14/month. Five further verified publications are listed disabled (no working feed) and add nothing until an HTML adapter lands.",
+  "posts_per_month": 92.4
+ },
+ "categories": [
+  "Energy",
+  "Industry"
+ ],
+ "coverage": "Verified pass on 2026-11-17: every main-list site was fetched live, every feed was fetched and its item dates read, and cadences were computed from those dates. The pack covers English-language geothermal trade press, the major industry associations (US, European, global), and company and research-project newsrooms with verifiable publication streams, weighted to North America and Europe. It is NOT a census of the industry: major producing regions whose press is non-English or feed-less (Indonesia, the Philippines, Kenya, Türkiye, Japan) are not covered; no national-lab source passed verification this pass (see 'unverified' for the INL and NREL findings); and companies that communicate only via LinkedIn or wire releases, without an on-site feed or news page, are listed under 'unverified' with the reason rather than silently included.",
+ "curator": {
+  "name": "AI Praxis Lab (Jerry Yu)",
+  "url": "https://aipraxislab.com/sources/"
+ },
+ "description": "The geothermal industry's own paper trail: the trade-press wire, association policy and market news, and project and company announcements from EGS, closed-loop and conventional developers — every source fetched live and dated on 2026-11-17.",
+ "id": "geothermal-industry",
+ "name": "Geothermal Industry",
+ "schema_version": 1,
+ "sources": [
+  {
+   "cadence": {
+    "as_of": "2026-11-17",
+    "basis": "Feed fetched 2026-11-17 holds 50 items dated 2026-10-28 to 2026-11-16 — about 2.6 items/day, ≈78/month. This is the full article stream, not a selection.",
+    "posts_per_month": 78.0
+   },
+   "channel": "research",
+   "enabled": true,
+   "feed_url": "https://www.thinkgeoenergy.com/feed/",
+   "homepage": "https://www.thinkgeoenergy.com/",
+   "id": "thinkgeoenergy",
+   "last_post_at": "2026-11-16",
+   "max_items_per_day": 5,
+   "name": "ThinkGeoEnergy",
+   "notes": "The industry's trade-press wire: global geothermal project development, policy, finance, drilling and technology news. By far the highest-volume source in this pack.",
+   "org": "ThinkGeoEnergy",
+   "platform": "WordPress",
+   "readiness": "RSS verified live 2026-11-17 (50 items, newest 2026-11-16).",
+   "site_url": "https://www.thinkgeoenergy.com/",
+   "type": "rss",
+   "verified_at": "2026-11-17"
+  },
+  {
+   "cadence": {
+    "as_of": "2026-11-17",
+    "basis": "Feed fetched 2026-11-17: 10 items dated 2026-09-22 to 2026-11-11 — ≈5.5/month over that window.",
+    "posts_per_month": 5.5
+   },
+   "channel": "research",
+   "enabled": true,
+   "feed_url": "https://fervoenergy.com/feed/",
+   "homepage": "https://fervoenergy.com/",
+   "id": "fervo",
+   "last_post_at": "2026-11-11",
+   "max_items_per_day": 5,
+   "name": "Fervo Energy",
+   "notes": "Company newsroom feed of the leading US enhanced-geothermal (EGS) developer: Cape Station project milestones, quarterly results and technical insights (e.g. seismic-behavior notes from Cape Station).",
+   "org": "Fervo Energy",
+   "platform": "WordPress",
+   "readiness": "RSS verified live 2026-11-17 (10 items, newest 2026-11-11).",
+   "site_url": "https://fervoenergy.com/",
+   "type": "rss",
+   "verified_at": "2026-11-17"
+  },
+  {
+   "cadence": {
+    "as_of": "2026-11-17",
+    "basis": "Feed fetched 2026-11-17: 10 items dated 2026-07-27 to 2026-11-12 — ≈2.6/month over that window.",
+    "posts_per_month": 2.6
+   },
+   "channel": "research",
+   "enabled": true,
+   "feed_url": "https://www.xgsenergy.com/feed/",
+   "homepage": "https://www.xgsenergy.com/",
+   "id": "xgs",
+   "last_post_at": "2026-11-12",
+   "max_items_per_day": 5,
+   "name": "XGS Energy",
+   "notes": "Company news from the water-independent, closed-loop geothermal developer: a DOE superhot-geothermal selection, executive hires and commercial-scaling commentary.",
+   "org": "XGS Energy",
+   "platform": "WordPress",
+   "readiness": "RSS verified live 2026-11-17 (10 items, newest 2026-11-12).",
+   "site_url": "https://www.xgsenergy.com/",
+   "type": "rss",
+   "verified_at": "2026-11-17"
+  },
+  {
+   "cadence": {
+    "as_of": "2026-11-17",
+    "basis": "Feed fetched 2026-11-17: 12 items dated 2026-01-09 to 2026-06-09 — ≈2.2/month over that window; the feed has been quiet since 2026-06-09.",
+    "posts_per_month": 2.2
+   },
+   "channel": "research",
+   "enabled": true,
+   "feed_url": "https://eavor.com/feed/",
+   "homepage": "https://eavor.com/",
+   "id": "eavor",
+   "last_post_at": "2026-06-09",
+   "max_items_per_day": 5,
+   "name": "Eavor",
+   "notes": "Closed-loop geothermal developer (the Eavor-Loop): project and company news from Calgary and its European projects.",
+   "org": "Eavor",
+   "platform": "WordPress",
+   "readiness": "RSS verified live 2026-11-17 (12 items, newest 2026-06-09).",
+   "site_url": "https://eavor.com/",
+   "type": "rss",
+   "verified_at": "2026-11-17"
+  },
+  {
+   "cadence": {
+    "as_of": "2026-11-17",
+    "basis": "Feed fetched 2026-11-17: 10 items dated 2026-06-05 to 2026-10-29 — ≈1.9/month over that window.",
+    "posts_per_month": 1.9
+   },
+   "channel": "research",
+   "enabled": true,
+   "feed_url": "https://www.egec.org/feed/",
+   "homepage": "https://www.egec.org/",
+   "id": "egec",
+   "last_post_at": "2026-10-29",
+   "max_items_per_day": 5,
+   "name": "EGEC · European Geothermal Energy Council",
+   "notes": "Brussels-based industry association for European geothermal: EU policy positions (ETS, targets), market data and sector news.",
+   "org": "European Geothermal Energy Council (EGEC)",
+   "platform": "WordPress",
+   "readiness": "RSS verified live 2026-11-17 (10 items, newest 2026-10-29, parsed cleanly by focu's own feed parser). Note: egec.org intermittently answers the feed URL with an HTML interstitial page from this network (observed repeatedly on 2026-11-17), so a given fetch may fail even though the feed is healthy.",
+   "site_url": "https://www.egec.org/",
+   "type": "rss",
+   "verified_at": "2026-11-17"
+  },
+  {
+   "cadence": {
+    "as_of": "2026-11-17",
+    "basis": "Feed fetched 2026-11-17: 10 items dated 2026-03-26 to 2026-08-19 — ≈1.9/month over that window; quiet since August 2026.",
+    "posts_per_month": 1.9
+   },
+   "channel": "research",
+   "enabled": true,
+   "feed_url": "https://baseloadcap.com/feed/",
+   "homepage": "https://baseloadcap.com/",
+   "id": "baseload",
+   "last_post_at": "2026-08-19",
+   "max_items_per_day": 5,
+   "name": "Baseload Capital",
+   "notes": "Geothermal investment firm (Stockholm): portfolio project news, financings and market commentary from the investor side of the industry.",
+   "org": "Baseload Capital",
+   "platform": "WordPress",
+   "readiness": "RSS verified live 2026-11-17 (10 items, newest 2026-08-19; parsed cleanly by focu's own feed parser in standalone checks). Note: the host intermittently drops connections from this network — it reported unreachable in two full validator runs while succeeding in standalone fetches.",
+   "site_url": "https://baseloadcap.com/",
+   "type": "rss",
+   "verified_at": "2026-11-17"
+  },
+  {
+   "cadence": {
+    "as_of": "2026-11-17",
+    "basis": "Feed fetched 2026-11-17: 10 items spanning 2023-02-07 to 2025-09-25 — sporadic project announcements, ≈0.3/month across the whole window and silent since 2025-09-25. Kept enabled because a new post would be material project news and a silent feed costs no attention.",
+    "posts_per_month": 0.3
+   },
+   "channel": "research",
+   "enabled": true,
+   "feed_url": "https://deepcorp.ca/feed/",
+   "homepage": "https://deepcorp.ca/",
+   "id": "deep",
+   "last_post_at": "2025-09-25",
+   "max_items_per_day": 5,
+   "name": "DEEP Earth Energy",
+   "notes": "Developer of Canada's first geothermal power project in southern Saskatchewan; the feed carries its project-development announcements.",
+   "org": "DEEP Earth Energy Production Corp.",
+   "platform": "WordPress",
+   "readiness": "RSS verified live 2026-11-17 (10 items, newest 2025-09-25 — dormant).",
+   "site_url": "https://deepcorp.ca/",
+   "type": "rss",
+   "verified_at": "2026-11-17"
+  },
+  {
+   "cadence": {
+    "as_of": "2026-11-17",
+    "basis": "The site's declared feed (worldgeothermal.org/feed) was fetched 2026-11-17: its 10 items run 2025-07-07 to 2025-09-01 (≈5/month while a weekly editorial series ran) and nothing since, so the forward estimate is nominal until the feed resumes.",
+    "posts_per_month": 0.5
+   },
+   "channel": "research",
+   "enabled": false,
+   "feed_url": "https://worldgeothermal.org/feed",
+   "homepage": "https://www.lovegeothermal.org/",
+   "id": "iga",
+   "last_post_at": "2025-09-01",
+   "max_items_per_day": 5,
+   "name": "International Geothermal Association",
+   "notes": "The global industry association and organizer of the World Geothermal Congress. Its website carries news and event coverage, but the declared RSS feed stopped updating in September 2025.",
+   "org": "International Geothermal Association (IGA)",
+   "platform": "WordPress",
+   "readiness": "Website live (fetched 2026-11-17); declared feed stale — newest item 2025-09-01 — so listed disabled until the feed resumes.",
+   "site_url": "https://www.lovegeothermal.org/",
+   "type": "rss",
+   "verified_at": "2026-11-17"
+  },
+  {
+   "cadence": {
+    "as_of": "2026-11-17",
+    "basis": "Blog listing fetched 2026-11-17 shows dated posts on 2026-06-17, 2026-07-09, 2026-07-23, 2026-08-19, 2026-09-18, 2026-09-23, 2026-10-21, 2026-10-22 and 2026-11-16 — ≈1.8/month. (One further date on the page, 2026-11-18, is an event date and was excluded.)",
+    "posts_per_month": 1.8
+   },
+   "channel": "research",
+   "enabled": false,
+   "homepage": "https://geothermal.org/index.php/our-impact/blog",
+   "id": "geothermal-rising",
+   "last_post_at": "2026-11-16",
+   "max_items_per_day": 5,
+   "name": "Geothermal Rising",
+   "notes": "The US geothermal industry association (formerly the Geothermal Resources Council): policy, workforce, events and member news on its 'Bulletin Blog'.",
+   "org": "Geothermal Rising",
+   "platform": "Self-hosted",
+   "readiness": "Blog live and current (fetched 2026-11-17); the site exposes no RSS/Atom feed (/feed/ and per-section feed paths return 404) — HTML adapter needed, so listed disabled.",
+   "site_url": "https://geothermal.org/index.php/our-impact/blog",
+   "type": "blog",
+   "verified_at": "2026-11-17"
+  },
+  {
+   "cadence": {
+    "as_of": "2026-11-17",
+    "basis": "News listing fetched 2026-11-17 shows eight items dated 2026-09-22 to 2026-11-03 (≈5–6/month in that window — a burst around the $180M Series B close); older items on the page are sparser, so 5.0 is a current-burst rate, not a long-run average.",
+    "posts_per_month": 5.0
+   },
+   "channel": "research",
+   "enabled": false,
+   "homepage": "https://www.quaise.com/news",
+   "id": "quaise",
+   "last_post_at": "2026-11-03",
+   "max_items_per_day": 5,
+   "name": "Quaise Energy",
+   "notes": "Millimeter-wave deep-drilling developer: press releases, drilling demonstrations and funding news.",
+   "org": "Quaise Energy",
+   "platform": "Self-hosted",
+   "readiness": "News page live (fetched 2026-11-17); no feed — /feed/ and /news/feed/ return 404 and the page declares none — HTML adapter needed, so listed disabled.",
+   "site_url": "https://www.quaise.com/news",
+   "type": "blog",
+   "verified_at": "2026-11-17"
+  },
+  {
+   "cadence": {
+    "as_of": "2026-11-17",
+    "basis": "Newsroom page live when fetched 2026-11-17 but script-rendered, so its full date series could not be read; the company homepage linked two BusinessWire releases dated 2026-08-26 and 2026-09-22, consistent with roughly one release a month in 2026.",
+    "posts_per_month": 1.0
+   },
+   "channel": "research",
+   "enabled": false,
+   "homepage": "https://www.sagegeosystems.com/newsroom",
+   "id": "sage",
+   "last_post_at": "2026-09-22",
+   "max_items_per_day": 5,
+   "name": "Sage Geosystems",
+   "notes": "Geopressured geothermal and energy-storage developer; its releases also go out via BusinessWire.",
+   "org": "Sage Geosystems",
+   "platform": "Self-hosted",
+   "readiness": "Newsroom live (fetched 2026-11-17); no feed exposed — listed disabled.",
+   "site_url": "https://www.sagegeosystems.com/newsroom",
+   "type": "blog",
+   "verified_at": "2026-11-17"
+  },
+  {
+   "cadence": {
+    "as_of": "2026-11-17",
+    "basis": "The site's Research News listing (search index crawled 2026-11-15) shows 2026 items dated 2026-02-17, 2026-07-09 and 2026-08-12 — a few announcements a year, ≈0.4/month.",
+    "posts_per_month": 0.4
+   },
+   "channel": "research",
+   "enabled": false,
+   "homepage": "https://utahforge.com/category/announcements/research-news/",
+   "id": "utah-forge",
+   "last_post_at": "2026-08-12",
+   "max_items_per_day": 5,
+   "name": "Utah FORGE",
+   "notes": "DOE's field laboratory for enhanced geothermal systems near Milford, Utah: circulation-test results, research announcements and data releases — the R&D neighbor of Fervo's Cape Station.",
+   "org": "Utah FORGE (University of Utah, Energy & Geoscience Institute)",
+   "platform": "WordPress",
+   "readiness": "Site live and publishing (search index crawled it 2026-11-15) but unreachable from this network on 2026-11-17 — every direct fetch was connection-reset — so its feed could not be verified; listed disabled pending a reachable check.",
+   "site_url": "https://utahforge.com/category/announcements/research-news/",
+   "type": "blog",
+   "verified_at": "2026-11-17"
+  }
+ ],
+ "tags": [
+  "geothermal",
+  "energy",
+  "industry",
+  "trade-press",
+  "egs"
+ ],
+ "title": "Geothermal Industry",
+ "unverified": [
+  {
+   "checked_at": "2026-11-17",
+   "homepage": "https://www.energy.gov/eere/geothermal/geothermal-technologies-office",
+   "name": "US DOE Office of Geothermal",
+   "reason": "Office page live (fetched 2026-11-17; the office is the renamed Geothermal Technologies Office) but exposes no feed: /eere/geothermal/rss.xml and /eere/geothermal/feed both return 404, and the only energy.gov RSS found (department-wide) is stale, newest item 2020-06-10. Announcements flow through energy.gov pages and GovDelivery email instead."
+  },
+  {
+   "checked_at": "2026-11-17",
+   "homepage": "https://www.ormat.com/",
+   "name": "Ormat Technologies",
+   "reason": "Corporate site live, but its investor newsroom (investor.ormat.com) returned HTTP 403 from this network on 2026-11-17 and no feed could be verified on the corporate site; the world's largest geothermal operator distributes releases via GlobeNewswire. Excluded until a feed verifies."
+  },
+  {
+   "checked_at": "2026-11-17",
+   "homepage": "https://www.zanskar.com/",
+   "name": "Zanskar",
+   "reason": "Company site live (fetched 2026-11-17) but carries no news page, blog or feed: /blog redirects to the About page and /feed/ returns 404. Company news appears via trade-press coverage (ThinkGeoEnergy, in this pack) and LinkedIn, which this pack cannot subscribe to yet."
+  },
+  {
+   "checked_at": "2026-11-17",
+   "homepage": "https://www.nrel.gov/geothermal/",
+   "name": "NREL (National Renewable Energy Laboratory)",
+   "reason": "nrel.gov was unreachable from this network on 2026-11-17 (connection reset on repeated attempts), so neither the lab's geothermal pages nor any feed could be verified, and no geothermal-specific NREL feed is published at a verifiable URL."
+  },
+  {
+   "checked_at": "2026-11-17",
+   "homepage": "https://inl.gov/",
+   "name": "Idaho National Laboratory",
+   "reason": "Lab-wide feed verified live (24 items, newest 2026-11-12) but it is a general laboratory feed: current items are dominated by Nuclear Energy (8) and National & Homeland Security (9) categories and none of the 24 is geothermal; the geothermal tag feed returns 404. Excluded rather than flooding a geothermal pack with off-topic lab news."
+  },
+  {
+   "checked_at": "2026-11-17",
+   "homepage": "https://www.sciencedirect.com/journal/geothermics",
+   "name": "Geothermics (Elsevier)",
+   "reason": "The field's flagship journal is subscription-paywalled, and its ScienceDirect page returned HTTP 403 from this network on 2026-11-17; no open feed exists to subscribe to."
+  },
+  {
+   "checked_at": "2026-11-17",
+   "homepage": "https://geothermal-energy-journal.springeropen.com/",
+   "name": "Geothermal Energy journal (SpringerOpen)",
+   "reason": "Open-access journal, but no working feed could be found: the journal homepage declares none, and the standard Springer feed paths (/rss and /articles/rss on the journal host, link.springer.com/journal/40517/rss) returned HTML or 404 on 2026-11-17."
+  },
+  {
+   "checked_at": "2026-11-17",
+   "homepage": "https://renewablesnow.com/",
+   "name": "Renewables Now",
+   "reason": "Returned HTTP 403 from this network on 2026-11-17, so its feed could not be verified; it is also a general renewables outlet (geothermal is one desk) with a partial paywall."
+  },
+  {
+   "checked_at": "2026-11-17",
+   "homepage": "https://nzgeothermal.org.nz/",
+   "name": "New Zealand Geothermal Association",
+   "reason": "Site returned HTTP 526 (origin error) on 2026-11-17; no feed could be verified."
+  },
+  {
+   "checked_at": "2026-11-17",
+   "homepage": "https://www.cangea.ca/",
+   "name": "CanGEA (Canadian Geothermal Energy Association)",
+   "reason": "No longer a separate publication: cangea.ca now resolves to Geothermal Rising's Canada Policy Council (fetched 2026-11-17). Canadian association coverage flows through the Geothermal Rising source in this pack."
+  },
+  {
+   "checked_at": "2026-11-17",
+   "homepage": "https://geothermal.stanford.edu/",
+   "name": "Stanford Geothermal Program",
+   "reason": "Program site live (fetched 2026-11-17) but it is a program/workshop site (home of the annual Stanford Geothermal Workshop) with no news feed or running publication to subscribe to."
+  }
+ ],
+ "verified_at": "2026-11-17",
+ "version": "1.0.0"
+}

@@ -7,7 +7,8 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from .errors import FewError
 from .identity import source_url, stable_id
 
-KNOWN_TYPES = {"rss", "blog", "youtube", "x", "linkedin"}
+KNOWN_TYPES = {"rss", "blog", "youtube", "x", "linkedin",
+               "instagram", "rednote", "facebook"}
 
 
 def load_config(path):

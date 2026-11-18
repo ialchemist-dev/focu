@@ -7,7 +7,7 @@ import subprocess
 from unittest.mock import patch
 import unittest
 from publish import build, sha256, episode_date
-from editorial import editorial, blocks_from_markdown, compose_article_with_openai
+from editorial import editorial, blocks_from_markdown, compose_article_with_openai, clean
 from cover_art import typographic_svg
 
 class PublisherTests(unittest.TestCase):
@@ -142,7 +142,7 @@ class PublisherTests(unittest.TestCase):
         html = Path(__file__).with_name("index.html").read_text()
         self.assertIn("const manifest=params.get('manifest')||'assets/episodes.json'", html)
         self.assertIn("try{const url=safeUrl(manifest);if(!url)throw Error('Invalid manifest URL');const response=", html)
-        self.assertIn("}catch(e){data=embedded;note='embedded snapshot (manifest unavailable)'", html)
+        self.assertIn("catch(e){data=embedded;note='embedded snapshot (manifest unavailable)';if(!data.length)", html)
         self.assertIn("return v}", html)
 
     def test_unified_item_with_article_and_editorial_metadata(self):
@@ -183,6 +183,79 @@ class PublisherTests(unittest.TestCase):
         self.assertTrue(any(block["type"] == "bullet" for block in info["article_blocks"]))
         self.assertIn("https://example.org/story", str(info["article_blocks"]))
         self.assertGreaterEqual(info["reading_minutes"], 1)
+
+    def test_gist_is_first_complete_sentence_when_it_fits(self):
+        info = editorial("# Briefing\n\nBody.\n", {"summary": (
+            "Jack Clark's Import AI covers the week's research. "
+            "This issue leads with a long essay on mesa-optimization and then "
+            "surveys robotaxis, chip export controls, and three new benchmarks.")})
+        self.assertEqual(info["gist"],
+                         "Jack Clark's Import AI covers the week's research.")
+        self.assertLessEqual(len(info["gist"]), 90)
+        # The scan layer is untouched by the glance extraction.
+        self.assertIn("mesa-optimization", info["summary"])
+
+    def test_gist_trims_at_word_boundary_and_stays_extractive(self):
+        source = ("The study reports that experienced developers using AI coding "
+                  "tools were measurably slower overall while believing that they "
+                  "had been faster by roughly the same amount in the trial.")
+        info = editorial("# Briefing\n\nBody.\n", {"summary": source})
+        gist = info["gist"]
+        self.assertTrue(gist.endswith("…"))
+        self.assertLessEqual(len(gist), 91)  # 90 chars of source + ellipsis
+        self.assertIn(gist.rstrip("…"), clean(source))
+        self.assertNotIn("  ", gist)
+
+    def test_gist_uses_whole_text_when_it_already_fits(self):
+        info = editorial(
+            "# Research\n\nOne source announced a new result in distributed inference.\n")
+        self.assertEqual(info["gist"],
+                         "One source announced a new result in distributed inference")
+
+    def test_gist_cjk_sentence_boundary(self):
+        lead = "蚂蚁灵光发布了新一代多模态模型，重点提升了长视频理解与生成能力。"
+        rest = ("节目还邀请了团队负责人讨论它与主流闭源模型的差距、中文场景下的实际表现、"
+                "定价策略，以及下一阶段的产品路线图和组织方式，整集信息量很大。")
+        self.assertGreater(len(clean(lead + rest)), 90)
+        info = editorial("# 硅谷101\n\n" + lead + rest + "\n")
+        self.assertEqual(info["gist"], lead)
+
+    def test_gist_ignores_abbreviation_fragments(self):
+        source = ("U.S. officials outlined the new export framework for advanced "
+                  "chips and the licensing process that now applies to three "
+                  "categories of accelerators sold overseas this year.")
+        gist = editorial("# Briefing\n\nBody.\n", {"summary": source})["gist"]
+        self.assertNotEqual(gist, "U.")
+        self.assertGreater(len(gist), 40)
+        self.assertIn(gist.rstrip("…"), clean(source))
+
+    def test_gist_omitted_when_nothing_honest_can_be_extracted(self):
+        self.assertEqual(editorial("# Title only\n")["gist"], "")
+        self.assertEqual(editorial("", {})["gist"], "")
+        self.assertEqual(editorial("", {"summary": "Too short"})["gist"], "")
+
+    def test_build_emits_gist_and_omits_it_when_unextractable(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            folder = root / "deliveries" / "story-20261110"
+            folder.mkdir(parents=True)
+            (folder / "article.md").write_text(
+                "# A grounded result\n\n"
+                "Pando releases a memory architecture for long-running agents. "
+                "The design keeps working state across sessions, tools, and days, "
+                "and the authors report large gains on multi-day tasks in their "
+                "internal evaluation harness.\n")
+            audio_only = root / "deliveries" / "audio-20261110"
+            audio_only.mkdir()
+            (audio_only / "podcast.mp3").write_bytes(b"audio-only")
+            output = root / "bundle"
+            build(root / "deliveries", output, Path(__file__).with_name("index.html"), 15)
+            items = {x["content_id"]: x for x in
+                     json.loads((output / "assets/episodes.json").read_text())["items"]}
+            self.assertEqual(items["story-20261110"]["gist"],
+                             "Pando releases a memory architecture for long-running agents.")
+            self.assertLessEqual(len(items["story-20261110"]["gist"]), 90)
+            self.assertNotIn("gist", items["audio-20261110"])
 
     def test_offline_covers_are_deterministic_and_distinct(self):
         first = typographic_svg("Pando memory architecture", "AI research")
@@ -268,6 +341,303 @@ class PublisherTests(unittest.TestCase):
             self.assertEqual(updated["podcast_mode"], "single")
             self.assertIn("audio", updated["formats"])
             self.assertEqual(len(json.loads((root / "podcast/assets/episodes.json").read_text())["episodes"]), 1)
+
+    def test_original_url_passes_through_from_content_json_source_url(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            def delivery(name, content_id, metadata_extra):
+                folder = root / "deliveries" / name
+                folder.mkdir(parents=True)
+                (folder / "article.md").write_text("# Piece\n\nBody.", encoding="utf-8")
+                metadata = {"content_id": content_id, "origin": "registered_source",
+                            "podcast_mode": "daily_compilation"}
+                metadata.update(metadata_extra)
+                (folder / "content.json").write_text(json.dumps(metadata), encoding="utf-8")
+            delivery("with-url-20261110", "piece-with-url",
+                     {"source_url": "https://example.org/the-original-post"})
+            delivery("no-url-20261110", "piece-without-url", {})
+            delivery("bad-url-20261110", "piece-with-bad-url",
+                     {"source_url": "javascript:alert(1)"})
+            research = root / "deliveries" / "research-url-20261110"
+            research.mkdir(parents=True)
+            (research / "article.md").write_text("# Investigation\n\nFindings.", encoding="utf-8")
+            (research / "content.json").write_text(json.dumps({
+                "content_id": "piece-research-url", "origin": "user_initiated",
+                "podcast_mode": "none",
+                "source_url": "https://example.org/source-thread"
+            }), encoding="utf-8")
+            # A research item whose delivery data carries an origin URL
+            # gets the field too: the pass-through follows the data, not
+            # the item class.
+            build(root / "deliveries", root / "bundle", Path(__file__).with_name("index.html"), 15)
+            data = json.loads((root / "bundle/assets/episodes.json").read_text())
+            by_id = {item["content_id"]: item for item in data["items"]}
+            self.assertEqual(by_id["piece-with-url"]["original_url"],
+                             "https://example.org/the-original-post")
+            self.assertEqual(by_id["piece-research-url"]["original_url"],
+                             "https://example.org/source-thread")
+            # Absent or non-HTTP(S) source_url emits nothing at all: the
+            # item shape is exactly what pre-change bundles carried.
+            self.assertNotIn("original_url", by_id["piece-without-url"])
+            self.assertNotIn("original_url", by_id["piece-with-bad-url"])
+
+    AGENDA_ARTICLE = (
+        "# Daily Briefing — November 16, 2026\n\n"
+        "Here's what came in.\n\n"
+        "Two items today:\n\n"
+        "- Pando releases a memory architecture for long-running agents — Pando Blog\n"
+        "- A new cooling design reduces data-center water use — Energy Weekly\n\n"
+        "## Pando releases a memory architecture for long-running agents\n\n"
+        "Pando releases a memory architecture for long-running agents, with "
+        "working state kept across sessions.\n\n"
+        "## A new cooling design reduces data-center water use\n\n"
+        "A new cooling design reduces data-center water use across existing "
+        "facilities.\n"
+    )
+
+    def test_compilation_gist_comes_from_the_agenda_not_the_formula_lead(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            for name, content_id, article in (
+                ("source-a-20261116", "agenda-source-a",
+                 "# Pando release\n\nPando releases a memory architecture for "
+                 "long-running agents. The design keeps working state across "
+                 "sessions, tools, and days.\n"),
+                ("source-b-20261116", "agenda-source-b",
+                 "# Cooling design\n\nA new cooling design reduces data-center "
+                 "water use. The retrofit applies to existing facilities.\n"),
+            ):
+                folder = root / "deliveries" / name
+                folder.mkdir(parents=True)
+                (folder / "article.md").write_text(article, encoding="utf-8")
+                (folder / "content.json").write_text(json.dumps({
+                    "content_id": content_id, "origin": "registered_source",
+                    "podcast_mode": "daily_compilation"
+                }), encoding="utf-8")
+            daily = root / "deliveries" / "daily-20261116"
+            daily.mkdir()
+            (daily / "article.md").write_text(self.AGENDA_ARTICLE, encoding="utf-8")
+            (daily / "content.json").write_text(json.dumps({
+                "content_id": "daily-2026-11-16", "origin": "daily_compilation",
+                "podcast_mode": "daily_compilation", "published_at": "2026-11-16",
+                "covered_content_ids": ["agenda-source-a", "agenda-source-b"]
+            }), encoding="utf-8")
+            build(root / "deliveries", root / "bundle",
+                  Path(__file__).with_name("index.html"), 15)
+            data = json.loads((root / "bundle/assets/episodes.json").read_text())
+            by_id = {item["content_id"]: item for item in data["items"]}
+            gist = by_id["daily-2026-11-16"]["gist"]
+            # The glance line reflects the contents — the agenda's count
+            # and a covered item's title — and is never the bare formula.
+            self.assertNotEqual(gist, "Here's what came in")
+            self.assertIn("Two items today", gist)
+            self.assertIn("Pando releases a memory architecture", gist)
+            self.assertLessEqual(len(gist), 91)
+            # The scan layer is untouched: the summary still leads with
+            # the article's own opening, exactly as before.
+            self.assertEqual(by_id["daily-2026-11-16"]["summary"],
+                             "Here's what came in")
+            # Non-compilation gists are byte-identical to the old pipeline.
+            self.assertEqual(by_id["agenda-source-a"]["gist"],
+                             "Pando releases a memory architecture for long-running agents.")
+            self.assertEqual(by_id["agenda-source-b"]["gist"],
+                             "A new cooling design reduces data-center water use.")
+
+    def test_agenda_gist_is_compilation_only(self):
+        info = editorial(self.AGENDA_ARTICLE, {"origin": "daily_compilation"})
+        self.assertIn("Two items today", info["gist"])
+        self.assertIn("Pando releases a memory architecture", info["gist"])
+        # The same article under any other origin keeps today's gist:
+        # the formula lead, extracted exactly as before this fix.
+        self.assertEqual(editorial(self.AGENDA_ARTICLE,
+                                   {"origin": "registered_source"})["gist"],
+                         "Here's what came in")
+        self.assertEqual(editorial(self.AGENDA_ARTICLE)["gist"],
+                         "Here's what came in")
+        # A compilation whose lead is real prose keeps the prose gist.
+        prose = ("# Daily Briefing\n\nA prose lead that honestly summarises "
+                 "the day for the reader in plain words.\n\n## Item\n\nBody.\n")
+        self.assertEqual(editorial(prose, {"origin": "daily_compilation"})["gist"],
+                         "A prose lead that honestly summarises the day for the "
+                         "reader in plain words")
+        # An explicit synopsis supplied by the publisher still wins.
+        info = editorial(self.AGENDA_ARTICLE,
+                         {"origin": "daily_compilation",
+                          "summary": "An explicit synopsis supplied by the "
+                                     "publisher for this briefing."})
+        self.assertEqual(info["gist"],
+                         "An explicit synopsis supplied by the publisher for "
+                         "this briefing")
+
+    # Wave 28: a bullet-shaped digest unit (the LinkedIn feed shape) has
+    # no synopsis, claim, or lead paragraph, so it used to publish with
+    # gist and summary both empty — title + price and no text at all.
+    LINKEDIN_DIGEST_ARTICLE = (
+        "# LinkedIn Feed — Friday, November 14, 2026\n\n"
+        "1. Jane Doe — shipped a mapping tool for geothermal surveys "
+        "(https://www.linkedin.com/feed/update/urn:li:ugcPost:7526714905299763201/)\n"
+        "2. John Roe — a new paper on reservoir simulation boundary "
+        "conditions is out today "
+        "(https://www.linkedin.com/feed/update/urn:li:ugcPost:7526714905299763202/)\n"
+        "3. Ana Lee — hiring two ML engineers for exploration work "
+        "(https://www.linkedin.com/feed/update/urn:li:ugcPost:7526714905299763203/)\n"
+        "4. Tom Poe — notes from the GEMS workshop on fault mapping "
+        "(https://www.linkedin.com/feed/update/urn:li:ugcPost:7526714905299763204/)\n"
+    )
+
+    def test_bullet_digest_gist_and_summary_come_from_the_first_bullet(self):
+        info = editorial(self.LINKEDIN_DIGEST_ARTICLE,
+                         {"title": "LinkedIn Feed — Friday, November 14, 2026"})
+        expected = "Jane Doe — shipped a mapping tool for geothermal surveys"
+        self.assertEqual(info["gist"], expected)
+        self.assertEqual(info["summary"], expected)
+        # Extractive only: both fields are the item's own words, and the
+        # entry's permalink — a locator, not content — never leaks in.
+        self.assertIn(info["gist"], self.LINKEDIN_DIGEST_ARTICLE)
+        self.assertIn(info["summary"], self.LINKEDIN_DIGEST_ARTICLE)
+        self.assertLessEqual(len(info["gist"]), 90)
+        self.assertNotIn("http", info["gist"])
+        self.assertNotIn("linkedin.com", info["gist"])
+        self.assertNotIn("7526714905299763201", info["gist"])
+
+    def test_build_bullet_digest_publishes_gist_and_summary(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            folder = root / "deliveries" / "linkedin-20261114"
+            folder.mkdir(parents=True)
+            (folder / "article.md").write_text(self.LINKEDIN_DIGEST_ARTICLE,
+                                               encoding="utf-8")
+            (folder / "content.json").write_text(json.dumps({
+                "content_id": "linkedin-2026-11-14",
+                "origin": "registered_source",
+                "podcast_mode": "daily_compilation",
+                "title": "LinkedIn Feed — Friday, November 14, 2026",
+                "published_at": "2026-11-14",
+            }), encoding="utf-8")
+            build(root / "deliveries", root / "bundle",
+                  Path(__file__).with_name("index.html"), 15)
+            data = json.loads((root / "bundle/assets/episodes.json").read_text())
+            by_id = {item["content_id"]: item for item in data["items"]}
+            item = by_id["linkedin-2026-11-14"]
+            self.assertTrue(item["gist"])
+            self.assertTrue(item["summary"])
+            self.assertIn(item["gist"], self.LINKEDIN_DIGEST_ARTICLE)
+            self.assertIn(item["summary"], self.LINKEDIN_DIGEST_ARTICLE)
+            self.assertLessEqual(len(item["gist"]), 90)
+            self.assertNotIn("http", item["gist"])
+
+    def test_bullet_fallback_never_overrides_a_prose_lead(self):
+        # Shape gate is both-fields-empty: an item the prose paths serve
+        # keeps its exact output even when its body also carries bullets,
+        # and a short explicit synopsis is likewise left alone.
+        prose = ("# Report\n\nA prose lead that honestly summarises the "
+                 "work in plain words for the reader.\n\n"
+                 "- First point\n- Second point\n- Third point\n")
+        info = editorial(prose)
+        self.assertEqual(info["gist"],
+                         "A prose lead that honestly summarises the work "
+                         "in plain words for the reader")
+        self.assertEqual(info["summary"], info["gist"])
+        info = editorial("# Report\n\nBody text here.\n\n"
+                         "- Alpha point\n- Beta point\n- Gamma point\n",
+                         {"summary": "Too short"})
+        self.assertEqual(info["gist"], "")
+        self.assertEqual(info["summary"], "Too short")
+
+    def test_bullet_digest_with_unusable_first_bullet_stays_empty(self):
+        # A bare-URL first bullet yields nothing, and the fallback never
+        # manufactures a line from a later bullet instead.
+        bare = ("# LinkedIn Feed — Saturday, November 15, 2026\n\n"
+                "1. https://www.linkedin.com/feed/update/urn:li:ugcPost:7526714905299763201/\n"
+                "2. John Roe — a new paper on reservoir simulation boundary "
+                "conditions is out today "
+                "(https://www.linkedin.com/feed/update/urn:li:ugcPost:7526714905299763202/)\n"
+                "3. Ana Lee — hiring two ML engineers for exploration work "
+                "(https://www.linkedin.com/feed/update/urn:li:ugcPost:7526714905299763203/)\n")
+        info = editorial(bare, {"title": "LinkedIn Feed — Saturday, "
+                                        "November 15, 2026"})
+        self.assertEqual(info["gist"], "")
+        self.assertEqual(info["summary"], "")
+        # A fragment first bullet is likewise unusable for both fields.
+        fragment = ("# Digest\n\n"
+                    "1. Hi (https://example.com/x)\n"
+                    "2. John Roe — a new paper on reservoir simulation "
+                    "boundary conditions is out today (https://example.com/y)\n"
+                    "3. Ana Lee — hiring two ML engineers for exploration "
+                    "work (https://example.com/z)\n")
+        info = editorial(fragment)
+        self.assertEqual(info["gist"], "")
+        self.assertEqual(info["summary"], "")
+        # Two bullets are not the digest shape: no fallback either.
+        info = editorial("# Digest\n\n- Alpha point worth reading\n"
+                         "- Beta point worth reading\n")
+        self.assertEqual(info["gist"], "")
+        self.assertEqual(info["summary"], "")
+
+    def test_build_bullet_digest_omits_gist_that_repeats_the_title(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            folder = root / "deliveries" / "notes-20261114"
+            folder.mkdir(parents=True)
+            (folder / "article.md").write_text(
+                "# Notes on reservoir simulation\n\n"
+                "- Notes on reservoir simulation\n"
+                "- Boundary conditions for the Cape field model\n"
+                "- Grid refinement results from the October run\n",
+                encoding="utf-8")
+            (folder / "content.json").write_text(json.dumps({
+                "content_id": "notes-2026-11-14",
+                "origin": "registered_source",
+                "podcast_mode": "daily_compilation",
+            }), encoding="utf-8")
+            build(root / "deliveries", root / "bundle",
+                  Path(__file__).with_name("index.html"), 15)
+            data = json.loads((root / "bundle/assets/episodes.json").read_text())
+            by_id = {item["content_id"]: item for item in data["items"]}
+            self.assertNotIn("gist", by_id["notes-2026-11-14"])
+
+    def test_source_name_passes_through_from_content_json(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            def delivery(name, content_id, metadata_extra):
+                folder = root / "deliveries" / name
+                folder.mkdir(parents=True)
+                (folder / "article.md").write_text("# Piece\n\nBody.", encoding="utf-8")
+                metadata = {"content_id": content_id}
+                metadata.update(metadata_extra)
+                (folder / "content.json").write_text(json.dumps(metadata),
+                                                     encoding="utf-8")
+            delivery("named-20261116", "piece-named",
+                     {"origin": "registered_source",
+                      "podcast_mode": "daily_compilation",
+                      "source_name": "OpenAI Official"})
+            delivery("unnamed-20261116", "piece-unnamed",
+                     {"origin": "registered_source",
+                      "podcast_mode": "daily_compilation"})
+            delivery("url-named-20261116", "piece-url-named",
+                     {"origin": "registered_source",
+                      "podcast_mode": "daily_compilation",
+                      "source_name": "https://spam.example/post"})
+            delivery("research-plain-20261116", "piece-research-plain",
+                     {"origin": "user_initiated", "podcast_mode": "none"})
+            delivery("research-named-20261116", "piece-research-named",
+                     {"origin": "user_initiated", "podcast_mode": "none",
+                      "source_name": "Field notes"})
+            build(root / "deliveries", root / "bundle",
+                  Path(__file__).with_name("index.html"), 15)
+            data = json.loads((root / "bundle/assets/episodes.json").read_text())
+            by_id = {item["content_id"]: item for item in data["items"]}
+            self.assertEqual(by_id["piece-named"]["source"], "OpenAI Official")
+            # Absent ⇒ today's labels, byte-identical: registered items
+            # are "Focu", commissioned research is "Your research".
+            self.assertEqual(by_id["piece-unnamed"]["source"], "Focu")
+            self.assertEqual(by_id["piece-research-plain"]["source"],
+                             "Your research")
+            # A URL is not a plain-text name and is never passed through.
+            self.assertEqual(by_id["piece-url-named"]["source"], "Focu")
+            # The pass-through follows the recorded data, not the origin.
+            self.assertEqual(by_id["piece-research-named"]["source"],
+                             "Field notes")
 
     def test_daily_article_rejects_missing_visual_even_without_audio(self):
         with tempfile.TemporaryDirectory() as temp:
