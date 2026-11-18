@@ -139,6 +139,10 @@ DEFAULT_MAX_PER_DAY = 20
 DEFAULT_MAX_SCAN = 100
 # The LinkedIn gist rule: at most 30 words per digest line.
 MAX_GIST_WORDS = 30
+# Plus a character ceiling (P2-5 finding, 2026-11-18): a word-count cap
+# alone lets one whitespace-free token — a base64 dump, a long URL, an
+# unspaced CJK run — pass through unbounded into the emitted unit.
+MAX_GIST_CHARS = 500
 DEFAULT_PACE_MIN_SECONDS = 2.0
 DEFAULT_PACE_MAX_SECONDS = 5.0
 
@@ -288,10 +292,16 @@ def normalize_post(raw) -> FeedPost | None:
 
 def username_from_session_path(session_path) -> str | None:
     """Derive the username from Instaloader's ``session-<username>``
-    file convention, when the session file follows it."""
-    stem = Path(session_path).stem
-    if stem.startswith("session-") and len(stem) > len("session-"):
-        return stem[len("session-"):]
+    file convention, when the session file follows it.
+
+    The full file NAME is used, never the stem (P2-5 finding,
+    2026-11-18): session files are extensionless by convention, and
+    Instagram usernames legitimately contain dots — a stem would
+    truncate ``session-jerry.94242`` to ``jerry``, breaking both the
+    session load and the own-post skip for that owner."""
+    name = Path(session_path).name
+    if name.startswith("session-") and len(name) > len("session-"):
+        return name[len("session-"):]
     return None
 
 
@@ -300,7 +310,7 @@ def username_from_session_path(session_path) -> str | None:
 
 def truncate_words(text: str, limit: int = MAX_GIST_WORDS) -> str:
     words = str(text or "").split()
-    return " ".join(words[:limit])
+    return " ".join(words[:limit])[:MAX_GIST_CHARS]
 
 
 def gist_for(post: FeedPost) -> str:

@@ -108,6 +108,13 @@ class GistTests(unittest.TestCase):
         self.assertEqual(gist_for(post), " ".join(f"word{i}" for i in range(30)))
         self.assertEqual(truncate_words(caption), gist_for(post))
 
+    def test_single_token_caption_is_char_capped(self):
+        # P2-5 regression: the 30-word rule alone let one whitespace-
+        # free token (base64 dump, unspaced CJK run) through unbounded.
+        post = normalize_post(raw_post("ABC", caption="a" * 5000))
+        self.assertEqual(len(gist_for(post)), 500)
+        self.assertEqual(len(truncate_words("a" * 5000)), 500)
+
     def test_captionless_posts_get_factual_media_labels(self):
         self.assertEqual(gist_for(normalize_post(raw_post("P", caption=""))),
                          "Photo post")
@@ -206,6 +213,12 @@ class EmitShapeTests(unittest.TestCase):
         self.assertEqual(username_from_session_path("/x/session-jerry94242"),
                          "jerry94242")
         self.assertIsNone(username_from_session_path("/x/whatever.bin"))
+        # P2-5 regression: dotted usernames survive intact — session
+        # files are extensionless, so the name is not a stem.
+        self.assertEqual(username_from_session_path("/x/session-jerry.94242"),
+                         "jerry.94242")
+        self.assertEqual(username_from_session_path("session-a-b"), "a-b")
+        self.assertIsNone(username_from_session_path("/x/session-"))
 
 
 class IdentityTests(unittest.TestCase):

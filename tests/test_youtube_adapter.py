@@ -317,6 +317,65 @@ class LadderTests(unittest.TestCase):
         self.assertEqual(vtt_to_text(vtt), "Hello world Next line")
 
 
+GOOD_VTT = "WEBVTT\nKind: captions\nLanguage: en\n\n" + "\n\n".join(
+    f"00:00:{i:02d}.000 --> 00:00:{i + 1:02d}.000\nSubtitle line {i} with enough words"
+    for i in range(30))
+
+
+class YtdlpRungTests(unittest.TestCase):
+    """The yt-dlp rung's per-group invocations (P2-5 live finding,
+    2026-11-18): yt-dlp aborts an invocation on the first track that
+    hits HTTP 429, so one language group failing must not discard the
+    next group's tracks. subprocess is faked; nothing here is live."""
+
+    def run_rung(self, writer):
+        calls = []
+
+        def fake_run(args, **kwargs):
+            calls.append(args)
+            group = args[args.index("--sub-langs") + 1]
+            template = args[args.index("-o") + 1]
+            writer(group, Path(template).parent)
+
+        fake_subprocess = mock.Mock()
+        fake_subprocess.run = fake_run
+        with mock.patch.object(youtube, "_ytdlp_binary", lambda: "/fake/yt-dlp"), \
+                mock.patch.object(youtube, "subprocess", fake_subprocess):
+            return youtube.transcript_via_ytdlp("VID"), calls
+
+    def test_failed_first_group_falls_through_to_second(self):
+        def writer(group, tmp):
+            if group.startswith("en"):
+                (tmp / "sub.en.vtt").write_text(GOOD_VTT, encoding="utf-8")
+            # The zh group writes nothing: its first track hit a 429 and
+            # yt-dlp aborted the invocation (the live 2026-11-18 shape).
+
+        text, calls = self.run_rung(writer)
+        self.assertGreaterEqual(len(text), 200)
+        self.assertIn("Subtitle line 0", text)
+        self.assertEqual(len(calls), 2)
+
+    def test_first_group_hit_short_circuits(self):
+        def writer(group, tmp):
+            (tmp / "sub.zh-Hans.vtt").write_text(GOOD_VTT, encoding="utf-8")
+
+        text, calls = self.run_rung(writer)
+        self.assertGreaterEqual(len(text), 200)
+        self.assertEqual(len(calls), 1)
+
+    def test_all_groups_empty_means_missing(self):
+        text, calls = self.run_rung(lambda group, tmp: None)
+        self.assertEqual(text, "")
+        self.assertEqual(len(calls), 2)
+
+    def test_no_binary_means_missing_without_a_subprocess(self):
+        fake_subprocess = mock.Mock()
+        with mock.patch.object(youtube, "_ytdlp_binary", lambda: None), \
+                mock.patch.object(youtube, "subprocess", fake_subprocess):
+            self.assertEqual(youtube.transcript_via_ytdlp("VID"), "")
+        fake_subprocess.run.assert_not_called()
+
+
 class CliTests(unittest.TestCase):
     def test_cli_emit_with_registry_file(self):
         registry = {"sources": [{"name": "Test Source",

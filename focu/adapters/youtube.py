@@ -22,7 +22,10 @@ What it does, per channel and Denver day:
   (1) ``youtube_transcript_api``; (2) yt-dlp subtitle download with the
   android player client, VTT converted to text with auto-caption line
   dedupe (the ladder learned 2026-09-24, implemented in production by
-  ``~/focu-runtime/bin/youtube_transcript.py``). A body under
+  ``~/focu-runtime/bin/youtube_transcript.py``). The yt-dlp rung tries
+  its subtitle language groups in separate invocations, so a rate
+  limit on one group's tracks cannot discard another group's (P2-5
+  live finding, 2026-11-18). A body under
   ``MIN_TRANSCRIPT_CHARS`` counts as missing at every rung.
 - Emits ONE digest unit per channel-day (zero when nothing survives),
   in the exact shape ``linkedin_to_units.py`` emits and the daily
@@ -194,22 +197,34 @@ def _ytdlp_binary() -> str | None:
     return shutil.which("yt-dlp")
 
 
+# Subtitle language groups for the yt-dlp rung, in preference order.
+# They are attempted in SEPARATE yt-dlp invocations (P2-5 live finding,
+# 2026-11-18): yt-dlp downloads one invocation's tracks in order and a
+# rate-limit (HTTP 429) on an early track — typically an auto-translated
+# track the adapter does not need — aborts the invocation before the
+# usable tracks are written, discarding the whole rung. One group
+# failing must never poison the next.
+SUB_LANG_GROUPS = ("zh-Hans,zh-Hant,zh.*", "en.*")
+
+
 def transcript_via_ytdlp(video_id: str) -> str:
     binary = _ytdlp_binary()
     if not binary:
         return ""
     with tempfile.TemporaryDirectory() as tmp:
         out = str(Path(tmp) / "sub.%(ext)s")
-        subprocess.run(
-            [binary, "--skip-download", "--write-subs", "--write-auto-subs",
-             "--sub-langs", "zh-Hans,zh-Hant,zh.*,en.*", "--sub-format", "vtt",
-             "--extractor-args", "youtube:player_client=android",
-             "-o", out, WATCH_URL.format(video_id=video_id)],
-            capture_output=True, timeout=120)
-        for vtt_path in sorted(Path(tmp).glob("sub.*.vtt")):
-            text = vtt_to_text(vtt_path.read_text(encoding="utf-8", errors="replace"))
-            if len(text) >= MIN_TRANSCRIPT_CHARS:
-                return text
+        for group in SUB_LANG_GROUPS:
+            subprocess.run(
+                [binary, "--skip-download", "--write-subs", "--write-auto-subs",
+                 "--sub-langs", group, "--sub-format", "vtt",
+                 "--extractor-args", "youtube:player_client=android",
+                 "-o", out, WATCH_URL.format(video_id=video_id)],
+                capture_output=True, timeout=120)
+            for vtt_path in sorted(Path(tmp).glob("sub.*.vtt")):
+                text = vtt_to_text(vtt_path.read_text(
+                    encoding="utf-8", errors="replace"))
+                if len(text) >= MIN_TRANSCRIPT_CHARS:
+                    return text
     return ""
 
 

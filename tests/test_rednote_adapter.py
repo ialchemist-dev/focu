@@ -129,6 +129,12 @@ class GistTests(unittest.TestCase):
         note = normalize_record(note_record(title="", text="正文 内容"))
         self.assertEqual(gist_for(note), "正文 内容")
 
+    def test_single_token_title_is_char_capped(self):
+        # P2-5 regression: word-count truncation alone passed a single
+        # whitespace-free token through unbounded (~1 MB units).
+        note = normalize_record(note_record(title="a" * 5000))
+        self.assertEqual(len(gist_for(note)), 500)
+
     def test_noteless_record_gets_a_factual_label(self):
         note = normalize_record(note_record(title="", text=""))
         self.assertEqual(gist_for(note), "Note (no title or text)")
@@ -358,6 +364,34 @@ class FailureTests(unittest.TestCase):
         self.assertEqual(units, [])
         self.assertEqual(len(report["failures"]), 1)
         self.assertEqual(report["failures"][0]["error"], "ExportShapeError")
+
+
+class ScaleAndEmptyTests(unittest.TestCase):
+    """P2-5 hardening: zero-byte and oversized exports, probed live in
+    the P2-5 pass and pinned here."""
+
+    def test_zero_byte_export_is_a_clean_report(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            export = write_export(tmp, "")
+            out = str(Path(tmp) / "units.json")
+            report = emit(DAY, export, out)
+            units = json.loads(Path(out).read_text(encoding="utf-8"))
+        self.assertEqual(units, [])
+        self.assertEqual(len(report["failures"]), 1)
+        self.assertEqual(report["failures"][0]["error"], "ExportParseError")
+
+    def test_oversized_export_is_capped_exactly(self):
+        records = [note_record(n=i) for i in range(5000)]
+        with tempfile.TemporaryDirectory() as tmp:
+            export = write_export(tmp, records)
+            out = str(Path(tmp) / "units.json")
+            report = emit(DAY, export, out)
+            units = json.loads(Path(out).read_text(encoding="utf-8"))
+        self.assertEqual(report["feed"]["records"], 5000)
+        self.assertEqual(report["feed"]["included"], 30)
+        self.assertEqual(report["feed"]["over_cap"], 4970)
+        self.assertEqual(len(units), 1)
+        self.assertEqual(len(units[0]["body"].split("\n")), 30)
 
 
 class CliTests(unittest.TestCase):

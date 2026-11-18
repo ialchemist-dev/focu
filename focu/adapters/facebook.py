@@ -165,6 +165,10 @@ FEED_URL = "https://www.facebook.com/"
 DEFAULT_MAX_PER_DAY = 15
 # The LinkedIn gist rule: at most 30 words per digest line.
 MAX_GIST_WORDS = 30
+# Plus a character ceiling (P2-5 finding, 2026-11-18): a word-count cap
+# alone lets one whitespace-free token — a base64 dump, a long URL, an
+# unspaced CJK run — pass through unbounded into the emitted unit.
+MAX_GIST_CHARS = 500
 
 
 @dataclass
@@ -301,7 +305,7 @@ def parse_export(data) -> tuple[list[Post], int]:
 
 def truncate_words(text: str, limit: int = MAX_GIST_WORDS) -> str:
     words = str(text or "").split()
-    return " ".join(words[:limit])
+    return " ".join(words[:limit])[:MAX_GIST_CHARS]
 
 
 def gist_for(post: Post) -> str:
