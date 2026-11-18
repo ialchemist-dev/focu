@@ -1,0 +1,39 @@
+# Demo config — matches examples/secretary-briefing-demo-units.json.
+# Used by the README's offline verification step: the demo run ingests
+# bundled units with --input-units, so no network fetch happens and the
+# feed URLs below are placeholders that only need to be well-formed.
+version: 1
+timezone: "UTC"
+output_mode: text_only
+
+channels:
+  - id: research
+    name: "Demo Briefing"
+    language: en
+    max_minutes: 12
+
+sources:
+  - name: "Example Alpha"
+    type: rss
+    channel: research
+    feed_url: "https://example.com/alpha.xml"
+
+  - name: "Example Beta"
+    type: rss
+    channel: research
+    feed_url: "https://example.com/beta.xml"
+
+  - name: "Example Gamma"
+    type: rss
+    channel: research
+    feed_url: "https://example.com/gamma.xml"
+
+  - name: "Example Delta"
+    type: rss
+    channel: research
+    feed_url: "https://example.com/delta.xml"
+
+  - name: "Example Epsilon"
+    type: rss
+    channel: research
+    feed_url: "https://example.com/epsilon.xml"

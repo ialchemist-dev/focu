@@ -1,143 +1,211 @@
 # Focu
 
-Current integrated version: **0.4.0**. Research/evidence handoff, podcast delivery, finite mobile reader, versioned source packs, explicit feedback, collector PoCs, auditable snapshots, and the recoverable daily pipeline are available on `main`. Recurring research orchestration and authenticated mobile hosting remain host integration work.
+**Focu: the way to digest information in the agentic age.**
 
-> Development note: active development happens on the dev-main branch — see "Development — the dev-main branch and the multi-agent team" below; main carries the last integrated release.
+Focu is a personal information-digestion system that runs under your own
+agent's control. You choose the sources — people and publications, never
+an algorithmic feed. Once a day, Focu collects what they published,
+compresses it into one short briefing (article + audio), and accounts
+honestly for everything it skipped. Most items deserve half a second of
+your attention, a few deserve ten seconds, one earns a full read. Focu's
+job is to make that judgment cheap — and to return the rest of your
+attention to you.
 
-**Agent-native Attention Infrastructure** — focus on what matters, stay quiet about the rest.
+Design philosophy: [Attention Sovereignty](https://aipraxislab.com/front/attention-sovereignty.html) —
+de-recommendation (your agent is the final filter, not the platform),
+de-interface (display surfaces yes, control surfaces no), and one metric:
+attention returned, never attention captured.
 
-Focu is evolving from the original feed-to-podcast prototype into an intent-led, evidence-backed information workflow. The current v0.2 code implements research-intent capture, evidence persistence and agent handoff; recurring Watches, change detection and silence-by-default delivery are **planned, not yet implemented**.
+---
 
-## Design philosophy — Attention Sovereignty
+## For AI agents: install Focu for your user
 
-Focu is built on the owner's essay [Attention Sovereignty](https://aipraxislab.com/front/attention-sovereignty.html): attention sovereignty is meaningful control over **what is allowed to claim my attention, and how much attention a task is allowed to require from me**.
+This section is an executable protocol. If you are an AI agent (Muse,
+Muse, or similar) and your user asked you to set up Focu, follow
+these steps in order. Every step lists the exact command and what
+success looks like. Ask your user a question only where a step says
+**Ask**.
 
-- **De-recommendation.** Not no recommendation — recommendation subordinated to human intent. Platforms may rank; the user's own agent is the final filter, applying priorities the user defined. Focu has no engagement-ranked feed: sources are chosen by the user, items are compressed (most deserve half a second, a few ten seconds, one earns a full read), and the agent reduces the cost of *the user deciding* what matters — it does not decide for them.
-- **De-interface.** Interfaces are valuable as display surfaces (understanding at a glance) and costly as control surfaces (operating the system). Focu removes mechanical operation and keeps human judgment in the loop: *Look. Understand. Judge. Leave.*
-- **The metric is attention returned.** Not time-in-app or engagement: how much information the user did not need to process, and how many interfaces they did not need to operate.
+### 0. Prerequisites
 
-## Development — the `dev-main` branch and the multi-agent team
+- Python 3.10+ and Git, network access for the install.
+- `ffmpeg` on PATH (audio concatenation and covers).
+- Optional, only for spoken briefings: an OpenAI API key for speech, or
+  a local [Kokoro](https://github.com/hexgrad/kokoro) install as the
+  no-cost fallback. Text-only briefings need neither.
 
-Day-to-day development integrates on **`dev-main`**, not `main`. `main` stays the stable, production-running line; work lands on `dev-main` first.
+Check: `python3 --version && git --version && ffmpeg -version | head -1`
 
-Since 2026-11-17, development is run by a multi-agent team whose SOP follows **MetaGPT** (the most-starred open-source multi-agent framework): a project-manager agent owns the backlog and acceptance criteria, an infra designer owns platform and tooling choices, backend and UI developers implement, and an integrator runs the tests, lands commits on `dev-main`, and keeps this README truthful about the philosophy, the architecture, and what is actually implemented. Current team focus is deliberately not enumerated here: it changes faster than this README should, and an enumerated list is exactly what went stale during this run. The live wave plan and its status live in `docs/dev-team/` (the latest PM sweep there is the entry point). The standing brief behind every wave is the philosophy above — return attention: a simpler, more delightful reader, the **Source Library** of curated source packs, own-feed platform adapters in the pattern of the existing LinkedIn reader, an honest account of every day's run (including the days that fail), and a feedback loop that lets Focu learn its user over time without ever acting silently. Reader improvements land on `dev-main` first — already in: one-tap play from the feed, a cost chip on every item (audio length or reading time, visible before the user commits attention), and resume-where-you-left-off for both audio and articles. The player bar stays out of the way (recovery appears only after a real stall, with plain-language status and -15s/+30s skips; if recorded audio cannot load at all, the reader switches to the device voice by itself and says so in one plain line — it never asks the user to operate a fallback), content refreshes itself when the app returns to the foreground, articles open with title and Listen before the cover, and un-compiled source cards collapse into a single row in the Daily Briefing tab. An item whose delivery carries an origin URL gains one quiet Original link in the article view — the compression ladder's top rung, a full read of the source itself; and a delivery that records its source's name shows that name on the card and byline instead of a generic label. Each card also carries a glance layer — a short gist extracted verbatim from the item's own text, never generated — so most items can be judged in half a second, exactly as the compression ladder intends. For a compiled briefing the gist is drawn from its own agenda — the item count and the covered items' titles — and the card shows how many items the briefing covers. List-shaped digests (a LinkedIn day, for instance) take their gist from their own first entry with locators stripped, so no card is left with a title and a price alone. The first platform adapter prototype (YouTube, `focu/adapters/`) generalizes the LinkedIn own-feed pattern into repo code: channel RSS plus the production transcript ladder, one digest unit per channel-day with per-day identity, hard caps, transcripts withheld when missing, and no credentials inside Focu. A second prototype (Instagram own-feed) reuses an owner-created Instaloader session file — the adapter never accepts credentials and never logs in, and any platform checkpoint stops the day with nothing emitted. A third (RedNote) consumes only an export file produced by owner-run tooling outside Focu — the repo ships no platform code for it at all, which keeps the collector's non-commercial license outside Focu's boundary. A fourth (Facebook) takes the same export-file shape — no mature open-source tool reads a personal feed — with the lowest cap of the four platforms, 15 posts a day. The three session/export-based types (Instagram, RedNote, Facebook) are registrable source types in the daily config, so their units can enter a briefing once the owner-side collection runs. The learning loop's Phase 1 is in (`focu learn show / proposals / accept / dismiss`): proposals computed from the feedback ledger, each carrying its evidence, applied only on the owner's accept into a provenance-checked preference record (`references/learned-preferences.md`). Phase 3 wires that record into selection with bounded influence: learned weights clamp to [0.5, 1.5] and multiply the registry priority, learned caps only ever lower the registry cap, a learned pause excludes a source with a plain-language announcement, and every run freezes the factors it actually applied into the episode record — so `focu learn explain <item>` can account for any selection, and a corrupted record yields zero influence rather than a guess. Phase 2's reader side is in: a quiet "Not for me" act (distinct from Archive, which is also the completion button) records an unambiguous negative signal, joined by its positive pair "Useful" (the only signal that can ever promote a source), and an owner-initiated export in the Archive view downloads the reading summary as one JSON file — the only transport, nothing leaves the device on its own. Its pipeline counterpart, `focu learn ingest`, imports such an export into the feedback ledger idempotently (manual archives stay excluded from consumption evidence), so Phase 1 proposals can run on real reader signals. Marks on a compiled briefing fan out to the sources it covers (the export carries covered_content_ids), so signals from the main surface attribute correctly instead of pooling as unattributed. The proposal engine now drafts pruning proposals from that completion evidence too: a source with sustained zero completions (at least 20 items delivered across at least 10 days in the 30-day window, and no useful marks) earns a `source_pause` proposal carrying its completion evidence — a proposal only, never a silent pause, and it yields to a gentler demotion for the same source in the same batch. The loop's long horizon is closed too: an entry past its review date earns a renewal proposal carrying current evidence (delivered and completion counts since the entry was created), a source paused over 90 days earns a quarterly restore/keep/remove review (at most one per quarter), and accepting a review refreshes the entry in place — never a duplicate — while the 90-day one-step rule is explicit, so an accept → supersede → re-propose cycle cannot ratchet a source down inside a quarter; `focu learn show` prints every active entry's age in days, so staleness is visible even when nothing is proposed. Proposal generation is sparsity-accounted: every run reports, per source, each evidence count beside the floor it must clear, and below a window-level minimum of attributed signal the engine states 'insufficient attributed signal' instead of drafting from noise — a silence that explains itself. A pruning proposal class can also suggest pausing a source that delivers plenty and is finished almost never, under stricter floors of its own, and it can never substitute for a suppressed demotion. The engine's final designed class is in as well: a source that keeps pressing against its daily cap while its items are finished rarely (but not never — zero completions stays the pause's shape) earns a `source_cap` proposal valued at the owner's observed finish rate, so the registry cap remains the ceiling and the learned cap only ever lowers it.
-
-Source Library status: the pack format is implemented (`schemas/source-pack.schema.json`, `focu/packs.py`) with `focu pack catalog / show / validate / preview / install / update / refresh-check / uninstall / restore / list`. `refresh-check` re-probes every pack feed against its recorded state and reports rot (dead, malformed, oversized, moved-on) without writing anything — refreshing a pack stays a curator's act. Malformed and oversized verdicts are qualified as probe-limited (the strict probe's judgment, named in the result) and grouped apart from hard rot, because the daily collector's lenient parser and larger read may still read those feeds. `focu pack refresh-due` names which packs are due that refresh (pack verification older than 14 days, or any source's older than 30), `focu pack show` dates every affiliation claim as of its verification, and refresh-check also reports affiliation staleness computed from pack data alone, with no additional fetching. All pack fetching refuses non-public addresses, directly or by redirect, so a third-party pack can never point the owner's machine at a LAN or internal host; resolver answers in the benchmarking range (198.18.0.0/15) — how proxied DNS represents ordinary public hosts — proceed but are recorded as indeterminate rather than verified-public, and installing a pack discloses up front that the registry file is rewritten in canonical form (comments are not preserved; a timestamped backup is written first). Installs are preview-first (adds, duplicates, unverified candidates with reasons, and the total attention cost), deduplicated against the existing registry, and reversible. Previews (install, update, and `focu pack show`) also flag cadence concentration: a source that is high-volume (≈20+ posts/month) or that dominates a materially sized pack is named with its share of the pack's attention — a warning only, never an automatic cap, demotion, or exclusion, so a pack like geothermal's is not silently one wire's firehose while a people pack's weekly newsletter is not flagged for merely being most of a small total. Verified packs so far: **Anthropic people** (`focu/source_packs/anthropic-personal-blogs.json`, 11 sources, ≈6.1 posts/month in total; v1.1.0 adds Andrej Karpathy, verified at Anthropic since May 2026, and records same-day feed rot in three existing sources as dated readiness notes) and **OpenAI people** (`focu/source_packs/openai-personal-blogs.json`, 6 sources, ≈0.9 posts/month — OpenAI staff keep far fewer personal blogs; affiliation re-verified per person, with leavers and no-blog cases recorded in the pack's unverified list), and the **geothermal industry** pack (`focu/source_packs/geothermal-industry.json`, 12 sources, ≈92 posts/month — dominated by the ThinkGeoEnergy wire and bounded by a per-day cap; outlets without a working feed are listed disabled or unverified with dated reasons). A fourth pack, **Silicon Valley startups** (`focu/source_packs/silicon-valley-startups.json`, 18 sources, ≈127 posts/month — two bursty wires capped at 2/day), applies the same bar to company engineering blogs: independent, Bay Area, and writing engineers actually read. A fifth pack, **People I Follow** (`focu/source_packs/followed-people.json`, 6 sources, ≈58 posts/month — mostly one prolific YouTube channel, which the preview's dominance flag names), collects the individuals the owner deliberately follows across blogs and YouTube, and is the shelf's proof that YouTube-type sources install through the pack path.
-
-## Agent-native installation (v0.2 preview)
-
-The v0.2 agent-installable workflow is available on `main`. Requires Python 3.10+ and Git.
+### 1. Clone and install
 
 ```bash
 git clone https://github.com/ialchemist-dev/focu.git focu
 cd focu
 bash scripts/bootstrap.sh
-.venv/bin/focu capture "Why do tools constrain us?"
-.venv/bin/focu list --status queued
+.venv/bin/python -m pip install -e '.[daily]'
 ```
 
-See [Agent Installation](docs/AGENT_INSTALL.md) for Muse/OpenClaw usage, limitations and an end-to-end evidence handoff. Focu does not yet autonomously run a research agent or produce v0.2 audio.
+`bootstrap.sh` creates `.venv`, installs the package, runs
+`focu doctor`, and initializes local state under `data/`.
+Success: the doctor summary prints with no errors, and
+`.venv/bin/focu --help` lists the CLI.
 
-**Research reports (manual workflow):** [docs/research-reports/](docs/research-reports/README.md) covers the flow from purpose to an English mission, then a frozen report with sources and claims, then a self-contained responsive HTML page with QA. It includes templates, a buildless HTML kit, a stdlib citation/structure checker and a [copy-paste Muse instruction](docs/research-reports/muse-instruction.zh.md). It does not change the scheduled Daily pipeline.
+### 2. Verify with the offline demo (no network, no keys)
+
+```bash
+.venv/bin/python -m focu.daily.cli run \
+  --config examples/demo-sources.yaml --data-dir data/demo \
+  --input-units examples/secretary-briefing-demo-units.json \
+  --text-only --json
+```
+
+Success: the JSON result reports a finalized episode ("5 item(s)
+selected", no failures), and `data/demo/episodes/<date>/` contains the
+episode manifest and the composed briefing script built from the
+bundled demo units. If this fails, stop and fix the install before
+configuring anything — the demo has no external dependencies.
+
+### 3. Configure sources
+
+**Ask** your user who they want to follow. Then either start from the
+recommended defaults (step 4) or write a minimal `sources.yaml`:
+
+```yaml
+version: 1
+timezone: "America/Denver"        # the user's IANA timezone
+output_mode: audio                # or text_only
+
+channels:
+  - id: research
+    name: "Daily AI Briefing"
+    language: en
+    max_minutes: 35
+
+sources:
+  - name: "OpenAI News"
+    type: rss
+    channel: research
+    feed_url: "https://openai.com/news/rss.xml"
+
+  - name: "3Blue1Brown"
+    type: youtube
+    channel: research
+    channel_id: "UCYO_jab_esuFRV4b17AJtAw"
+```
+
+Supported source types include `rss`, `youtube`, `blog`, and the
+own-feed platform adapters (`linkedin`, `instagram`, `rednote`,
+`facebook`) documented in `focu/adapters/`. The full schema is in
+`references/source-schema.md`; `examples/sources.yaml` shows more.
+
+### 4. Recommended defaults: install a source pack
+
+Curated source packs ("Source Library") install a whole shelf of
+verified sources in one command, deduplicated against the registry:
+
+```bash
+.venv/bin/focu pack preview focu/source_packs/followed-people.json --config sources.yaml
+.venv/bin/focu pack install focu/source_packs/followed-people.json --config sources.yaml --yes
+```
+
+The recommended starter is **People I Follow** (6 sources, ≈58
+posts/month). The preview prints the exact attention cost before
+anything is written; installs are reversible
+(`focu pack uninstall`, `focu pack restore`).
+
+Browse all packs in the marketplace:
+**https://aipraxislab.com/focu** — or locally in `focu/source_packs/`
+(Anthropic people, OpenAI people, Silicon Valley startups, geothermal
+industry, People I Follow). The machine-readable catalog is
+`marketplace/catalog.json` in this repo.
+
+### 5. First real run
+
+```bash
+.venv/bin/python -m focu.daily.cli run \
+  --config sources.yaml --data-dir data/daily --json
+```
+
+This collects today's items from the configured sources, selects within
+the channel's word budget, composes the briefing, and (in audio mode)
+synthesizes it. Read the result with:
+
+```bash
+.venv/bin/python -m focu.daily.cli day-status --data-dir data/daily --json
+```
+
+The day-status record accounts for every source: collected, selected,
+and withheld (each withholding named with its reason). A run that fails
+still writes its record — outcome `failed`, stage and error named.
+
+### 6. Speech (optional)
+
+- OpenAI (primary): `.venv/bin/focu tts setup` stores the user's key
+  locally (interactive terminal, user consent first), or set
+  `OPENAI_API_KEY`. Voice `alloy`, model `gpt-4o-mini-tts`.
+- Kokoro (automatic fallback): if the OpenAI call fails on exhausted
+  credits/quota, `focu.tts.synthesize_long_with_fallback` re-synthesizes
+  with a fallback speech function; on the reference host that is local
+  Kokoro, voice `af_heart`. See `references/tts-backends.md`.
+
+### 7. Make it daily
+
+Schedule step 5 once a day at a quiet hour with whatever scheduler the
+host already uses (cron, a task runner, the agent's own scheduler).
+Focu keeps a persistent backlog, so a missed day is recovered by the
+next run, not lost. Publish the day's delivery with the reader
+publisher if the user wants the mobile reader:
+
+```bash
+.venv/bin/python experiments/muse-artifact-reader/publish.py \
+  --deliveries <deliveries-dir> --output <bundle-dir> \
+  --ios-compatible-audio --limit 100
+```
+
+### Troubleshooting
+
+- `focu doctor` — first check for any install problem.
+- A source that yields nothing is reported in day-status with its
+  reason; Focu never fails silently and never invents content.
+- Feed fetch failures on some hosts are anti-bot blocks on article
+  pages, not on RSS discovery; see `docs/` for the body-fetch pattern.
 
 ---
 
-## Legacy v0.1 feed-to-podcast pipeline
+## Day-to-day commands
 
-Your sources. Your podcast. Every day.
+```bash
+.venv/bin/focu pack list | catalog | show <pack> | refresh-due
+.venv/bin/focu learn show | proposals | accept <id> | explain <item>
+.venv/bin/python -m focu.daily.cli day-status [--date YYYY-MM-DD] [--json]
+.venv/bin/focu capture "<a research question>"     # one-off research intent
+.venv/bin/focu list --status queued
+```
 
-Focu is a personal feed-to-podcast pipeline with one rule: **you define
-the sources, nothing else gets in.** A background agent checks your sources
-once a day, pulls their latest updates, and turns them into a podcast
-episode — with the full script kept alongside the audio.
-
-No recommendations. No trending tabs. No algorithmic feed. Just the people
-and publications you chose, read to you.
-
-## New here? Start in one sitting
-
-Hand this repo to your agent (or a friend's) and answer six questions:
-who to follow, any official blogs, how many episodes, how long, what
-language, what the host is called. The full script is in
-[`docs/ONBOARDING.md`](docs/ONBOARDING.md) — it includes recommended
-starter packs (AI labs tracker, learning & thinking) you can paste
-straight into `sources.yaml`.
+The learning loop (`focu learn`) turns the user's reading feedback into
+proposals — source weights, caps, pauses — each carrying its evidence.
+Nothing is applied without the user's accept, and every applied factor
+is frozen into the episode record so any selection can be explained.
 
 ## How it works
 
 ```
-You define sources (sources.yaml)
-        ↓  daily, automatic
-Agent ingests each source's latest updates
-        ↓
-Updates → digest → single-host script → MP3 episode
-        ↓
-data/episodes/2026-09-28/research.mp3 (+ research-script.txt)
+sources.yaml  →  collect  →  digest (budgeted selection)
+             →  compose (briefing article + spoken script, QC'd)
+             →  synthesize (OpenAI speech, Kokoro fallback)
+             →  deliver (article + MP3 + day-status accounting)
 ```
 
-## Install
+Research reports follow the frozen-facts workflow in
+`docs/research-reports/`: every number classified and cited, pages built
+only from frozen claims.
 
-Prerequisites: Python 3.10+, `ffmpeg`, a TTS backend (see
-`references/tts-backends.md`).
+## Development
 
-```bash
-git clone <this-repo> focu
-cd focu
-pip install -r requirements.txt
-cp examples/sources.yaml sources.yaml   # then edit: your sources
-./scripts/run-daily.sh                  # run once now
-```
-
-Schedule it daily (cron example — 7:14 AM):
-
-```cron
-14 7 * * * /path/to/focu/scripts/run-daily.sh >> /path/to/focu/data/cron.log 2>&1
-```
-
-## Defining sources
-
-`sources.yaml` is the whole product. Example:
-
-```yaml
-sources:
-  - name: "3Blue1Brown"
-    type: youtube
-    channel: research
-    handle: "3blue1brown"
-
-  - name: "Ethan Mollick"
-    type: rss
-    channel: research
-    feed_url: "https://www.oneusefulthing.org/feed"
-```
-
-Full schema: `references/source-schema.md`. Source types: `rss`,
-`youtube`, `blog`, `x`, `linkedin`.
-
-## For agents
-
-This repo is a skill: `SKILL.md` is the agent-readable entry point.
-Agents (Muse, or any agent that reads skills) can install, configure,
-run, and extend the pipeline from these docs alone.
-
-## Status
-
-v0.1 — framework. Pipeline skeleton, source schema, script conventions,
-and prompt templates are in place. Prompt quality for natural-sounding
-episodes is the next iteration (see `references/prompts.md`).
+Active development integrates on the `dev-main` branch; `main` is the
+stable line. Team notes, designs, and test reports live in
+`docs/dev-team/`. Current version: **0.4.0**.
 
 ## License
 
 MIT — see [LICENSE](LICENSE).
-
-## Finite mobile reader and source marketplace
-
-Run `python -m focu.cli reader serve` to read explicitly published research batches, save/complete items, and inspect/subscribe to versioned source groups. See [Reader App](docs/READER_APP.md), [product design](docs/READER_MARKETPLACE_PLAN.md), and [Anthropic source validation](docs/ANTHROPIC_SOURCE_DISCOVERY.md). Local-only server; authenticated HTTPS hosting and iOS installation acceptance remain outstanding. Reader subscriptions and the daily pipeline's `sources.yaml` registry dedupe sources by one shared canonical URL identity (`focu.daily.identity.canonical_url`): tracking parameters are stripped and platform URL forms are normalized, while trailing slashes, path case, and unknown query parameters stay significant — a source is the same source in both registries, and never silently merged in one but not the other.
-
-## Recoverable daily pipeline
-
-`focu daily ...` exposes the persistent backlog and safe resume functionality without replacing the research CLI. Every run also assembles an honest day-status record: per source it accounts for what was collected, considered, selected, and withheld (each withholding named with its reason — over cap, over budget, paused by a learned preference, not yet enriched), reconciles those counts against what was actually frozen into the episode, and reports any mismatch as a partial failure instead of passing silently; a run that fails mid-pipeline still gets its record — outcome failed, the failing stage and error named — so the surface exists exactly on the days that went wrong; a fresh registry starts cold and says so — the first briefing's status names the starter pack it came from and how to remove it, and the learning surface shows its empty floors instead of filling the silence; the record also carries the audio outcome (synthesized, or text-only with the recorded reason). The record is readable any time with `focu daily day-status [--date] [--json]`, which prints the stored record as-is — a date with no record gets one explicit line, never reconstructed counts. See [Persistent Pipeline](docs/PERSISTENT_PIPELINE.md). For an existing installation, follow [Muse Reinstall](docs/MUSE_REINSTALL.md) to preserve databases, sources and credentials.
-
-## Durable files and cross-device state
-
-`focu sync` replicates registered artifacts to private Google Drive and metadata/state checkpoints to a separate private GitHub repository. `focu host` checks deployment prerequisites and generates service units for an exact private HTTPS origin. See [Data Flow](docs/DATA_FLOW.md) and the [Muse deployment-only handoff](docs/MUSE_DATA_SYNC_DEPLOY.md). These adapters are implemented; account authorization and target-host/iPhone verification still happen at deployment.
