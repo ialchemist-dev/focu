@@ -73,7 +73,7 @@ def collect(source, state=None):
     if typ == "youtube":
         return collect_youtube(source)
     return FetchResult(status="needs_auth" if typ in {"x", "linkedin", "instagram",
-                                                      "rednote", "facebook"} else "unsupported",
+                                                      "rednote", "facebook", "superlinear"} else "unsupported",
                        completeness="failed", error_code="collector_not_implemented",
                        message="M1 supports RSS/blog-with-feed and the experimental YouTube collector")
 

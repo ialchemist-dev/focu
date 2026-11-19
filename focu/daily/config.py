@@ -8,7 +8,7 @@ from .errors import FewError
 from .identity import source_url, stable_id
 
 KNOWN_TYPES = {"rss", "blog", "youtube", "x", "linkedin",
-               "instagram", "rednote", "facebook"}
+               "instagram", "rednote", "facebook", "superlinear"}
 
 
 def load_config(path):
